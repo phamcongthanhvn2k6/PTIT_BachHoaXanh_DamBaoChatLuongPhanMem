@@ -6,6 +6,9 @@ import { promotionService } from '../services/promotionService';
 import { couponService } from '../services/couponService';
 import { useAppSelector, store } from '../store';
 import { useTranslation } from 'react-i18next';
+import { HotDealCountdown } from '../components/HotDealCountdown/HotDealCountdown';
+import { InlineVoucherBadge } from '../components/PromotionImageFallback/PromotionImageFallback';
+import PromotionImageDisplay from '../components/PromotionImageFallback/PromotionImageFallback';
 
 const Promotions: React.FC = () => {
   const { t } = useTranslation();
@@ -95,8 +98,9 @@ const Promotions: React.FC = () => {
          id: w.id || w._id,
          itemType: w.code ? 'coupon' : 'promotion',
          title: w.title || w.code || 'Voucher',
-         image_url: w.image || w.image_url || 'https://images.unsplash.com/photo-1607082349566-187342175e1f?w=400&q=80',
+         image_url: w.image || w.image_url || w.banner_image || '',
          badge: w.voucher_type === 'shipping' ? t('promotions.shippingVoucher') : t('promotions.productVoucher'),
+         voucher_type: w.voucher_type || 'product',
          user_claimed: true,
       }));
       return list;
@@ -117,10 +121,15 @@ const Promotions: React.FC = () => {
       id: cu.id || cu._id,
       itemType: 'coupon', 
       title: cu.title || cu.code, 
-      description: cu.description || `Giảm ${Number(cu.discount_value || 0).toLocaleString('vi-VN')}${String(cu.type || '').toLowerCase() === 'percent' ? '%' : 'đ'} cho đơn từ ${Number(cu.min_order_amount || cu.min_order_value || 0).toLocaleString('vi-VN')}đ`, 
+      description: cu.description || t('promotions.couponAutoDesc', {
+        value: Number(cu.discount_value || 0).toLocaleString('vi-VN'),
+        unit: String(cu.type || '').toLowerCase() === 'percent' ? '%' : 'đ',
+        min: Number(cu.min_order_amount || cu.min_order_value || 0).toLocaleString('vi-VN'),
+        defaultValue: `Giảm ${Number(cu.discount_value || 0).toLocaleString('vi-VN')}${String(cu.type || '').toLowerCase() === 'percent' ? '%' : 'đ'} cho đơn từ ${Number(cu.min_order_amount || cu.min_order_value || 0).toLocaleString('vi-VN')}đ`
+      }), 
       start_date: cu.start_date || cu.valid_from, 
       end_date: cu.end_date || cu.valid_until, 
-      image_url: cu.image || cu.image_url || cu.banner_image || 'https://images.unsplash.com/photo-1607082349566-187342175e1f?w=400&q=80', 
+      image_url: cu.image || cu.image_url || cu.banner_image || '', 
       badge: cu.voucher_type === 'shipping' ? t('promotions.shippingVoucher') : t('promotions.productVoucher'),
       voucher_type: cu.voucher_type || 'product',
       user_claimed: myWallet.some(w => (w.walletItemType === 'coupon') && (String(w.id) === String(cu._id) || String(w.id) === String(cu.id)))
@@ -349,7 +358,6 @@ const Promotions: React.FC = () => {
                 <div className="grid grid-cols-1 gap-4 relative">
                   {currentItems.map((item: any) => {
                     const itemId = item.id || item._id;
-                     const isCoupon = item.itemType === 'coupon';
                     const now = Date.now();
                     const endRaw = item.end_date || item.valid_until;
                     const endTs = endRaw ? new Date(endRaw).getTime() : null;
@@ -370,21 +378,18 @@ const Promotions: React.FC = () => {
                         className={`bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md transition-shadow flex overflow-hidden border ${item.voucher_type === 'shipping' ? 'border-teal-100' : 'border-red-100'} cursor-pointer h-36 relative`}
                            onClick={() => handleItemClick(item)}
                         >
-                           {/* Left Graphic */}
-                            <div className={`w-36 h-full flex flex-col items-center justify-center relative p-3 text-white border-r border-dashed ${item.voucher_type === 'shipping' ? 'bg-teal-500 border-teal-200' : 'bg-lotteRed border-red-200'}`}>
-                                <span className="material-symbols-outlined text-4xl mb-1 opacity-90">
-                                   {item.voucher_type === 'shipping' ? 'local_shipping' : 'card_giftcard'}
-                                </span>
-                                <span className="font-black text-center leading-tight">
-                                   {item.voucher_type === 'shipping' ? 'FREE\nSHIP' : 'GIẢM\nGIÁ'}
-                                </span>
-                                
-                                {/* Zigzag cutouts */}
-                                <div className="absolute top-0 bottom-0 -right-1.5 w-3 overflow-hidden flex flex-col text-white opacity-20">
-                                  {Array(8).fill(0).map((_, i) => (
-                                    <div key={i} className="h-4 w-4 bg-white rounded-full -ml-2 -mt-1"></div>
-                                  ))}
-                                </div>
+                           {/* Left Graphic — shows uploaded image or fallback */}
+                            <div className="relative h-full flex shrink-0">
+                               <InlineVoucherBadge
+                                 imageUrl={item.image_url}
+                                 voucherType={item.voucher_type}
+                                 type={item.type}
+                               />
+                               {item.badge_text && (
+                                 <div className="absolute top-0 left-0 bg-lotteRed text-white px-2 py-0.5 rounded-br-lg text-[10px] font-black z-10 shadow-sm uppercase">
+                                   {item.badge_text}
+                                 </div>
+                               )}
                             </div>
 
                            {/* Body */}
@@ -403,12 +408,18 @@ const Promotions: React.FC = () => {
                                <div className="flex items-end justify-between mt-auto pt-2">
                                   <div className="flex flex-col">
                                      {total > 0 && !isSoldOut && (
-                                       <div className="w-32 bg-gray-200 rounded-full h-1.5 mb-1.5 overflow-hidden">
-                                          <div className={`h-full rounded-full ${remaining !== null && (remaining / total) < 0.2 ? 'bg-red-500' : 'bg-lotteRed'}`} style={{ width: `${Math.min(100, Math.max(0, ((total - (remaining||0)) / total) * 100))}%` }}></div>
+                                       <div className="w-32 mb-1.5">
+                                          <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden mb-1">
+                                             <div className={`h-full rounded-full ${remaining !== null && (remaining / total) < 0.2 ? 'bg-red-500' : 'bg-lotteRed'}`} style={{ width: `${Math.min(100, Math.max(0, ((total - (remaining||0)) / total) * 100))}%` }}></div>
+                                          </div>
+                                          <div className="flex justify-between text-[10px] text-gray-500 font-medium">
+                                            <span>Đã dùng {total - (remaining||0)}</span>
+                                            <span className="text-lotteRed">Còn {remaining}</span>
+                                          </div>
                                        </div>
                                      )}
                                      <span className="text-[11px] text-gray-400 font-medium whitespace-nowrap">
-                                        {isSoldOut ? t('promotions.soldOut') : isExpired ? t('promotions.expired') : isCoupon && item.end_date ? `HSD: ${new Date(item.end_date).toLocaleDateString('vi-VN')}` : t('promotions.unlimited')}
+                                        {isSoldOut ? t('promotions.soldOut') : isExpired ? t('promotions.expired') : endRaw ? `HSD: ${new Date(endRaw).toLocaleDateString('vi-VN')}` : t('promotions.unlimited')}
                                      </span>
                                   </div>
                                   
@@ -433,6 +444,13 @@ const Promotions: React.FC = () => {
                                       className="px-5 py-1.5 bg-gray-100 text-gray-400 text-xs font-bold rounded cursor-not-allowed whitespace-nowrap"
                                     >
                                       {t('promotions.locked')}
+                                    </button>
+                                  ) : (item.itemType === 'promotion' && !item.claim_campaign) ? (
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); navigate('/products'); }}
+                                      className="px-5 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 text-xs font-bold rounded transition whitespace-nowrap cursor-pointer"
+                                    >
+                                      {t('promotions.buyNow')}
                                     </button>
                                   ) : (
                                     <button 
@@ -487,11 +505,11 @@ const Promotions: React.FC = () => {
                      <span className="material-symbols-outlined text-[18px]">chevron_right</span>
                   </button>
                </div>
-            )}
-          </div>
+             )}
+           </div>
 
-          {/* Right Column - Sidebar */}
-          <aside className="lg:w-1/3 space-y-6">
+           {/* Right Column - Sidebar */}
+          <aside className="lg:w-1/3 space-y-6 lg:sticky lg:top-[100px] self-start max-h-[calc(100vh-120px)] overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
             
             {/* Wallet Quick Summary (If Logged In) */}
             {user && (
@@ -512,30 +530,33 @@ const Promotions: React.FC = () => {
                    </button>
                  </div>
                  <div className="absolute -right-4 -bottom-4 text-white/5 pointer-events-none">
-                    <span className="material-symbols-outlined text-8xl">local_activity</span>
+                     <span className="material-symbols-outlined text-8xl">local_activity</span>
                  </div>
                </section>
             )}
 
             {/* Hot Deals Section */}
-            <section className="bg-white dark:bg-slate-900 rounded-xl shadow-sm p-5 border border-gray-100">
+            <section className="bg-white dark:bg-slate-900 rounded-xl shadow-sm p-5 border border-gray-100 dark:border-slate-800">
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-lg font-black flex items-center uppercase tracking-tight text-gray-900 dark:text-white">
                   <span className="material-symbols-outlined text-orange-500 mr-2 text-2xl fill-1">local_fire_department</span>
                   {t('promotions.hotDeals')}
                 </h2>
-                <a className="text-xs text-blue-600 font-bold hover:underline cursor-pointer bg-blue-50 px-2 py-1 rounded" onClick={() => navigate('/products')}>
+                <a className="text-xs text-blue-600 font-bold hover:underline cursor-pointer bg-blue-50 px-2 py-1 rounded dark:bg-slate-800 dark:text-blue-400" onClick={() => navigate('/products')}>
                   {t('promotions.goShop')}
                 </a>
               </div>
               <div className="space-y-4">
                 {hotDeals.filter(d => d.is_active).slice(0, 4).map((deal: any, idx: number) => (
-                    <div key={deal.id || idx} onClick={() => navigate(`/home/product/${deal.product_id || 1}`)} className="flex items-center space-x-4 p-3 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer group border border-transparent hover:border-gray-100">
-                      <div className="w-16 h-16 shrink-0 bg-gray-100 rounded-lg overflow-hidden border border-gray-100 shadow-sm relative">
+                    <div key={deal.id || idx} onClick={() => navigate(`/products/${deal.product_id || 1}`)} className="flex items-center space-x-4 p-3 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer group border border-transparent hover:border-gray-100">
+                      <div className="w-16 h-16 shrink-0 bg-gray-100 dark:bg-slate-850 rounded-lg overflow-hidden border border-gray-100 dark:border-slate-800 shadow-sm relative">
                           <img
                              alt={deal.title || 'deal'}
                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                              src={deal.image_url || 'https://images.unsplash.com/photo-1607082349566-187342175e1f?w=100&q=80'}
+                             onError={(e) => {
+                               e.currentTarget.src = 'https://images.unsplash.com/photo-1607082349566-187342175e1f?w=100&q=80';
+                             }}
                           />
                           {deal.discount_percent && (
                              <div className="absolute top-0 right-0 bg-lotteRed text-white text-[9px] font-black px-1 rounded-bl-lg">
@@ -545,10 +566,11 @@ const Promotions: React.FC = () => {
                       </div>
                       <div className="grow min-w-0">
                           <h4 className="text-sm font-bold line-clamp-1 text-gray-800 dark:text-white group-hover:text-lotteRed transition-colors" title={deal.title}>{deal.title || t('promotions.productDeal')}</h4>
-                          <div className="flex items-baseline space-x-2 mt-0.5">
+                          <div className="flex items-baseline space-x-2 mt-0.5 mb-1">
                              {deal.price && <span className="text-lotteRed font-bold text-sm tracking-tight">{deal.price.toLocaleString('vi-VN')}đ</span>}
                              {deal.original_price && <span className="text-gray-400 line-through text-[10px]">{deal.original_price.toLocaleString('vi-VN')}đ</span>}
                           </div>
+                          <HotDealCountdown endDate={deal.end_date} />
                       </div>
                     </div>
                 ))}
@@ -561,7 +583,11 @@ const Promotions: React.FC = () => {
 
             {/* Banners Extra Section */}
             <section className="space-y-4">
-              <div onClick={() => { setActiveTab('shipping'); document.getElementById('promotion-section')?.scrollIntoView({ behavior: 'smooth' }); }} className="bg-linear-to-br from-teal-400 to-teal-600 rounded-xl p-6 relative overflow-hidden group cursor-pointer shadow-md border hover:border-teal-400 transition">
+              <div 
+                onClick={() => { setActiveTab('shipping'); document.getElementById('promotion-section')?.scrollIntoView({ behavior: 'smooth' }); }} 
+                className="rounded-xl p-6 relative overflow-hidden group cursor-pointer shadow-md border border-teal-500 hover:scale-[1.02] transition-all duration-300"
+                style={{ background: 'linear-gradient(135deg, #0d9488 0%, #115e59 100%)' }}
+              >
                 <div className="relative z-10">
                   <h3 className="text-xl font-extrabold mb-1 text-white opacity-100 inline-block drop-shadow-md uppercase">{t('promotions.freeShipTitle')}</h3>
                   <p className="text-sm text-teal-50 font-medium mb-4 drop-shadow-sm" dangerouslySetInnerHTML={{ __html: t('promotions.freeShipDesc') }}>
@@ -581,14 +607,19 @@ const Promotions: React.FC = () => {
       {selectedItem && (
         <div className="fixed inset-0 z-200 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setSelectedItem(null)}>
            <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden shadow-2xl relative flex flex-col" onClick={e => e.stopPropagation()}>
-             {/* Header */}
-             <div className={`h-32 relative flex items-center justify-center ${selectedItem.voucher_type === 'shipping' ? 'bg-teal-500' : 'bg-lotteRed'}`}>
-                 <button onClick={() => setSelectedItem(null)} className="absolute top-4 right-4 size-8 bg-black/20 hover:bg-black/30 text-white rounded-full flex items-center justify-center transition z-10">
+             {/* Header — show uploaded image or colored fallback */}
+             <div className="h-64 relative overflow-hidden bg-gray-100 dark:bg-slate-800">
+                 <button onClick={() => setSelectedItem(null)} className="absolute top-4 right-4 size-8 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center transition z-20">
                     <span className="material-symbols-outlined text-xl">close</span>
                  </button>
-                 <span className="material-symbols-outlined text-6xl text-white opacity-90 drop-shadow-md">
-                    {selectedItem.voucher_type === 'shipping' ? 'local_shipping' : 'card_giftcard'}
-                 </span>
+                 <PromotionImageDisplay
+                   imageUrl={selectedItem.image_url || selectedItem.image || selectedItem.banner_image}
+                   voucherType={selectedItem.voucher_type}
+                   type={selectedItem.type}
+                   alt={selectedItem.title}
+                   className="rounded-none w-full h-full object-cover"
+                   aspectRatio=""
+                 />
                  <div className="absolute -bottom-4 inset-x-0 mx-auto flex gap-2 justify-center drop-shadow-sm w-full overflow-hidden">
                     {Array(15).fill(0).map((_, i) => (
                        <div key={i} className="size-8 bg-white dark:bg-slate-900 rounded-full shrink-0"></div>
@@ -626,6 +657,24 @@ const Promotions: React.FC = () => {
                       </div>
                    )}
 
+                   {selectedItem.usage_per_user && selectedItem.usage_per_user > 0 && (
+                      <div className="flex gap-3 text-sm">
+                         <span className="material-symbols-outlined text-gray-400">person</span>
+                         <p className="text-gray-600 dark:text-gray-300 font-medium">
+                            Giới hạn: <span className="font-bold text-gray-900 dark:text-white">{selectedItem.usage_per_user} lần / người dùng</span>
+                         </p>
+                      </div>
+                   )}
+
+                   {selectedItem.stackable && (
+                      <div className="flex gap-3 text-sm">
+                         <span className="material-symbols-outlined text-gray-400">layers</span>
+                         <p className="text-gray-600 dark:text-gray-300 font-medium">
+                            <span className="font-bold text-green-600 dark:text-green-400">Có thể áp dụng cùng khuyến mãi khác</span>
+                         </p>
+                      </div>
+                   )}
+
                    {(selectedItem.start_date || selectedItem.end_date) && (
                       <div className="flex gap-3 text-sm">
                          <span className="material-symbols-outlined text-gray-400">schedule</span>
@@ -649,6 +698,13 @@ const Promotions: React.FC = () => {
                        className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold text-base hover:bg-green-700 transition flex items-center justify-center shadow-lg mt-6 cursor-pointer"
                     >
                        ✓ {t('promotions.claimed')} — {t('promotions.close')}
+                    </button>
+                ) : (selectedItem.itemType === 'promotion' && !selectedItem.claim_campaign) ? (
+                    <button 
+                       onClick={() => { setSelectedItem(null); navigate('/products'); }} 
+                       className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold text-base transition flex items-center justify-center shadow-lg shadow-blue-500/30 mt-6 cursor-pointer"
+                    >
+                       {t('promotions.buyNow')}
                     </button>
                 ) : (
                     <button 

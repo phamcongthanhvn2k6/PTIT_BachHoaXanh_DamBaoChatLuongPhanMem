@@ -5,8 +5,7 @@
 import jsPDF from 'jspdf';
 import {
   Document, Packer, Paragraph, Table, TableRow, TableCell,
-  TextRun, HeadingLevel, AlignmentType, WidthType,
-  BorderStyle, ShadingType,
+  TextRun, HeadingLevel, AlignmentType, WidthType, ShadingType
 } from 'docx';
 import { saveAs } from 'file-saver';
 

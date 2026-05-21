@@ -61,11 +61,11 @@ import AdminProductManagement from './admin/pages/AdminProductManagement.tsx';
 import AdminCategoryManagement from './admin/pages/AdminCategoryManagement';
 import AdminCustomers from './admin/pages/AdminCustomers.tsx';
 import AdminCouponsManagement from './admin/pages/AdminCouponsManagement.tsx';
-import AdminFlashDeals from './admin/pages/AdminFlashDeals.tsx';
 import AdminLotteMartEventsManagementPortal from './admin/pages/AdminLotteMartEventsManagementPortal.tsx';
 import AdminSystemSettings from './admin/pages/AdminSystemSettings.tsx';
 import AdminLotteMartOrderManagement from './admin/pages/AdminLotteMartOrderManagement.tsx';
 import AdminReviewsManagement from './admin/pages/AdminReviewsManagement.tsx';
+import AdminQuestions from './admin/pages/AdminQuestions.tsx';
 import AdminSupportTickets from './admin/pages/AdminSupportTickets.tsx';
 import AdminSuppliers from './admin/pages/AdminSuppliers.tsx';
 import AdminImportOrders from './admin/pages/AdminImportOrders.tsx';
@@ -131,13 +131,28 @@ function App() {
 
     bootstrap();
     
-    // Feature Parity: Consume Admin Settings
+    // Feature Parity: Consume Admin Settings (branding + maintenance)
     import('./services/dataService').then(({ dataService }) => {
       dataService.getAdminSettings().then(settings => {
         if (settings) {
-          if (settings.system_name || settings.brand_name) {
-            document.title = settings.system_name || settings.brand_name;
+          // Browser tab title — prefer dedicated system_name, fallback to brand_name
+          const tabTitle = settings.system_name || settings.brand_name || "LOTTE Mart";
+          if (tabTitle) document.title = tabTitle;
+
+          // Dynamic favicon — prefer dedicated favicon_url, fallback to brand_logo_url
+          const faviconUrl = settings.favicon_url || settings.brand_logo_url;
+          if (faviconUrl) {
+            const clean = faviconUrl.split('?')[0];
+            // Remove ALL existing favicon links so the browser cannot cache the Vite default
+            document.querySelectorAll("link[rel='icon'], link[rel='shortcut icon']").forEach(el => el.remove());
+            const link = document.createElement('link');
+            link.id = 'dynamic-favicon';
+            link.rel = 'icon';
+            link.type = 'image/png';
+            link.href = `${clean}?v=${Date.now()}`;
+            document.head.appendChild(link);
           }
+
           if (settings.maintenance_mode === true || settings.maintenance_mode === 'true') {
             setMaintenanceMode(true);
           }
@@ -289,11 +304,11 @@ function App() {
             <Route path="categories" element={<AdminPermissionGuard permission="products.read"><AdminCategoryManagement /></AdminPermissionGuard>} />
             <Route path="customers" element={<AdminCustomers />} />
             <Route path="coupons" element={<AdminCouponsManagement />} />
-            <Route path="flash-deals" element={<AdminPermissionGuard permission="coupons.read"><AdminFlashDeals /></AdminPermissionGuard>} />
             <Route path="events" element={<AdminLotteMartEventsManagementPortal />} />
             <Route path="settings" element={<AdminSystemSettings />} />
             <Route path="orders" element={<AdminLotteMartOrderManagement />} />
             <Route path="reviews" element={<AdminReviewsManagement />} />
+            <Route path="questions" element={<AdminQuestions />} />
             <Route path="support" element={<AdminSupportTickets />} />
             <Route path="returns" element={<AdminReturnRequests />} />
             <Route path="suppliers" element={<AdminPermissionGuard permission="suppliers.read"><AdminSuppliers /></AdminPermissionGuard>} />

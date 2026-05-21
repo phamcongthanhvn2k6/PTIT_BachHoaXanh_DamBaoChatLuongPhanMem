@@ -88,7 +88,7 @@ const formatDealValue = (deal: any): string => {
 const formatQuantityLabel = (deal: any): string => {
   const total = Number(deal?.total_quantity ?? 0);
   const remain = Number(deal?.remaining_quantity ?? 0);
-  if (total <= 0 && remain <= 0) return 'Khong gioi han';
+  if (total <= 0 && remain <= 0) return 'Không giới hạn';
   return `${remain}/${total}`;
 };
 
@@ -181,7 +181,7 @@ const AdminFlashDeals: React.FC = () => {
       setDeals(dealList);
       setBranchProducts(Array.isArray(bpRes) ? bpRes : []);
     } catch (err: any) {
-      toast.error(err?.message || 'Khong tai duoc du lieu flash deal');
+      toast.error(err?.message || 'Không tải được dữ liệu flash deal');
     } finally {
       setLoading(false);
     }
@@ -230,27 +230,27 @@ const AdminFlashDeals: React.FC = () => {
 
   const validateForm = () => {
     if (!form.title.trim()) {
-      toast.error('Ten flash deal la bat buoc');
+      toast.error('Tên flash deal là bắt buộc');
       return false;
     }
     if (!form.product_id && !form.branch_product_id) {
-      toast.error('Phai chon san pham ap dung');
+      toast.error('Phải chọn sản phẩm áp dụng');
       return false;
     }
     if (!form.start_date || !form.end_date) {
-      toast.error('Phai co thoi gian bat dau va ket thuc');
+      toast.error('Phải có thời gian bắt đầu và kết thúc');
       return false;
     }
     if (new Date(form.start_date).getTime() >= new Date(form.end_date).getTime()) {
-      toast.error('Thoi gian ket thuc phai sau thoi gian bat dau');
+      toast.error('Thời gian kết thúc phải sau thời gian bắt đầu');
       return false;
     }
     if (Number(form.total_quantity) < 0 || Number(form.remaining_quantity) < 0) {
-      toast.error('So luong khong hop le');
+      toast.error('Số lượng không hợp lệ');
       return false;
     }
     if (Number(form.total_quantity) > 0 && Number(form.remaining_quantity) > Number(form.total_quantity)) {
-      toast.error('So luong con lai khong duoc lon hon tong so luong');
+      toast.error('Số lượng còn lại không được lớn hơn tổng số lượng');
       return false;
     }
     return true;
@@ -282,17 +282,17 @@ const AdminFlashDeals: React.FC = () => {
       start_date: form.start_date,
       end_date: form.end_date,
       is_active: Boolean(form.is_active),
-      status: form.status,
+      status: form.is_active ? 'active' : 'draft',
     };
 
     setSubmitting(true);
     try {
       if (editingId) {
         await flashDealService.updateFlashDeal(editingId, payload);
-        toast.success('Da cap nhat flash deal');
+        toast.success('Đã cập nhật flash deal');
       } else {
         await flashDealService.createFlashDeal(payload);
-        toast.success('Da tao flash deal');
+        toast.success('Đã tạo flash deal');
       }
 
       setModalOpen(false);
@@ -300,7 +300,7 @@ const AdminFlashDeals: React.FC = () => {
       setForm(defaultForm);
       await loadData();
     } catch (err: any) {
-      toast.error(err?.message || 'Khong the luu flash deal');
+      toast.error(err?.message || 'Không thể lưu flash deal');
     } finally {
       setSubmitting(false);
     }
@@ -318,10 +318,10 @@ const AdminFlashDeals: React.FC = () => {
         end_date: toggled?.end_date,
         remaining_quantity: toggled?.remaining_quantity,
       });
-      toast.success('Da doi trang thai flash deal');
+      toast.success('Đã đổi trạng thái flash deal');
       await loadData();
     } catch (err: any) {
-      toast.error(err?.message || 'Khong the doi trang thai');
+      toast.error(err?.message || 'Không thể đổi trạng thái');
     } finally {
       setLoading(false);
     }
@@ -333,7 +333,7 @@ const AdminFlashDeals: React.FC = () => {
     setSubmitting(true);
     try {
       await flashDealService.deleteFlashDeal(String(confirmDelete?.id || confirmDelete?._id || ''));
-      toast.success('Da xoa flash deal');
+      toast.success('Đã xóa flash deal');
       setConfirmDelete(null);
       setDetailDrawer(null);
       if (editingId === String(confirmDelete?.id || confirmDelete?._id || '')) {
@@ -343,7 +343,7 @@ const AdminFlashDeals: React.FC = () => {
       }
       await loadData();
     } catch (err: any) {
-      toast.error(err?.message || 'Khong the xoa flash deal');
+      toast.error(err?.message || 'Không thể xóa flash deal');
     } finally {
       setSubmitting(false);
     }
@@ -353,45 +353,45 @@ const AdminFlashDeals: React.FC = () => {
     <div className="p-8 max-w-screen-2xl mx-auto">
       <PageHeader
         title="Flash Deal"
-        subtitle="Quan ly deal theo thoi gian, trang thai va so luong ton"
+        subtitle="Quản lý deal theo thời gian, trạng thái và số lượng tồn"
         icon="bolt"
         actions={
           <>
             <button onClick={loadData} className={cls.btnSecondary}>
               <span className="material-symbols-outlined text-sm">refresh</span>
-              Lam moi
+              Làm mới
             </button>
             <button onClick={openCreate} className={cls.btnPrimary}>
               <span className="material-symbols-outlined text-sm">add</span>
-              Them flash deal
+              Thêm flash deal
             </button>
           </>
         }
       />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Tong deal" value={stats.total} icon="sell" color="blue" />
-        <StatCard label="Dang hoat dong" value={stats.active} icon="check_circle" color="emerald" />
-        <StatCard label="Dang tam dung" value={stats.draft} icon="pause_circle" color="amber" />
-        <StatCard label="Da het han" value={stats.expired} icon="timer_off" color="red" />
+        <StatCard label="Tổng deal" value={stats.total} icon="sell" color="blue" />
+        <StatCard label="Đang hoạt động" value={stats.active} icon="check_circle" color="emerald" />
+        <StatCard label="Đang tạm dừng" value={stats.draft} icon="pause_circle" color="amber" />
+        <StatCard label="Đã hết hạn" value={stats.expired} icon="timer_off" color="red" />
       </div>
 
       <div className="flex flex-col md:flex-row gap-3 mb-6">
         <SearchBar
           value={search}
           onChange={setSearch}
-          placeholder="Tim theo ten deal, branch product, product id..."
+          placeholder="Tìm theo tên deal, branch product, product id..."
           onSearch={() => setPage(1)}
         />
         <FilterBar
           filters={[
             {
-              label: 'Tat ca trang thai',
+              label: 'Tất cả trạng thái',
               value: statusFilter,
               options: [
-                { value: 'active', label: 'Hoat dong' },
-                { value: 'draft', label: 'Tam dung' },
-                { value: 'expired', label: 'Het han' },
+                { value: 'active', label: 'Hoạt động' },
+                { value: 'draft', label: 'Tạm dừng' },
+                { value: 'expired', label: 'Hết hạn' },
               ],
               onChange: (value) => {
                 setStatusFilter(value);
@@ -407,12 +407,12 @@ const AdminFlashDeals: React.FC = () => {
         {!loading && filteredDeals.length === 0 ? (
           <EmptyState
             icon="bolt"
-            title="Chua co flash deal"
-            description="Them flash deal dau tien de hien thi tren trang nguoi dung"
+            title="Chưa có flash deal"
+            description="Thêm flash deal đầu tiên để hiển thị trên trang người dùng"
             action={
               <button onClick={openCreate} className={cls.btnPrimary}>
                 <span className="material-symbols-outlined text-sm">add</span>
-                Tao flash deal
+                Tạo flash deal
               </button>
             }
           />
@@ -444,7 +444,7 @@ const AdminFlashDeals: React.FC = () => {
                           <button onClick={() => setDetailDrawer(deal)} className="text-left font-semibold text-slate-900 hover:text-red-600 transition-colors">
                             {deal?.title || 'Flash deal'}
                           </button>
-                          <div className="text-xs text-slate-400 mt-1 line-clamp-1">{deal?.description || 'Khong co mo ta'}</div>
+                          <div className="text-xs text-slate-400 mt-1 line-clamp-1">{deal?.description || 'Không có mô tả'}</div>
                         </td>
                         <td className={cls.tdCell}>
                           <div className="text-xs text-slate-600">BP: {String(deal?.branch_product_id || '--')}</div>
@@ -465,16 +465,16 @@ const AdminFlashDeals: React.FC = () => {
                         </td>
                         <td className={`${cls.tdCell} text-right`}>
                           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => setDetailDrawer(deal)} className={cls.btnGhost} title="Xem chi tiet">
+                            <button onClick={() => setDetailDrawer(deal)} className={cls.btnGhost} title="Xem chi tiết">
                               <span className="material-symbols-outlined text-[16px]">visibility</span>
                             </button>
-                            <button onClick={() => openEdit(deal)} className={cls.btnGhost} title="Sua">
+                            <button onClick={() => openEdit(deal)} className={cls.btnGhost} title="Sửa">
                               <span className="material-symbols-outlined text-[16px]">edit</span>
                             </button>
-                            <button onClick={() => handleToggle(deal)} className={cls.btnGhost} title="Bat/Tat">
+                            <button onClick={() => handleToggle(deal)} className={cls.btnGhost} title="Bật/Tắt">
                               <span className="material-symbols-outlined text-[16px]">power_settings_new</span>
                             </button>
-                            <button onClick={() => setConfirmDelete(deal)} className={cls.btnGhost} title="Xoa">
+                            <button onClick={() => setConfirmDelete(deal)} className={cls.btnGhost} title="Xóa">
                               <span className="material-symbols-outlined text-[16px]">delete</span>
                             </button>
                           </div>
@@ -493,23 +493,23 @@ const AdminFlashDeals: React.FC = () => {
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editingId ? 'Cap nhat flash deal' : 'Tao flash deal'}
-        subtitle="0/0 cho tong so luong va so luong con lai se duoc xem la khong gioi han"
+        title={editingId ? 'Cập nhật flash deal' : 'Tạo flash deal'}
+        subtitle="0/0 cho tổng số lượng và số lượng còn lại sẽ được xem là không giới hạn"
         icon={editingId ? 'edit' : 'add'}
         size="xl"
         footer={
           <>
-            <button type="button" onClick={() => setModalOpen(false)} className={cls.btnSecondary}>Huy</button>
+            <button type="button" onClick={() => setModalOpen(false)} className={cls.btnSecondary}>Hủy</button>
             <button type="submit" form="flash-deal-form" disabled={submitting} className={cls.btnPrimary}>
               {submitting && <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>}
-              {editingId ? 'Luu thay doi' : 'Tao deal'}
+              {editingId ? 'Lưu thay đổi' : 'Tạo deal'}
             </button>
           </>
         }
       >
         <form id="flash-deal-form" onSubmit={submit}>
-          <FormSection title="Thong tin co ban">
-            <FormField label="Ten flash deal" required>
+          <FormSection title="Thông tin cơ bản">
+            <FormField label="Tên flash deal" required>
               <input
                 className={cls.input}
                 value={form.title}
@@ -518,67 +518,57 @@ const AdminFlashDeals: React.FC = () => {
               />
             </FormField>
 
-            <FormField label="Trang thai">
-              <select
-                className={`${cls.select} w-full`}
-                value={form.status}
-                onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as FlashDealFormState['status'] }))}
-              >
-                <option value="active">active</option>
-                <option value="draft">draft</option>
-                <option value="expired">expired</option>
-              </select>
-            </FormField>
 
-            <FormField label="Mo ta" colSpan={2}>
+
+            <FormField label="Mô tả" colSpan={2}>
               <textarea
                 className={`${cls.input} resize-none`}
                 rows={3}
                 value={form.description}
                 onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
-                placeholder="Mo ta ngan ve deal"
+                placeholder="Mô tả ngắn về deal"
               />
             </FormField>
 
-            <FormField label="Loai deal">
+            <FormField label="Loại deal">
               <select
                 className={`${cls.select} w-full`}
                 value={form.type}
                 onChange={(event) => setForm((prev) => ({ ...prev, type: event.target.value as FlashDealFormState['type'] }))}
               >
-                <option value="percent">Phan tram</option>
-                <option value="fixed_amount">Giam tien</option>
+                <option value="percent">Phần trăm</option>
+                <option value="fixed_amount">Giảm tiền</option>
                 <option value="flash_deal">Flash deal</option>
               </select>
             </FormField>
 
-            <FormField label="Dang kich hoat">
+            <FormField label="Đang kích hoạt">
               <select
                 className={`${cls.select} w-full`}
                 value={form.is_active ? '1' : '0'}
                 onChange={(event) => setForm((prev) => ({ ...prev, is_active: event.target.value === '1' }))}
               >
-                <option value="1">Hoat dong</option>
-                <option value="0">Tam dung</option>
+                <option value="1">Hoạt động</option>
+                <option value="0">Tạm dừng</option>
               </select>
             </FormField>
           </FormSection>
 
-          <FormSection title="San pham ap dung">
+          <FormSection title="Sản phẩm áp dụng">
             <FormField label="Branch product" required colSpan={2}>
               <select
                 className={`${cls.select} w-full`}
                 value={form.branch_product_id}
                 onChange={(event) => onSelectBranchProduct(event.target.value)}
               >
-                <option value="">Chon branch product</option>
+                <option value="">Chọn branch product</option>
                 {branchProductOptions.map((option: any) => (
                   <option key={option.id} value={option.id}>{option.label}</option>
                 ))}
               </select>
             </FormField>
 
-            <FormField label="product_id (tu dong dien khi chon BP)">
+            <FormField label="product_id (tự động điền khi chọn BP)">
               <input
                 className={cls.input}
                 value={form.product_id}
@@ -588,7 +578,7 @@ const AdminFlashDeals: React.FC = () => {
             </FormField>
           </FormSection>
 
-          <FormSection title="Gia va uu dai">
+          <FormSection title="Giá và ưu đãi">
             <FormField label="discount_value">
               <input
                 type="number"
@@ -609,7 +599,7 @@ const AdminFlashDeals: React.FC = () => {
               />
             </FormField>
 
-            <FormField label="Gia goc">
+            <FormField label="Giá gốc">
               <input
                 type="number"
                 className={cls.input}
@@ -619,7 +609,7 @@ const AdminFlashDeals: React.FC = () => {
               />
             </FormField>
 
-            <FormField label="Gia deal">
+            <FormField label="Giá deal">
               <input
                 type="number"
                 className={cls.input}
@@ -630,8 +620,8 @@ const AdminFlashDeals: React.FC = () => {
             </FormField>
           </FormSection>
 
-          <FormSection title="So luong va thoi gian">
-            <FormField label="Tong so luong">
+          <FormSection title="Số lượng và thời gian">
+            <FormField label="Tổng số lượng">
               <input
                 type="number"
                 className={cls.input}
@@ -641,7 +631,7 @@ const AdminFlashDeals: React.FC = () => {
               />
             </FormField>
 
-            <FormField label="So luong con lai">
+            <FormField label="Số lượng còn lại">
               <input
                 type="number"
                 className={cls.input}
@@ -651,7 +641,7 @@ const AdminFlashDeals: React.FC = () => {
               />
             </FormField>
 
-            <FormField label="Bat dau" required>
+            <FormField label="Bắt đầu" required>
               <input
                 type="datetime-local"
                 className={cls.input}
@@ -660,7 +650,7 @@ const AdminFlashDeals: React.FC = () => {
               />
             </FormField>
 
-            <FormField label="Ket thuc" required>
+            <FormField label="Kết thúc" required>
               <input
                 type="datetime-local"
                 className={cls.input}
@@ -675,7 +665,7 @@ const AdminFlashDeals: React.FC = () => {
       <DetailDrawer
         open={!!detailDrawer}
         onClose={() => setDetailDrawer(null)}
-        title={detailDrawer?.title || 'Chi tiet flash deal'}
+        title={detailDrawer?.title || 'Chi tiết flash deal'}
         subtitle={String(detailDrawer?.id || detailDrawer?._id || '')}
         icon="bolt"
       >
@@ -686,25 +676,25 @@ const AdminFlashDeals: React.FC = () => {
             </div>
 
             <div>
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Thong tin deal</h4>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Thông tin deal</h4>
               <div className="space-y-3">
-                <InfoRow label="Tieu de" value={detailDrawer?.title} />
-                <InfoRow label="Mo ta" value={detailDrawer?.description} />
-                <InfoRow label="Loai" value={detailDrawer?.type} />
-                <InfoRow label="Giam gia" value={formatDealValue(detailDrawer)} />
-                <InfoRow label="Gia deal" value={`${Number(detailDrawer?.deal_price || 0).toLocaleString('vi-VN')}đ`} />
-                <InfoRow label="Gia goc" value={`${Number(detailDrawer?.original_price || 0).toLocaleString('vi-VN')}đ`} />
+                <InfoRow label="Tiêu đề" value={detailDrawer?.title} />
+                <InfoRow label="Mô tả" value={detailDrawer?.description} />
+                <InfoRow label="Loại" value={detailDrawer?.type} />
+                <InfoRow label="Giảm giá" value={formatDealValue(detailDrawer)} />
+                <InfoRow label="Giá deal" value={`${Number(detailDrawer?.deal_price || 0).toLocaleString('vi-VN')}đ`} />
+                <InfoRow label="Giá gốc" value={`${Number(detailDrawer?.original_price || 0).toLocaleString('vi-VN')}đ`} />
               </div>
             </div>
 
             <div>
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Pham vi ap dung</h4>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Phạm vi áp dụng</h4>
               <div className="space-y-3">
                 <InfoRow label="branch_product_id" value={String(detailDrawer?.branch_product_id || '--')} />
                 <InfoRow label="product_id" value={String(detailDrawer?.product_id || '--')} />
-                <InfoRow label="So luong" value={formatQuantityLabel(detailDrawer)} />
-                <InfoRow label="Bat dau" value={detailDrawer?.start_date ? new Date(detailDrawer.start_date).toLocaleString('vi-VN') : '--'} />
-                <InfoRow label="Ket thuc" value={detailDrawer?.end_date ? new Date(detailDrawer.end_date).toLocaleString('vi-VN') : '--'} />
+                <InfoRow label="Số lượng" value={formatQuantityLabel(detailDrawer)} />
+                <InfoRow label="Bắt đầu" value={detailDrawer?.start_date ? new Date(detailDrawer.start_date).toLocaleString('vi-VN') : '--'} />
+                <InfoRow label="Kết thúc" value={detailDrawer?.end_date ? new Date(detailDrawer.end_date).toLocaleString('vi-VN') : '--'} />
               </div>
             </div>
 
@@ -717,7 +707,7 @@ const AdminFlashDeals: React.FC = () => {
                 className={`${cls.btnPrimary} flex-1 justify-center`}
               >
                 <span className="material-symbols-outlined text-sm">edit</span>
-                Chinh sua
+                Chỉnh sửa
               </button>
               <button
                 onClick={() => {
@@ -727,7 +717,7 @@ const AdminFlashDeals: React.FC = () => {
                 className={`${cls.btnSecondary} flex-1 justify-center`}
               >
                 <span className="material-symbols-outlined text-sm">power_settings_new</span>
-                Bat/Tat
+                Bật/Tắt
               </button>
               <button
                 onClick={() => {
@@ -736,9 +726,7 @@ const AdminFlashDeals: React.FC = () => {
                 }}
                 className={`${cls.btnDangerSoft} flex-1 justify-center`}
               >
-                <span className="material-symbols-outlined text-sm">delete</span>
-                Xoa
-              </button>
+                <span className="material-symbols-outlined text-sm">delete</span>Xóa</button>
             </div>
           </div>
         )}
@@ -748,9 +736,9 @@ const AdminFlashDeals: React.FC = () => {
         open={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}
         onConfirm={handleDelete}
-        title="Xoa flash deal"
-        message={`Ban co chac chan muon xoa "${confirmDelete?.title || 'Flash deal'}"?`}
-        confirmLabel="Xoa"
+        title="Xóa flash deal"
+        message={`Bạn có chắc chắn muốn xóa "${confirmDelete?.title || 'Flash deal'}"?`}
+        confirmLabel="Xóa"
         danger
         loading={submitting}
       />

@@ -35,9 +35,13 @@ const AdminProductManagement: React.FC = () => {
 
   // Modal state
   const [editItem, setEditItem] = useState<any | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<any | null>(null);
 
   // Quick Filters
   const [quickFilter, setQuickFilter] = useState<'none' | 'low-stock' | 'promo' | 'new' | 'expiring'>('none');
+
+  // Bulk Selection
+  const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
 
   // Branch filter (Admin) from global Redux
   const { adminBranchId: branchFilter } = useAppSelector(state => state.adminAuth);
@@ -113,6 +117,35 @@ const AdminProductManagement: React.FC = () => {
       merged.supplier_id = pickText(bp.supplier_id, master.supplier_id);
       merged.supplier_name = pickText(bp.supplier_name, master.supplier_name);
       merged.import_price = pickNumber(bp.import_price, master.import_price);
+
+      // Merge expiry_warning_days from master (default 7)
+      merged.expiry_warning_days = Number(master.expiry_warning_days ?? bp.expiry_warning_days ?? 7);
+
+      // ── Compute expiry fields client-side ──────────────────────────────────
+      const expiryDateRaw = merged.expiry_date;
+      if (expiryDateRaw) {
+        const expDate = new Date(expiryDateRaw);
+        const now = new Date();
+        const diffMs = expDate.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        const warningDays = merged.expiry_warning_days;
+
+        merged.days_until_expiry = diffDays;
+
+        if (diffDays < 0) {
+          merged.expiry_status = 'expired';
+        } else if (diffDays <= Math.floor(warningDays / 2)) {
+          merged.expiry_status = 'critical';   // red — urgent
+        } else if (diffDays <= warningDays) {
+          merged.expiry_status = 'warning';    // amber — approaching
+        } else {
+          merged.expiry_status = 'ok';
+        }
+      } else {
+        merged.days_until_expiry = null;
+        merged.expiry_status = null;
+      }
+      // ──────────────────────────────────────────────────────────────────────
 
       return merged;
     });
@@ -286,21 +319,47 @@ const AdminProductManagement: React.FC = () => {
     }
   };
 
-  const handleProductDelete = async (item: any) => {
-    const shouldDelete = window.confirm(`Bạn có chắc chắn muốn xóa sản phẩm "${item.name}"?\nHành động này sẽ xóa hoặc ẩn sản phẩm khỏi hệ thống.`);
-    if (!shouldDelete) return;
+  const handleProductDelete = async () => {
+    if (!itemToDelete) return;
 
     try {
       setIsProcessing(true);
       // Delete the master product (productController.remove will soft delete and deactivate branches)
-      const masterId = item.master_id || item.product_id;
+      const masterId = itemToDelete.master_id || itemToDelete.product_id;
       if (!masterId) throw new Error('Không tìm thấy ID sản phẩm gốc');
       
       await productService.deleteProduct(masterId);
-      toast.success('Đã xóa sản phẩm thành công');
+      toast.success('Đã xóa (hoặc ẩn) sản phẩm thành công');
       await loadData();
     } catch (err: any) {
       toast.error(err?.message || 'Không thể xóa sản phẩm');
+    } finally {
+      setIsProcessing(false);
+      setItemToDelete(null);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedItemIds.length === 0) return;
+    const shouldDelete = window.confirm(`Bạn có chắc chắn muốn xóa ${selectedItemIds.length} sản phẩm đã chọn? Thao tác này có thể không thể hoàn tác.`);
+    if (!shouldDelete) return;
+
+    try {
+      setIsProcessing(true);
+      let successCount = 0;
+      await Promise.all(selectedItemIds.map(async (id) => {
+         const item = items.find(i => String(i.id || i._id) === id);
+         const masterId = item?.master_id || item?.product_id;
+         if (masterId) {
+             await productService.deleteProduct(masterId);
+             successCount++;
+         }
+      }));
+      toast.success(`Đã xóa thành công ${successCount} sản phẩm`);
+      setSelectedItemIds([]);
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.message || 'Không thể xóa các sản phẩm đã chọn');
     } finally {
       setIsProcessing(false);
     }
@@ -315,22 +374,20 @@ const AdminProductManagement: React.FC = () => {
     else if (daysLeft !== null && daysLeft <= 14) discountValue = '30';
 
     const payload = {
+      item_type: 'promotion',
       title: `⚠️ Xả hàng sắp hết hạn: ${item.name}`,
-      description: `Xả hàng sắp hết hạn ${item.name}. SKU: ${item.sku || 'N/A'}. Nhập từ: ${item.supplier_name || 'N/A'}. Lô: ${item.batch_code || 'N/A'}. HSD: ${item.exp_date ? new Date(item.exp_date).toLocaleDateString('vi-VN') : 'N/A'}. Còn ${daysLeft ?? '?'} ngày. Tồn hiện tại: ${item.stock || 0}.`,
-      imageUrl: item.images?.[0] || item.product?.images?.[0] || 'https://via.placeholder.com/800x400.png?text=Clearance+Sale',
+      description: `Xả hàng sắp hết hạn ${item.name}. SKU: ${item.sku || 'N/A'}. Nhập từ: ${item.supplier_name || 'N/A'}. Lô: ${item.batch_code || 'N/A'}. HSD: ${item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('vi-VN') : 'N/A'}. Còn ${daysLeft ?? '?'} ngày. Tồn hiện tại: ${item.stock || 0}.`,
+      image: item.images?.[0] || item.product?.images?.[0] || 'https://via.placeholder.com/800x400.png?text=Clearance+Sale',
       type: 'percent',
-      discount_value: discountValue,
+      value: discountValue,
       scope: 'product',
       target_product_ids: [String(item.master_id || item.product_id)],
       target_branch_ids: branchFilter !== 'ALL' ? [String(branchFilter)] : [],
       start_date: new Date().toISOString(),
-      end_date: item.exp_date || '',
+      end_date: item.expiry_date || '',
       total_quantity: String(item.stock || ''),
-      per_user_limit: '1',
+      usage_per_user: '1',
       badge_text: 'Giải phóng hàng sắp hết hạn',
-      source: 'expiry_alert',
-      is_auto_generated: true,
-      autoOpenDraft: true,
     };
     navigate('/admin/coupons', { state: { draftPromotion: payload } });
   };
@@ -379,6 +436,7 @@ const AdminProductManagement: React.FC = () => {
       batch_code: '',
       manufacture_date: '',
       expiry_date: '',
+      expiry_warning_days: 7,
       import_price: 0,
       original_price: 0,
       price: 0,
@@ -400,6 +458,12 @@ const AdminProductManagement: React.FC = () => {
   const saveQuickEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editItem) return;
+
+    if (!editItem.name?.trim()) { toast.error('Vui lòng nhập tên sản phẩm!'); return; }
+    if (!editItem.sku?.trim()) { toast.error('Vui lòng nhập mã SKU!'); return; }
+    if (!editItem.category_id) { toast.error('Vui lòng chọn danh mục!'); return; }
+    if (Number(editItem.price) < 0) { toast.error('Giá bán không được nhỏ hơn 0!'); return; }
+
     try {
       setIsProcessing(true);
       const discountPct = Number(editItem.original_price) > 0
@@ -444,6 +508,7 @@ const AdminProductManagement: React.FC = () => {
         discount_percent: discountPct,
         manufacture_date: editItem.manufacture_date || null,
         expiry_date: editItem.expiry_date || null,
+        expiry_warning_days: Number(editItem.expiry_warning_days ?? 7),
         batch_code: editItem.batch_code || '',
         brand: editItem.brand || '',
         barcode: editItem.barcode || '',
@@ -456,13 +521,8 @@ const AdminProductManagement: React.FC = () => {
 
       if (!editItem.id) {
         // CREATE flow: create Product first, then BranchProduct
-        if (!editItem.name?.trim()) {
-          toast.error('Vui lòng nhập tên sản phẩm!');
-          setIsProcessing(false);
-          return;
-        }
         if (!editItem.branch_id) {
-          toast.error('Vui lòng chọn chi nhánh!');
+          toast.error('Vui lòng chọn chi nhánh để nhập kho!');
           setIsProcessing(false);
           return;
         }
@@ -516,20 +576,7 @@ const AdminProductManagement: React.FC = () => {
               Quản lý kho hàng, giá bán, tình trạng hiển thị của toàn bộ {enrichedProducts.length} SKU trên hệ thống.
             </p>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <button onClick={handleExport} className="inline-flex items-center justify-center gap-2 h-10 px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.98]">
-              <span className="material-symbols-outlined">ios_share</span>
-              Xuất Data
-            </button>
-            <button onClick={handleImport} className="inline-flex items-center justify-center gap-2 h-10 px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.98]">
-              <span className="material-symbols-outlined">publish</span>
-              Import Data
-            </button>
-            <button onClick={handleCreateSKU} disabled={isProcessing} className="inline-flex items-center justify-center gap-2 h-10 px-5 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/20 hover:shadow-primary/40 hover:bg-primary-container transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-sm">
-              <span className="material-symbols-outlined">add</span>
-              Tạo mới SKU
-            </button>
-          </div>
+
         </div>
 
         <div className="bg-surface-container-lowest rounded-2xl p-6 shadow-sm border border-slate-100 space-y-4">
@@ -538,13 +585,19 @@ const AdminProductManagement: React.FC = () => {
               <h2 className="text-lg font-black text-slate-800">Quản lý Danh mục</h2>
               <p className="text-xs text-slate-500 mt-1">Tạo và cập nhật danh mục để đồng bộ bộ lọc ở Shop.</p>
             </div>
-            <button
-              type="button"
-              onClick={resetCategoryForm}
-              className="px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
-            >
-              Tạo danh mục mới
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={handleCreateSKU} disabled={isProcessing} className="inline-flex items-center justify-center gap-1 px-3 py-2 bg-primary text-white font-bold rounded-lg hover:bg-primary/90 transition-all cursor-pointer text-xs">
+                <span className="material-symbols-outlined text-[16px]">add</span>
+                Tạo mới SKU
+              </button>
+              <button
+                type="button"
+                onClick={resetCategoryForm}
+                className="px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+              >
+                Tạo danh mục mới
+              </button>
+            </div>
           </div>
 
           <form onSubmit={saveCategory} className="grid grid-cols-1 md:grid-cols-12 gap-3">
@@ -613,7 +666,7 @@ const AdminProductManagement: React.FC = () => {
             </div>
           </form>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
             {categories.map((cat: any) => {
               const catId = String(cat.id || cat._id);
               const parent = categories.find((c: any) => String(c.id || c._id) === String(cat.parent_id));
@@ -653,6 +706,51 @@ const AdminProductManagement: React.FC = () => {
                 </div>
               );
             })}
+          </div>
+
+          {/* Moved Action Buttons */}
+          <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center gap-3">
+            <button onClick={handleExport} className="inline-flex items-center justify-center gap-2 h-10 px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.98]">
+              <span className="material-symbols-outlined">ios_share</span>
+              Xuất Data
+            </button>
+            <button onClick={handleImport} className="inline-flex items-center justify-center gap-2 h-10 px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.98]">
+              <span className="material-symbols-outlined">publish</span>
+              Import Data
+            </button>
+            <button 
+              onClick={async () => {
+                const conf = window.confirm('Hệ thống sẽ tự động tạo promotion xả hàng cho tất cả sản phẩm sắp hết hạn?');
+                if (!conf) return;
+                try {
+                  setIsProcessing(true);
+                  const token = localStorage.getItem('access_token') || sessionStorage.getItem('token');
+                  const res = await fetch('http://localhost:3001/api/promotions/bulk-expiring', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+                  });
+                  const data = await res.json();
+                  if (data.success) {
+                    toast.success(`Đã tạo thành công ${data.count || 0} khuyến mãi!`);
+                    await loadData();
+                  } else throw new Error(data.message);
+                } catch(err: any) {
+                  toast.error(err.message || 'Lỗi tạo ưu đãi hàng loạt');
+                } finally {
+                  setIsProcessing(false);
+                }
+              }}
+              disabled={isProcessing}
+              className="inline-flex items-center justify-center gap-2 h-10 px-5 bg-orange-50 bg-opacity-50 border border-orange-200 text-orange-600 hover:bg-orange-100 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.98]">
+              <span className="material-symbols-outlined">auto_fix</span>
+              Tạo Sale Hàng Loạt
+            </button>
+            {selectedItemIds.length > 0 && (
+              <button onClick={handleBulkDelete} disabled={isProcessing} className="inline-flex items-center justify-center gap-2 h-10 px-5 bg-red-600 text-white font-bold rounded-xl shadow-lg shadow-red-600/20 hover:shadow-red-600/40 hover:bg-red-700 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-sm">
+                <span className="material-symbols-outlined">delete</span>
+                Xóa {selectedItemIds.length} mục
+              </button>
+            )}
           </div>
         </div>
 
@@ -783,7 +881,18 @@ const AdminProductManagement: React.FC = () => {
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-5 py-4 text-[11px] font-black uppercase tracking-widest text-slate-500 w-10">
-                    <input className="rounded border-slate-300 text-primary focus:ring-primary/20" type="checkbox" />
+                    <input 
+                      className="rounded border-slate-300 text-primary focus:ring-primary/20 cursor-pointer" 
+                      type="checkbox" 
+                      checked={displayedItems.length > 0 && selectedItemIds.length === displayedItems.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedItemIds(displayedItems.map(item => String(item.id || item._id)));
+                        } else {
+                          setSelectedItemIds([]);
+                        }
+                      }}
+                    />
                   </th>
                   <th className="px-5 py-4 text-[11px] font-black uppercase tracking-widest text-slate-500">Sản phẩm & NCC</th>
                   <th className="px-5 py-4 text-[11px] font-black uppercase tracking-widest text-slate-500 text-right">Giá bán / Nhập</th>
@@ -796,7 +905,21 @@ const AdminProductManagement: React.FC = () => {
               <tbody className="divide-y divide-slate-100 bg-white">
                 {displayedItems.map((item) => (
                   <tr key={item.id} className="group hover:bg-slate-50/50 transition-colors">
-                    <td className="px-5 py-4 align-top"><input className="rounded border-slate-300 text-primary mt-3" type="checkbox" /></td>
+                    <td className="px-5 py-4 align-top">
+                      <input 
+                        className="rounded border-slate-300 text-primary mt-3 cursor-pointer" 
+                        type="checkbox" 
+                        checked={selectedItemIds.includes(String(item.id || item._id))}
+                        onChange={(e) => {
+                          const id = String(item.id || item._id);
+                          if (e.target.checked) {
+                            setSelectedItemIds(prev => [...prev, id]);
+                          } else {
+                            setSelectedItemIds(prev => prev.filter(x => x !== id));
+                          }
+                        }}
+                      />
+                    </td>
                     <td className="px-5 py-4 max-w-[300px]">
                       <div className="flex gap-4">
                         <div className="w-14 h-14 rounded-xl bg-slate-100 border border-slate-200 flex-shrink-0 overflow-hidden relative">
@@ -863,7 +986,7 @@ const AdminProductManagement: React.FC = () => {
                             NSX: {new Date(item.manufacture_date).toLocaleDateString('vi-VN')}
                           </span>
                         )}
-                        {item.exp_date ? (
+                        {item.expiry_date ? (
                           <div className="flex flex-col gap-0.5">
                             <span className={`text-[11px] font-bold ${
                               item.expiry_status === 'expired' ? 'text-red-600' :
@@ -871,7 +994,7 @@ const AdminProductManagement: React.FC = () => {
                               item.expiry_status === 'warning' ? 'text-amber-600' :
                               'text-slate-600'
                             }`}>
-                              HSD: {new Date(item.exp_date).toLocaleDateString('vi-VN')}
+                              HSD: {new Date(item.expiry_date).toLocaleDateString('vi-VN')}
                             </span>
                             <span className={`text-[10px] font-bold ${
                               item.expiry_status === 'expired' ? 'text-red-600' :
@@ -936,7 +1059,7 @@ const AdminProductManagement: React.FC = () => {
                           </button>
                         )}
                         <button 
-                          onClick={() => handleProductDelete(item)}
+                          onClick={() => setItemToDelete(item)}
                           disabled={isProcessing}
                           className="px-4 py-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 font-bold text-[11px] rounded-lg transition-all flex items-center justify-center gap-1 w-full"
                           title="Xóa sản phẩm"
@@ -1103,8 +1226,41 @@ const AdminProductManagement: React.FC = () => {
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 border-t border-slate-100 pt-4 mt-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">URL Thumbnail</label>
-                  <input type="text" value={editItem.thumbnail || ''} onChange={e => setEditItem({...editItem, thumbnail: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm" />
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 flex items-center justify-between">
+                    Thumbnail
+                    <label className="text-primary hover:underline cursor-pointer normal-case">
+                      Tải lên
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 2 * 1024 * 1024) { toast.error('Ảnh phải nhỏ hơn 2MB'); return; }
+                          try {
+                            setIsProcessing(true);
+                            const formData = new FormData();
+                            formData.append('image', file);
+                            const token = localStorage.getItem('access_token') || sessionStorage.getItem('token');
+                            const res = await fetch('http://localhost:3001/api/uploads/promotion-image', {
+                                method: 'POST', body: formData, headers: token ? { Authorization: `Bearer ${token}` } : {}
+                            });
+                            const result = await res.json();
+                            if (result.success && result.data?.url) {
+                               setEditItem((prev: any) => ({...prev, thumbnail: result.data.url}));
+                               toast.success('Tải ảnh thành công');
+                            } else throw new Error(result.message);
+                          } catch(err: any) { toast.error(err.message || 'Lỗi tải ảnh'); }
+                          finally { setIsProcessing(false); }
+                        }}
+                      />
+                    </label>
+                  </label>
+                  <div className="flex gap-2 items-center">
+                    {editItem.thumbnail && <img src={editItem.thumbnail} className="w-10 h-10 rounded border border-slate-200 object-cover bg-slate-100 flex-shrink-0" alt="thumb" />}
+                    <input type="text" placeholder="URL thay thế..." value={editItem.thumbnail || ''} onChange={e => setEditItem({...editItem, thumbnail: e.target.value})} className="flex-1 w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm text-slate-700 min-w-0" />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Trọng lượng</label>
@@ -1136,7 +1292,11 @@ const AdminProductManagement: React.FC = () => {
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Hạn Sử Dụng</label>
                   <input type="date" value={editItem.expiry_date ? editItem.expiry_date.split('T')[0] : ''} onChange={e => setEditItem({...editItem, expiry_date: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm" />
                 </div>
-                <div className="col-span-2">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Báo Hết Hạn Trước (Ngày)</label>
+                  <input type="number" min="0" value={editItem.expiry_warning_days ?? 7} onChange={e => setEditItem({...editItem, expiry_warning_days: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm" />
+                </div>
+                <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Giá Nhập (Import Price)</label>
                   <div className="relative">
                     <input type="number" min="0" value={editItem.import_price || 0} onChange={e => setEditItem({...editItem, import_price: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm text-amber-600 font-bold" />
@@ -1205,6 +1365,27 @@ const AdminProductManagement: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm Modal */}
+      {itemToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6 animate-in fade-in zoom-in duration-200 text-center">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+               <span className="material-symbols-outlined text-red-600 text-[24px]">warning</span>
+            </div>
+            <h3 className="text-lg font-black text-slate-800 mb-2">Xóa sản phẩm?</h3>
+            <p className="text-slate-500 text-sm mb-6 leading-relaxed">
+              Bạn có chắc chắn muốn xóa <b>{itemToDelete.name}</b> khỏi hệ thống? Sản phẩm này sẽ bị ẩn khỏi cửa hàng.
+            </p>
+            <div className="flex gap-3">
+               <button onClick={() => setItemToDelete(null)} className="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl transition-all">Hủy thao tác</button>
+               <button onClick={handleProductDelete} disabled={isProcessing} className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold rounded-xl transition-all flex items-center justify-center">
+                 {isProcessing ? 'Đang xóa...' : 'Xác nhận xóa'}
+               </button>
+            </div>
           </div>
         </div>
       )}

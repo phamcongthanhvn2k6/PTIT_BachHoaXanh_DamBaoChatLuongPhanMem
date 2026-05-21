@@ -6,6 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { useAppSelector } from '../../store';
 import type { Branch } from '../../types';
 import { isManagerRole } from '../utils/permission';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   value: string;                      // current filter value ("ALL" or branchId)
@@ -17,6 +18,7 @@ const AdminBranchFilter: React.FC<Props> = ({ value, onChange, className }) => {
   const adminAuth = useAppSelector((s) => s.adminAuth);
   const admin = adminAuth.admin;
   const [branches, setBranches] = useState<Branch[]>([]);
+  const { t } = useTranslation();
 
   const isManager = isManagerRole(admin);
   const adminBranchId = admin?.branch_id || admin?.branch || '';
@@ -43,7 +45,7 @@ const AdminBranchFilter: React.FC<Props> = ({ value, onChange, className }) => {
     return (
       <div className={`flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm font-bold text-blue-700 ${className || ''}`}>
         <span className="material-symbols-outlined text-sm">storefront</span>
-        Chi nhánh: {myBranch?.name || adminBranchId}
+        {t('adminDash.branchLabel', { defaultValue: 'Branch' })}: {myBranch?.name || adminBranchId}
         <span className="text-[10px] font-normal text-blue-500 ml-1">(Manager)</span>
       </div>
     );
@@ -56,7 +58,7 @@ const AdminBranchFilter: React.FC<Props> = ({ value, onChange, className }) => {
       onChange={(e) => onChange(e.target.value)}
       className={`px-4 py-3 bg-surface-container-low border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary/20 transition-all text-sm outline-none cursor-pointer font-medium ${className || ''}`}
     >
-      <option value="ALL">🏪 Tất cả chi nhánh</option>
+      <option value="ALL">🏪 {t('adminDash.allBranches', { defaultValue: 'All branches' })}</option>
       {branches
         .filter((b) => b.is_active !== false)
         .map((b) => {

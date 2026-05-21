@@ -28,7 +28,6 @@ const menuItems: MenuItem[] = [
   { to: '/admin/orders', icon: 'receipt_long', labelKey: 'sidebar.orders', fallbackLabel: 'Đơn hàng', permission: 'orders.read' },
   { to: '/admin/customers', icon: 'group', labelKey: 'sidebar.customers', fallbackLabel: 'Khách hàng', permission: 'customers.read' },
   { to: '/admin/coupons', icon: 'local_activity', labelKey: 'sidebar.coupons', fallbackLabel: 'Khuyến mãi & Coupon', permission: 'coupons.read' },
-  { to: '/admin/flash-deals', icon: 'bolt', labelKey: 'sidebar.flashDeals', fallbackLabel: 'Flash Deal', permission: 'flash_deals.read' },
   { to: '/admin/settings', icon: 'settings', labelKey: 'sidebar.settings', fallbackLabel: 'Cấu hình hệ thống', permission: 'settings.read' },
 
   // Enterprise Inventory
@@ -43,6 +42,7 @@ const menuItems: MenuItem[] = [
 
   // CSKH
   { to: '/admin/reviews', icon: 'reviews', labelKey: 'sidebar.reviews', fallbackLabel: 'Quản lý đánh giá', permission: 'reviews.read', section: 'CSKH & Trải nghiệm' },
+  { to: '/admin/questions', icon: 'forum', labelKey: 'sidebar.questions', fallbackLabel: 'Hỏi Đáp Sản Phẩm', permission: 'reviews.read', section: 'CSKH & Trải nghiệm' },
   { to: '/admin/support', icon: 'support_agent', labelKey: 'sidebar.support', fallbackLabel: 'Hỗ trợ khách hàng', permission: 'support.read', section: 'CSKH & Trải nghiệm' },
   { to: '/admin/returns', icon: 'assignment_return', labelKey: 'sidebar.returns', fallbackLabel: 'Yêu cầu đổi trả', permission: 'returns.read', section: 'CSKH & Trải nghiệm' },
 ];
@@ -52,6 +52,13 @@ const AdminSidebar: React.FC = () => {
   const admin = useAppSelector((s) => s.adminAuth.admin);
   const profileName = admin?.name || admin?.full_name || admin?.username || 'Admin';
   const roleLabel = admin?.role_key || admin?.role || 'admin';
+  const [settings, setSettings] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    import('../../services/dataService').then(({ dataService }) => {
+      dataService.getAdminSettings().then(setSettings).catch(() => {});
+    });
+  }, []);
 
   const canShow = (item: MenuItem) => {
     if (item.superAdminOnly) return isSuperAdmin(admin);
@@ -67,9 +74,26 @@ const AdminSidebar: React.FC = () => {
 
   return (
     <aside className="h-screen w-64 fixed left-0 top-0 overflow-y-auto bg-slate-900 dark:bg-slate-950 border-r border-slate-800 dark:border-slate-800 shadow-2xl flex flex-col py-6 z-50">
-      <div className="px-6 mb-10">
-        <h1 className="text-xl font-black text-white tracking-tight uppercase">Lotte Mart</h1>
-        <p className="text-[10px] text-slate-500 font-bold tracking-widest uppercase mt-1">Master Admin Portal</p>
+      <div className="px-6 mb-10 flex items-center gap-3">
+        {settings?.brand_logo_url ? (
+          <img
+            src={settings.brand_logo_url}
+            alt="Logo"
+            className="w-9 h-9 object-contain rounded-full bg-white p-0.5 shadow-md flex-shrink-0"
+          />
+        ) : (
+          <div className="w-9 h-9 rounded-full bg-red-600 flex items-center justify-center text-white font-black text-sm flex-shrink-0 shadow-md">
+            L
+          </div>
+        )}
+        <div className="min-w-0">
+          <h1 className="text-md font-black text-white tracking-tight uppercase truncate">
+            {settings?.brand_name || 'Lotte Mart'}
+          </h1>
+          <p className="text-[9px] text-slate-500 font-bold tracking-widest uppercase mt-0.5 truncate">
+            {settings?.system_name || 'Master Admin Portal'}
+          </p>
+        </div>
       </div>
 
       <nav className="flex-1 space-y-1">

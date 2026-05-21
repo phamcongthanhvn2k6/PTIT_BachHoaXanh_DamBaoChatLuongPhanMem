@@ -73,12 +73,14 @@ const normalizeSummary = (raw: any): CompareAISummary => {
   };
 };
 
-const normalizeLocale = (locale?: string): 'vi' | 'en' => {
+const normalizeLocale = (locale?: string): 'vi' | 'en' | 'ja' => {
   const value = String(locale || '').trim().toLowerCase();
-  return value.startsWith('en') ? 'en' : 'vi';
+  if (value.startsWith('en')) return 'en';
+  if (value.startsWith('ja')) return 'ja';
+  return 'vi';
 };
 
-const resolveWebsiteLocale = (explicitLocale?: string): 'vi' | 'en' => {
+const resolveWebsiteLocale = (explicitLocale?: string): 'vi' | 'en' | 'ja' => {
   if (explicitLocale) return normalizeLocale(explicitLocale);
 
   const fromI18n = normalizeLocale(i18n.resolvedLanguage || i18n.language || '');
@@ -94,7 +96,11 @@ const resolveWebsiteLocale = (explicitLocale?: string): 'vi' | 'en' => {
   return 'vi';
 };
 
-const localeText = (locale: 'vi' | 'en', vi: string, en: string) => (locale === 'en' ? en : vi);
+const localeText = (locale: 'vi' | 'en' | 'ja', vi: string, en: string, ja?: string) => {
+  if (locale === 'en') return en;
+  if (locale === 'ja') return ja || en;
+  return vi;
+};
 
 export const compareService = {
   async getAISummaryStatus() {
@@ -119,7 +125,7 @@ export const compareService = {
       : [];
 
     if (safeProducts.length < 2) {
-      throw new Error(localeText(resolvedLocale, 'Can it nhat 2 san pham de tom tat', 'At least 2 products are required for AI summary'));
+      throw new Error(localeText(resolvedLocale, 'Cần ít nhất 2 sản phẩm để tóm tắt', 'At least 2 products are required for AI summary', '少なくとも2つの製品が必要です'));
     }
 
     let res;
@@ -139,8 +145,9 @@ export const compareService = {
       if (err?.code === 'ECONNABORTED' || String(err?.message || '').toLowerCase().includes('timeout')) {
         throw new Error(localeText(
           resolvedLocale,
-          'Yeu cau tom tat AI dang mat nhieu thoi gian hon du kien. Vui long thu lai sau it phut.',
+          'Yêu cầu tóm tắt AI đang mất nhiều thời gian hơn dự kiến. Vui lòng thử lại sau ít phút.',
           'AI summary is taking longer than expected. Please try again in a few minutes.',
+          'AI要約に時間がかかっています。数分後に再試行してください。',
         ));
       }
       throw err;

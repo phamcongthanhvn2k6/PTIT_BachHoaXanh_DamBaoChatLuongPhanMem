@@ -339,7 +339,7 @@ const SearchResults: React.FC = () => {
                     onClick={applyFilters}
                     className="w-full py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-transform active:scale-95 shadow-lg shadow-primary/20"
                   >
-                    {t('product.clearFilters')}
+                    {t('product.applyFilters', 'Áp dụng bộ lọc')}
                   </button>
                   <button
                     onClick={clearFilters}

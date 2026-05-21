@@ -20,6 +20,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://127.0.0.1:3001',
+      '/uploads': 'http://127.0.0.1:3001',
     },
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',

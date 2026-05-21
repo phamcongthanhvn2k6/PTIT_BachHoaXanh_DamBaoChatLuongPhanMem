@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
 import Promotion from '../models/Promotion.js';
+import Product from '../models/Product.js';
+import BranchProduct from '../models/BranchProduct.js';
 import { PromotionClaim, PromotionUsage } from '../models/PromotionUsage.js';
 import { calculateCheckoutTotals, getApplicablePromotions } from '../services/promotionCalculationService.js';
 import { attachCampaignLifecycle } from '../services/campaignLifecycleService.js';
@@ -512,6 +514,81 @@ export const usage = async (req, res) => {
     try {
         const data = await PromotionUsage.find({ promotion_id: req.params.id }).sort({ created_at: -1 }).limit(500);
         return res.json({ success: true, data });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// POST /api/promotions/bulk-expiring
+export const bulkCreateExpiringPromotions = async (req, res) => {
+    try {
+        const productsDoc = await Product.find({
+            is_active: true,
+            expiry_date: { $ne: null }
+        }).lean();
+
+        const activePromotions = await Promotion.find({
+            is_active: true,
+            status: 'active',
+            end_date: { $gte: new Date() }
+        }).lean();
+
+        const promotedProductIds = new Set();
+        activePromotions.forEach(promo => {
+            if (promo.scope === 'product' && Array.isArray(promo.target_product_ids)) {
+                promo.target_product_ids.forEach(id => promotedProductIds.add(String(id)));
+            }
+        });
+
+        const newPromotions = [];
+        const now = new Date();
+
+        for (const product of productsDoc) {
+            if (promotedProductIds.has(String(product._id))) continue;
+
+            const expDate = new Date(product.expiry_date);
+            const diffMs = expDate.getTime() - now.getTime();
+            const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+            if (diffDays < 0) continue; // expired
+            if (product.stock <= 0) continue; // required stock
+
+            const warningDays = product.expiry_warning_days ?? 7;
+
+            if (diffDays <= warningDays) {
+                let discountValue = 50;
+                if (diffDays <= 3) discountValue = 70;
+                else if (diffDays <= 7) discountValue = 50;
+                else if (diffDays <= 14) discountValue = 30;
+
+                const start = new Date(now);
+                const end = new Date(expDate);
+
+                newPromotions.push({
+                    title: `⚠️ Xả hàng: ${product.name}`,
+                    description: `Sale xả hàng sắp hết hạn. SKU: ${product.sku || 'N/A'}. HSD: ${expDate.toLocaleDateString('vi-VN')}. Còn ${diffDays} ngày.`,
+                    type: 'percent',
+                    discount_value: discountValue,
+                    scope: 'product',
+                    target_product_ids: [String(product._id)],
+                    start_date: start,
+                    end_date: end,
+                    total_quantity: Math.max(1, Number(product.stock)),
+                    status: 'active',
+                    is_active: true,
+                    badge_text: 'Giải phóng hàng',
+                    created_by: req.user?._id || req.user?.id || null,
+                    image: (product.images && product.images[0]) || product.thumbnail || 'https://via.placeholder.com/800x400.png?text=Clearance+Sale',
+                    banner_image: (product.images && product.images[0]) || product.thumbnail || 'https://via.placeholder.com/800x400.png?text=Clearance+Sale',
+                });
+            }
+        }
+
+        if (newPromotions.length > 0) {
+            await Promotion.insertMany(newPromotions);
+        }
+
+        return res.json({ success: true, count: newPromotions.length, message: 'Tạo khuyến mãi hàng loạt thành công' });
     } catch (err) {
         return res.status(500).json({ success: false, message: err.message });
     }

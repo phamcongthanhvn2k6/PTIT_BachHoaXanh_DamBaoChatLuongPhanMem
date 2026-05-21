@@ -23,14 +23,14 @@ ensureUploadRoot(supportUploadRoot);
 ensureUploadRoot(evidenceUploadRoot);
 ensureUploadRoot(brandUploadRoot);
 
-const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/x-icon', 'image/vnd.microsoft.icon']);
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 
 const buildStorage = ({ dir, prefix }) => multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, dir),
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg';
-    const safeExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext) ? ext : '.jpg';
+    const safeExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.ico'].includes(ext) ? ext : '.jpg';
     const stamp = Date.now();
     const random = Math.random().toString(36).slice(2, 8);
     cb(null, `${prefix}_${stamp}_${random}${safeExt}`);

@@ -5,4 +5,5 @@ const router = Router();
 router.get('/transactions', auth, c.transactions);
 router.get('/rules', c.rules);
 router.put('/rules', auth, admin, c.updateRules);
+router.post('/redeem', auth, c.redeemPoints);
 export default router;

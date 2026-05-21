@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { promotionService } from '../services/promotionService';
 import { useAppSelector } from '../store';
 import { toast } from '../components/Toast/toastEvent';
+import PromotionImageDisplay from '../components/PromotionImageFallback/PromotionImageFallback';
 
 const PromotionDetail: React.FC = () => {
   const { t } = useTranslation();
@@ -53,7 +54,7 @@ const PromotionDetail: React.FC = () => {
   const handleClaim = async () => {
     if (!id) return;
     if (!isAuthenticated) {
-      toast.warning('Vui lòng đăng nhập để nhận khuyến mãi');
+      toast.warning(t('promotion.loginToClaim', 'Vui lòng đăng nhập để nhận khuyến mãi'));
       navigate('/login');
       return;
     }
@@ -62,14 +63,14 @@ const PromotionDetail: React.FC = () => {
       const branchId = String(currentBranch?.id || (currentBranch as any)?._id || '');
       const res = await promotionService.claimPromotion(id, branchId || undefined);
       if (res?.success === false) {
-        toast.error(res.message || 'Không thể nhận khuyến mãi');
+        toast.error(res.message || t('promotion.claimFailed', 'Không thể nhận khuyến mãi'));
         return;
       }
-      toast.success(res?.message || 'Nhận khuyến mãi thành công');
+      toast.success(res?.message || t('promotion.claimSuccess', 'Nhận khuyến mãi thành công'));
       const refresh = await promotionService.getPromotionById(id);
       setPromotion(refresh.data || null);
     } catch {
-      toast.error('Không thể nhận khuyến mãi lúc này');
+      toast.error(t('promotion.claimUnavailable', 'Không thể nhận khuyến mãi lúc này'));
     }
   };
 
@@ -89,13 +90,17 @@ const PromotionDetail: React.FC = () => {
   return (
     <main className="max-w-5xl mx-auto px-4 py-8">
       <button className="text-primary font-semibold mb-4" onClick={() => navigate('/promotions')}>
-        ← Quay lại danh sách khuyến mãi
+        ← {t('promotion.backToList', 'Quay lại danh sách khuyến mãi')}
       </button>
 
       <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-        {promotion.banner_image && (
-          <img src={promotion.banner_image} alt={promotion.title} className="w-full h-64 object-cover" />
-        )}
+        <PromotionImageDisplay
+          imageUrl={promotion.banner_image || promotion.image_url || promotion.image}
+          voucherType={promotion.voucher_type}
+          type={promotion.type}
+          className="w-full h-64"
+          aspectRatio=""
+        />
 
         <div className="p-6 space-y-4">
           <div className="flex items-center gap-3">
@@ -108,7 +113,7 @@ const PromotionDetail: React.FC = () => {
             {!campaignState.soldOut && campaignState.expired && (
               <span className="px-3 py-1 rounded bg-orange-100 text-orange-700 text-xs font-bold uppercase">{t('promotion.expired')}</span>
             )}
-            <span className="text-xs text-slate-500">Độ ưu tiên: {promotion.priority || 0}</span>
+            <span className="text-xs text-slate-500">{t('promotion.priorityLabel', 'Độ ưu tiên')}: {promotion.priority || 0}</span>
           </div>
 
           <h1 className="text-3xl font-black text-slate-900 dark:text-white">{promotion.title}</h1>
@@ -118,17 +123,17 @@ const PromotionDetail: React.FC = () => {
             <div className="bg-slate-50 dark:bg-slate-800 rounded p-3">
               <p className="text-slate-500">{t('common.time')}</p>
               <p className="font-semibold">
-                {promotion.start_date ? new Date(promotion.start_date).toLocaleString('vi-VN') : 'Không giới hạn'} - {promotion.end_date ? new Date(promotion.end_date).toLocaleString('vi-VN') : 'Không giới hạn'}
+                {promotion.start_date ? new Date(promotion.start_date).toLocaleString('vi-VN') : t('promotion.unlimited', 'Không giới hạn')} - {promotion.end_date ? new Date(promotion.end_date).toLocaleString('vi-VN') : t('promotion.unlimited', 'Không giới hạn')}
               </p>
             </div>
             <div className="bg-slate-50 dark:bg-slate-800 rounded p-3">
               <p className="text-slate-500">{t('promotion.orderCondition')}</p>
-              <p className="font-semibold">Tối thiểu {Number(promotion.min_order_amount || 0).toLocaleString('vi-VN')}đ</p>
+              <p className="font-semibold">{t('promotion.minOrderPrefix', 'Tối thiểu')} {Number(promotion.min_order_amount || 0).toLocaleString('vi-VN')}đ</p>
             </div>
             <div className="bg-slate-50 dark:bg-slate-800 rounded p-3">
               <p className="text-slate-500">{t('promotion.campaignQuantity')}</p>
               <p className="font-semibold">
-                {promotion.total_quantity ? `${Number(campaignState.remaining || 0).toLocaleString('vi-VN')} / ${Number(promotion.total_quantity).toLocaleString('vi-VN')} lượt còn lại` : 'Không giới hạn'}
+                {promotion.total_quantity ? `${Number(campaignState.remaining || 0).toLocaleString('vi-VN')} / ${Number(promotion.total_quantity).toLocaleString('vi-VN')} ${t('promotion.remainingSuffix', 'lượt còn lại')}` : t('promotion.unlimited', 'Không giới hạn')}
               </p>
             </div>
           </div>
@@ -138,7 +143,13 @@ const PromotionDetail: React.FC = () => {
             onClick={handleClaim}
             disabled={!canClaim}
           >
-            {campaignState.soldOut ? 'Đã hết lượt nhận' : campaignState.expired ? 'Khuyến mãi đã hết hạn' : campaignState.inactive ? 'Khuyến mãi chưa khả dụng' : 'Nhận khuyến mãi'}
+            {campaignState.soldOut
+              ? t('promotion.soldOutClaim', 'Đã hết lượt nhận')
+              : campaignState.expired
+              ? t('promotion.expiredClaim', 'Khuyến mãi đã hết hạn')
+              : campaignState.inactive
+              ? t('promotion.inactiveClaim', 'Khuyến mãi chưa khả dụng')
+              : t('promotion.claimAction', 'Nhận khuyến mãi')}
           </button>
         </div>
       </div>

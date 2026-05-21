@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Promotion, Product, BranchProduct } from '../../types';
 import { dataService } from '../../services/dataService';
 import { Countdown } from '../Countdown/Countdown';
@@ -6,6 +7,7 @@ import { useAppDispatch, useAppSelector, store } from '../../store';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '../Toast/toastEvent';
 import { addToCartAsync } from '../../slices/cartSlice';
+import PromotionImageDisplay from '../PromotionImageFallback/PromotionImageFallback';
 
 interface PromotionCardProps {
   promotion: Promotion;
@@ -14,6 +16,7 @@ interface PromotionCardProps {
 }
 
 export const PromotionCard: React.FC<PromotionCardProps> = ({ promotion, branchIdSelected = '', onViewDetail }) => {
+  const { t } = useTranslation();
   const [products, setProducts] = useState<Product[]>([]);
   const [branchProducts, setBranchProducts] = useState<BranchProduct[]>([]);
   const navigate = useNavigate();
@@ -46,7 +49,7 @@ export const PromotionCard: React.FC<PromotionCardProps> = ({ promotion, branchI
   const handleBuy = async () => {
     const { isAuthenticated, user: authUser } = store.getState().auth;
     if (!user && !isAuthenticated && !authUser) {
-      toast.info('Vui lòng đăng nhập để mua hàng');
+      toast.info(t('promotions.loginToBuy', 'Vui lòng đăng nhập để mua hàng'));
       navigate('/login');
       return;
     }
@@ -65,12 +68,12 @@ export const PromotionCard: React.FC<PromotionCardProps> = ({ promotion, branchI
           product_image: product?.images?.[0] || '',
           branchProduct: bp as any,
         })).unwrap();
-        toast.success('Đã thêm vào giỏ hàng');
+        toast.success(t('promotions.addedToCart', 'Đã thêm vào giỏ hàng'));
       } catch (err: any) {
-        toast.error(typeof err === 'string' ? err : (err?.message || 'Lỗi thêm vào giỏ'));
+        toast.error(typeof err === 'string' ? err : (err?.message || t('promotions.addToCartError', 'Lỗi thêm vào giỏ')));
       }
     } else {
-      toast.error('Sản phẩm không có sẵn');
+      toast.error(t('promotions.productUnavailable', 'Sản phẩm không có sẵn'));
     }
   };
 
@@ -95,19 +98,24 @@ export const PromotionCard: React.FC<PromotionCardProps> = ({ promotion, branchI
   const badgeText = promotion.discount_type === 'percent' ? `SALE ${promotionValue}%` : `GIẢM ${promotionValue.toLocaleString()}đ`;
   const badgeClass = promotion.discount_type === 'percent' ? 'bg-red-600' : 'bg-yellow-400 text-black';
 
+  const imageUrl = promotion.image_url || (promotion as any).image || (promotion as any).banner_image || '';
+
   return (
     <article className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 flex flex-col h-full border border-gray-100 dark:border-slate-800 transition-all cursor-pointer" onClick={() => onViewDetail && onViewDetail(promotion)}>
       <div className="relative h-48 overflow-hidden">
-        <img
+        <PromotionImageDisplay
+          imageUrl={imageUrl}
+          type={promotion.discount_type || (promotion as any).type}
+          voucherType={(promotion as any).voucher_type}
           alt={promotion.title}
-          className="w-full h-full object-cover"
-          src={promotion.image_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuAknACQUwTPPOwvArBnEePsJUTt-e9vvJsOGElqtoY19ShvSYCzqflsJr3g75YDaHlnsoceRYhvs-q_L1NIbsr_SnauQ4yuSwb8W9xZbVVJK9gyAr96ZSZFfjIC4E-QYBMK-wNxQ7fgWLVDQw4e_voDZnguFTI2hwLwNB8xC0tIx9z6XXki8CJrN0rCHJ3AIWbM5Ayq28bKfLqAoSTbzQam97svhAvcoToFJ_pE8PSiU98CfREHtcMDrHZMOYgb9_-d8KAbdtoXy8I"}
+          className="w-full h-full"
+          aspectRatio=""
         />
         <span className={`absolute top-3 left-3 font-bold px-2 py-1 rounded text-xs uppercase shadow-sm ${badgeClass} ${promotion.discount_type === 'percent' ? 'text-white' : ''}`}>
           {badgeText}
         </span>
         <div className="absolute bottom-0 left-0 right-0 bg-black/50 backdrop-blur-sm text-white py-1 px-3 flex justify-between items-center text-xs">
-          <span>Kết thúc sau:</span>
+          <span>{t('promotions.endsIn', 'Kết thúc sau')}:</span>
           <Countdown endDate={promotion.end_date} />
         </div>
       </div>
@@ -145,7 +153,7 @@ export const PromotionCard: React.FC<PromotionCardProps> = ({ promotion, branchI
                  <span className="text-gray-400 line-through text-sm ml-2">{originalPrice.toLocaleString()}đ</span>
               )}
             </div>
-            <span className="text-gray-400 text-xs">Đã bán {soldCount}</span>
+            <span className="text-gray-400 text-xs">{t('promotions.soldCount', { count: soldCount, defaultValue: `Đã bán ${soldCount}` })}</span>
           </div>
           <div className="w-full bg-gray-100 dark:bg-slate-700 h-1.5 rounded-full mb-4 overflow-hidden">
             <div className="bg-lotteRed h-full w-3/4 rounded-full"></div>
@@ -155,7 +163,7 @@ export const PromotionCard: React.FC<PromotionCardProps> = ({ promotion, branchI
             onClick={(e) => { e.stopPropagation(); handleBuy(); }}
             className="w-full bg-lotteRed text-white font-bold py-2.5 rounded-xl hover:bg-red-700 transition"
           >
-            Mua ngay
+            {t('promotions.buyNow', 'Mua ngay')}
           </button>
         </div>
       </div>

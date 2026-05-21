@@ -161,12 +161,12 @@ const ReviewManager: React.FC = () => {
               <div className="flex flex-col sm:flex-row gap-6">
                 <div className="w-full sm:w-32 h-32 sm:h-auto overflow-hidden relative rounded-lg shrink-0">
                   {(() => {
-                    const imageSrc = resolveImageUrl(review.product_image || review.images?.[0] || '');
+                    const imageSrc = resolveImageUrl((review as any).product_image || (review as any).images?.[0] || '');
                     return (
                       <img
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         src={imageSrc || fallbackProductImage}
-                        alt={review.product_name || 'Product'}
+                        alt={(review as any).product_name || 'Product'}
                       />
                     );
                   })()}
@@ -180,7 +180,7 @@ const ReviewManager: React.FC = () => {
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <h3 className="font-bold text-lg leading-tight group-hover:text-primary transition-colors">
-                          {review.product_name || `Sản phẩm #${review.product_id}`}
+                          {(review as any).product_name || `Sản phẩm #${review.product_id}`}
                         </h3>
                         <div className="flex items-center gap-2 mt-1">
                           <div className="flex text-amber-400">

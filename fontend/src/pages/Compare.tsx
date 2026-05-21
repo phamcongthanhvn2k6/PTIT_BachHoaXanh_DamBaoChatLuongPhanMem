@@ -60,29 +60,29 @@ const ComparePage: React.FC = () => {
         aiDefaultError: 'Unable to generate AI summary right now. Please try again.',
       }
       : {
-        emptyTitle: 'Chua co san pham de so sanh',
-        emptyHint: 'Hay chon tu 2 den 4 san pham o trang san pham de bat dau so sanh.',
-        goProducts: 'Di den trang san pham',
-        pageTitle: 'So sanh san pham',
-        comparedCount: `Dang so sanh ${compareItems.length}/4 san pham`,
-        addMore: 'Them tiep san pham',
-        clearAll: 'Xoa tat ca',
-        needTwo: 'Can it nhat 2 san pham de xem bang so sanh day du.',
-        loadCompareData: 'Dang tai du lieu so sanh...',
-        aiTitle: 'Tom tat bang AI',
-        viewDetails: 'Xem so sanh chi tiet',
-        summarizeBtn: 'Tom tat bang AI',
-        summarizingBtn: 'Dang tom tat...',
-        aiNotReady: 'AI chua san sang',
-        aiGuide: 'AI chi tong hop tu du lieu so sanh thuc te dang hien thi, khong tu them thong so ngoai du lieu co san.',
-        retry: 'Thu lai',
-        summaryPros: 'Diem noi bat',
-        summaryCons: 'Diem can can nhac',
-        summaryNotes: 'Ghi chu',
-        summaryHintReady: 'Bam nut Tom tat bang AI de xem tong hop uu va nhuoc diem dua tren du lieu so sanh thuc te.',
-        summaryHintNotReady: 'AI chua san sang. Vui long cau hinh GEMINI_COMPARE_KEY o backend de su dung tinh nang nay.',
-        compareLoadError: 'Khong the tai du lieu so sanh.',
-        aiDefaultError: 'Khong the tao tom tat AI luc nay. Vui long thu lai.',
+        emptyTitle: 'Chưa có sản phẩm để so sánh',
+        emptyHint: 'Hãy chọn từ 2 đến 4 sản phẩm ở trang sản phẩm để bắt đầu so sánh.',
+        goProducts: 'Đi đến trang sản phẩm',
+        pageTitle: 'So sánh sản phẩm',
+        comparedCount: `Đang so sánh ${compareItems.length}/4 sản phẩm`,
+        addMore: 'Thêm tiếp sản phẩm',
+        clearAll: 'Xóa tất cả',
+        needTwo: 'Cần ít nhất 2 sản phẩm để xem bảng so sánh đầy đủ.',
+        loadCompareData: 'Đang tải dữ liệu so sánh...',
+        aiTitle: 'Tóm tắt bằng AI',
+        viewDetails: 'Xem so sánh chi tiết',
+        summarizeBtn: 'Tóm tắt bằng AI',
+        summarizingBtn: 'Đang tóm tắt...',
+        aiNotReady: 'AI chưa sẵn sàng',
+        aiGuide: 'AI chỉ tổng hợp từ dữ liệu so sánh thực tế đang hiển thị, không tự thêm thông số ngoài dữ liệu có sẵn.',
+        retry: 'Thử lại',
+        summaryPros: 'Điểm nổi bật',
+        summaryCons: 'Điểm cần cân nhắc',
+        summaryNotes: 'Ghi chú',
+        summaryHintReady: 'Bấm nút Tóm tắt bằng AI để xem tổng hợp ưu và nhược điểm dựa trên dữ liệu so sánh thực tế.',
+        summaryHintNotReady: 'AI chưa sẵn sàng. Vui lòng cấu hình GEMINI_COMPARE_KEY ở backend để sử dụng tính năng này.',
+        compareLoadError: 'Không thể tải dữ liệu so sánh.',
+        aiDefaultError: 'Không thể tạo tóm tắt AI lúc này. Vui lòng thử lại.',
       }
   ), [currentLocale, compareItems.length]);
 
@@ -310,10 +310,63 @@ const ComparePage: React.FC = () => {
         )}
 
         {summary ? (
-          <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-6 shadow-sm dark:border-indigo-900/50 dark:bg-slate-800/80">
-            <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none whitespace-pre-wrap text-slate-800 dark:text-slate-200">
-              {summary.markdown}
-            </div>
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-6 shadow-sm dark:border-indigo-900/50 dark:bg-slate-800/80 space-y-5">
+            {summary.title && (
+              <h3 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                <span className="material-symbols-outlined text-indigo-500">smart_toy</span>
+                {summary.title}
+              </h3>
+            )}
+            {summary.pros && summary.pros.length > 0 && (
+              <div>
+                <h4 className="text-sm font-bold text-green-700 dark:text-green-400 mb-2 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-base">thumb_up</span>
+                  {uiText.summaryPros}
+                </h4>
+                <ul className="space-y-1 ml-1">
+                  {summary.pros.map((item, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+                      <span className="text-green-500 mt-0.5 shrink-0">✓</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {summary.cons && summary.cons.length > 0 && (
+              <div>
+                <h4 className="text-sm font-bold text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-base">thumb_down</span>
+                  {uiText.summaryCons}
+                </h4>
+                <ul className="space-y-1 ml-1">
+                  {summary.cons.map((item, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+                      <span className="text-amber-500 mt-0.5 shrink-0">⚠</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {summary.recommendation && (
+              <div className="rounded-xl bg-indigo-100/60 dark:bg-indigo-900/30 p-4 border border-indigo-200 dark:border-indigo-800">
+                <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-300">
+                  <span className="material-symbols-outlined text-base align-middle mr-1">lightbulb</span>
+                  {summary.recommendation}
+                </p>
+              </div>
+            )}
+            {summary.notes && summary.notes.length > 0 && (
+              <div>
+                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">{uiText.summaryNotes}</h4>
+                <ul className="space-y-0.5">
+                  {summary.notes.map((note, i) => (
+                    <li key={i} className="text-xs text-slate-500 dark:text-slate-400">• {note}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-slate-300 px-4 py-5 text-sm text-slate-500">

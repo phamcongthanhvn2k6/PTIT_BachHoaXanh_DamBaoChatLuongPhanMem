@@ -317,6 +317,7 @@ export const endpoints = {
     transactions: '/loyalty/transactions',
     rules: '/loyalty/rules',
     updateRules: '/loyalty/rules',
+    redeem: '/loyalty/redeem',
   },
 
   // ═══════════════════════════════════════════════

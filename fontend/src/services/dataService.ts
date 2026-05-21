@@ -301,8 +301,8 @@ export const dataService = {
     const res = await httpClient.put(endpoints.orders.cancel(id), { reason });
     const o = obj(res); if (o && !o.id && o._id) o.id = o._id; return o;
   },
-  updateOrderStatus: async (id: string, status: string, note?: string): Promise<Types.Order> => {
-    const res = await httpClient.put(endpoints.orders.updateStatus(id), { status, note });
+  updateOrderStatus: async (id: string, status: string, note?: string, trackingMetadata?: { tracking_number?: string, carrier?: string, dispatch_branch?: string, dispatch_branch_name?: string }): Promise<Types.Order> => {
+    const res = await httpClient.put(endpoints.orders.updateStatus(id), { status, note, ...trackingMetadata });
     const o = obj(res); if (o && !o.id && o._id) o.id = o._id; return o;
   },
   refundOrder: async (id: string, reason?: string): Promise<Types.Order> => {
@@ -717,6 +717,10 @@ export const dataService = {
   updateLoyaltyRules: async (rules: any[]): Promise<any[]> => {
     const res = await httpClient.put(endpoints.loyalty.updateRules, rules);
     return arr(res) || rules;
+  },
+  redeemLoyaltyPoints: async (points: number, rewardId: string, rewardTitle: string): Promise<any> => {
+    const res = await httpClient.post(endpoints.loyalty.redeem, { points, rewardId, rewardTitle });
+    return obj(res);
   },
 
   // ═══════════════════════════════════════════════

@@ -554,7 +554,10 @@ export interface Order {
   };
   tracking?: {
     courier?: string;
+    carrier?: string;
     tracking_number?: string;
+    dispatch_branch?: string;
+    dispatch_branch_name?: string;
     history?: Array<{
       status: string;
       note?: string;

@@ -83,7 +83,7 @@ const AdminReturnRequests: React.FC = () => {
     });
   }, [requests, search]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+
   const pageStart = (page - 1) * PAGE_SIZE;
   const pagedRequests = filteredRequests.slice(pageStart, pageStart + PAGE_SIZE);
 

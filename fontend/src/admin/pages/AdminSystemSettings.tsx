@@ -4,6 +4,21 @@ import { dataService } from '../../services/dataService';
 import httpClient from '../../api/httpClient';
 import { useTranslation } from 'react-i18next';
 
+/** Apply a favicon URL to the browser tab immediately, with cache-busting */
+const applyFaviconToDom = (url: string) => {
+  // Strip any existing query params, then add a fresh cache-buster
+  const clean = url.split('?')[0];
+  const bustUrl = `${clean}?v=${Date.now()}`;
+  // Remove ALL existing favicon links so the browser cannot serve a stale icon
+  document.querySelectorAll("link[rel='icon'], link[rel='shortcut icon']").forEach(el => el.remove());
+  const link = document.createElement('link');
+  link.id = 'dynamic-favicon';
+  link.rel = 'icon';
+  link.type = 'image/png';
+  link.href = bustUrl;
+  document.head.appendChild(link);
+};
+
 const AdminSystemSettings: React.FC = () => {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('general');
@@ -11,131 +26,111 @@ const AdminSystemSettings: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 
-  // States
   const [settings, setSettings] = useState<any>({});
-  const [paymentProviders, setPaymentProviders] = useState<any[]>([]);
-  const [notifyTemplates, setNotifyTemplates] = useState<any[]>([]);
-  const [passwordForm, setPasswordForm] = useState({ old: '', new: '', confirm: '' });
-  const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const logoInputRef = useRef<HTMLInputElement>(null);
+  const settingsRef = useRef<any>({});
+  const [uploadingFavicon, setUploadingFavicon] = useState(false);
+  const [isDraggingFavicon, setIsDraggingFavicon] = useState(false);
+  const faviconInputRef = useRef<HTMLInputElement>(null);
 
-  // Shared logo upload handler
-  const handleLogoFile = async (file: File) => {
-    const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (!ALLOWED.includes(file.type)) {
-      toast.error(t('settings.logoInvalidType', 'Chỉ chấp nhận JPG, PNG, WebP, GIF'));
+  // Keep ref in sync so async callbacks always read the latest value
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
+
+  // ── Favicon upload handler ────────────────────────────────────
+  const handleFaviconUpload = async (file: File) => {
+    const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/x-icon', 'image/vnd.microsoft.icon'];
+    if (!ALLOWED.includes(file.type) && !file.name.endsWith('.ico')) {
+      toast.error(t('adminSettings.faviconInvalidType'));
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      toast.error(t('settings.logoTooLarge', 'Ảnh logo tối đa 2MB'));
+      toast.error(t('adminSettings.faviconTooLarge'));
       return;
     }
     try {
-      setUploadingLogo(true);
+      setUploadingFavicon(true);
       const formData = new FormData();
       formData.append('logo', file);
-      // Override default application/json so Axios sends it as multipart
       const res = await httpClient.post('/uploads/brand-logo', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-      const url = res?.data?.data?.url || res?.data?.url;
-      if (url) {
-        handleSettingChange('brand_logo_url', url);
-        toast.success(t('settings.logoUploadSuccess', 'Tải logo lên thành công!'));
-      } else {
-        toast.error(t('settings.logoNoUrl', 'Không nhận được URL từ server'));
-      }
+      const url: string = res?.data?.data?.url || res?.data?.url || '';
+      if (!url) { toast.error(t('adminSettings.faviconNoUrl')); return; }
+
+      // Normalise: store only the relative path so it works behind any proxy
+      const relativeUrl = url.includes('/uploads/') ? url.substring(url.indexOf('/uploads/')) : url;
+
+      // 1. Update state (marks hasChanges)
+      handleSettingChange('favicon_url', relativeUrl);
+
+      // 2. Apply to the browser tab RIGHT NOW
+      applyFaviconToDom(relativeUrl);
+
+      // 3. Auto-persist so the user doesn't need to remember to click Save
+      //    Use settingsRef.current to avoid stale-closure issues with React state
+      try {
+        await dataService.updateAdminSettings({ ...settingsRef.current, favicon_url: relativeUrl });
+        setHasChanges(false); // auto-save succeeded — clear dirty flag
+      } catch { /* non-critical — Save button still available */ }
+
+      toast.success(t('adminSettings.faviconUploadSuccess'));
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || t('settings.logoUploadError', 'Lỗi tải logo'));
+      toast.error(err?.response?.data?.message || err?.message || t('adminSettings.faviconUploadError'));
     } finally {
-      setUploadingLogo(false);
-      if (logoInputRef.current) logoInputRef.current.value = '';
+      setUploadingFavicon(false);
+      if (faviconInputRef.current) faviconInputRef.current.value = '';
     }
   };
 
-  // Load Data
+  // ── Data loading ──────────────────────────────────────────────
   const loadData = async () => {
     try {
       setLoading(true);
-      const [resSettings, resPayments, resNotify] = await Promise.all([
-        dataService.getAdminSettings(),
-        dataService.getPaymentProviders(),
-        dataService.getNotificationTemplates()
-      ]);
-      setSettings(resSettings || {});
-      setPaymentProviders(resPayments || []);
-      setNotifyTemplates(resNotify || []);
+      const res = await dataService.getAdminSettings();
+      setSettings(res || {});
       setHasChanges(false);
     } catch (err) {
-      toast.error('Lỗi tải cấu hình: ' + (err as Error).message);
+      toast.error(t('adminSettings.loadError') + (err as Error).message);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
-  // Handlers
   const handleSettingChange = (name: string, value: any) => {
     setSettings((prev: any) => ({ ...prev, [name]: value }));
     setHasChanges(true);
   };
 
-  const handleProviderToggle = (id: string, active: boolean) => {
-    setPaymentProviders(prev => prev.map(p => p.id === id ? { ...p, is_active: active } : p));
-    setHasChanges(true);
-  };
-
-  const handleTemplateChange = (id: string, field: string, value: string) => {
-    setNotifyTemplates(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
-    setHasChanges(true);
-  };
-
   const saveSettings = async () => {
     if (!hasChanges) return;
-    
-    // Basic validation
-    if (settings.vat_rate < 0 || settings.vat_rate > 100) return toast.error('VAT không hợp lệ');
-    if (settings.default_shipping_fee < 0) return toast.error('Phí ship không hợp lệ');
-
+    if (settings.vat_rate < 0 || settings.vat_rate > 100) return toast.error(t('adminSettings.vatInvalid'));
+    if (settings.default_shipping_fee < 0) return toast.error(t('adminSettings.shippingInvalid'));
     try {
       setIsSaving(true);
-      
-      const confirmSave = window.confirm("Xác nhận lưu tất cả cấu hình hệ thống hiện tại?");
-      if (!confirmSave) return;
-
-      await Promise.all([
-        dataService.updateAdminSettings(settings),
-        dataService.updatePaymentProviders(paymentProviders),
-        dataService.updateNotificationTemplate(notifyTemplates[0]?.id || 'order_created', notifyTemplates[0]),
-      ]);
-      toast.success('Lưu cấu hình hệ thống thành công!');
+      if (!window.confirm(t('adminSettings.confirmSave'))) return;
+      await dataService.updateAdminSettings(settings);
+      // Re-apply favicon after save in case it changed
+      if (settings.favicon_url) applyFaviconToDom(settings.favicon_url);
+      toast.success(t('adminSettings.saveSuccess'));
       setHasChanges(false);
     } catch (err) {
-      toast.error('Lỗi lưu cấu hình: ' + (err as Error).message);
+      toast.error(t('adminSettings.saveError') + (err as Error).message);
     } finally {
       setIsSaving(false);
     }
   };
 
   const resetChanges = () => {
-    const cf = window.confirm('Bạn có chắc muốn hủy các thay đổi chưa lưu?');
-    if (cf) loadData();
-  };
-
-  const changeAdminPassword = () => {
-    if (passwordForm.new.length < (settings.password_policy?.min_length || 8)) return toast.error('Mật khẩu mới quá ngắn!');
-    if (passwordForm.new !== passwordForm.confirm) return toast.error('Mật khẩu không khớp!');
-    toast.success('Đổi mật khẩu thành công (MOCK)');
-    setPasswordForm({ old: '', new: '', confirm: '' });
+    if (window.confirm(t('adminSettings.confirmReset'))) loadData();
   };
 
   if (loading) {
     return <div className="p-8"><div className="w-12 h-12 rounded-full border-4 border-slate-200 border-t-primary animate-spin mx-auto mt-20"></div></div>;
   }
+
+  // ── Input field helper ────────────────────────────────────────
+  const inputCls = "w-full bg-surface-container-low border border-transparent rounded-xl px-4 py-3 text-sm focus:bg-white focus:border-blue-500 outline-none transition-all";
 
   return (
     <div className="p-8 bg-surface min-h-screen text-on-surface">
@@ -143,31 +138,26 @@ const AdminSystemSettings: React.FC = () => {
         {/* Page Header */}
         <div className="mb-10">
           <nav className="flex text-[10px] uppercase tracking-widest text-secondary font-bold mb-2 gap-2">
-            <span>Quản trị</span>
+            <span>{t('adminSettings.breadcrumbAdmin')}</span>
             <span className="text-outline">/</span>
-            <span className="text-primary">Cài đặt hệ thống</span>
+            <span className="text-primary">{t('adminSettings.breadcrumbSettings')}</span>
           </nav>
           <h2 className="text-[2.75rem] font-black tracking-tight leading-none bg-clip-text text-transparent bg-gradient-to-r from-on-surface to-slate-500">
-            Cấu Hình & Thiết Lập
+            {t('adminSettings.pageTitle')}
           </h2>
-          <p className="mt-2 text-secondary font-medium text-sm">Quản lý toàn bộ thông số, chính sách và cơ chế hoạt động của e-commerce portal.</p>
+          <p className="mt-2 text-secondary font-medium text-sm">{t('adminSettings.pageSubtitle')}</p>
         </div>
 
-        {/* Tabs Navigation */}
+        {/* Tabs */}
         <div className="flex flex-wrap gap-2 bg-surface-container-low p-2 rounded-2xl mb-8 w-fit shadow-inner">
           {[
-            { id: 'general', icon: 'tune', label: 'Hệ thống (General)' },
-            { id: 'orders', icon: 'local_shipping', label: 'Vận hành & Đơn hàng' },
-            { id: 'payments', icon: 'payments', label: 'Thanh toán' },
-            { id: 'notifications', icon: 'notifications', label: 'Thông báo' },
-            { id: 'security', icon: 'security', label: 'Bảo mật' }
+            { id: 'general', icon: 'tune', label: t('adminSettings.tabGeneral') },
+            { id: 'orders', icon: 'local_shipping', label: t('adminSettings.tabOrders') },
           ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className={`px-5 py-2.5 font-bold rounded-xl text-sm transition-all flex items-center gap-2 ${
-                activeTab === tab.id 
-                  ? 'bg-surface-container-lowest text-primary shadow-sm ring-1 ring-slate-200' 
+                activeTab === tab.id
+                  ? 'bg-surface-container-lowest text-primary shadow-sm ring-1 ring-slate-200'
                   : 'text-secondary hover:text-on-surface hover:bg-surface-container-lowest/50'
               }`}
             >
@@ -177,139 +167,157 @@ const AdminSystemSettings: React.FC = () => {
           ))}
         </div>
 
-        {/* --- TAB CONTENT --- */}
+        {/* Content */}
         <div className="grid grid-cols-12 gap-8">
           <div className="col-span-12 lg:col-span-8 space-y-8">
-            
+
             {activeTab === 'general' && (
               <>
-                <div className="bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-slate-100">
-                  <div className="flex items-center gap-3 mb-6 border-b border-slate-50 pb-4">
+                <div className="bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-slate-100 space-y-6">
+                  <div className="flex items-center gap-3 border-b border-slate-50 pb-4">
                     <div className="w-2 h-6 bg-blue-500 rounded-full"></div>
-                    <h3 className="text-xl font-bold uppercase tracking-tight">Thông tin cơ bản</h3>
+                    <h3 className="text-xl font-bold uppercase tracking-tight">{t('adminSettings.sectionBranding')}</h3>
                   </div>
 
-                  {/* Brand Logo Upload with Drag & Drop */}
+                  {/* ── Favicon Upload ── */}
                   <div
-                    className={`flex items-start gap-6 mb-6 p-5 rounded-xl border-2 transition-all ${
-                      isDragging
-                        ? 'border-blue-400 bg-blue-50/60 shadow-lg shadow-blue-100'
-                        : 'border-slate-100 bg-slate-50/80 border-dashed'
+                    className={`rounded-xl border-2 transition-all overflow-hidden ${
+                      isDraggingFavicon ? 'border-blue-500 bg-blue-50/30 shadow-lg shadow-blue-500/10' : 'border-slate-200/80 bg-gradient-to-br from-slate-50/80 to-white hover:border-slate-300'
                     }`}
-                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); }}
-                    onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); }}
-                    onDrop={(e) => {
-                      e.preventDefault(); e.stopPropagation(); setIsDragging(false);
-                      const file = e.dataTransfer.files?.[0];
-                      if (file) handleLogoFile(file);
-                    }}
+                    onDragOver={e => { e.preventDefault(); e.stopPropagation(); setIsDraggingFavicon(true); }}
+                    onDragLeave={e => { e.preventDefault(); e.stopPropagation(); setIsDraggingFavicon(false); }}
+                    onDrop={e => { e.preventDefault(); e.stopPropagation(); setIsDraggingFavicon(false); const f = e.dataTransfer.files?.[0]; if (f) handleFaviconUpload(f); }}
                   >
-                    <div
-                      className={`w-24 h-24 rounded-xl border-2 border-dashed flex flex-col items-center justify-center bg-white overflow-hidden flex-shrink-0 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-all group relative ${
-                        isDragging ? 'border-blue-400 scale-105' : 'border-slate-300'
-                      }`}
-                      onClick={() => logoInputRef.current?.click()}
-                    >
-                      {settings.brand_logo_url ? (
-                        <>
-                          <img src={settings.brand_logo_url} alt="Logo" className="w-full h-full object-contain" />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <span className="material-symbols-outlined text-white text-xl">edit</span>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <span className={`material-symbols-outlined text-2xl transition-colors ${isDragging ? 'text-blue-500' : 'text-slate-300 group-hover:text-blue-400'}`}>cloud_upload</span>
-                          <span className={`text-[9px] mt-1 transition-colors ${isDragging ? 'text-blue-600 font-bold' : 'text-slate-400 group-hover:text-blue-500'}`}>
-                            {isDragging ? t('settings.logoDrop', 'Thả ảnh') : t('settings.logoUpload', 'Tải lên')}
-                          </span>
-                        </>
-                      )}
-                      {uploadingLogo && (
-                        <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
-                          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    {/* Section header */}
+                    <div className="px-6 pt-5 pb-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm">
+                          <span className="material-symbols-outlined text-white text-[18px]">public</span>
                         </div>
+                        <div>
+                          <h4 className="text-sm font-bold text-on-surface">{t('adminSettings.faviconLabel')}</h4>
+                          <p className="text-[10px] text-slate-400 mt-0.5">{t('adminSettings.faviconDesc')}</p>
+                        </div>
+                      </div>
+                      {settings.favicon_url && (
+                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
+                          {t('adminSettings.faviconUploaded')}
+                        </span>
                       )}
                     </div>
-                    <input
-                      ref={logoInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleLogoFile(file);
-                      }}
-                    />
-                    <div className="flex-1 min-w-0 space-y-2">
-                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('settings.logoTitle', 'Logo / Ảnh thương hiệu')}</label>
-                      <p className="text-xs text-slate-500">{t('settings.logoDesc', 'Nhấn vào ô bên trái hoặc kéo thả ảnh để tải lên. Định dạng: JPG, PNG, WebP. Tối đa 2MB.')}</p>
-                      {settings.brand_logo_url && (
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="material-symbols-outlined text-green-500 text-[14px]">check_circle</span>
-                          <span className="text-[10px] text-green-700 font-semibold">{t('settings.logoUploaded', 'Đã tải logo')}</span>
-                          <span className="text-[10px] text-blue-600 font-mono truncate max-w-[220px]" title={settings.brand_logo_url}>{settings.brand_logo_url.split('/').pop()}</span>
+
+                    {/* Content area */}
+                    <div className="px-6 pb-5">
+                      <div className="flex items-stretch gap-5">
+                        {/* Left: Browser tab mockup + preview */}
+                        <div className="flex flex-col items-center gap-3 flex-shrink-0">
+                          {/* Browser tab mockup */}
+                          <div className="w-[180px] rounded-t-xl overflow-hidden shadow-md border border-slate-200/60">
+                            {/* Tab bar */}
+                            <div className="bg-slate-100 px-3 py-1.5 flex items-center gap-2 border-b border-slate-200/60">
+                              <div className="flex gap-1">
+                                <span className="w-2 h-2 rounded-full bg-red-400/70"></span>
+                                <span className="w-2 h-2 rounded-full bg-amber-400/70"></span>
+                                <span className="w-2 h-2 rounded-full bg-green-400/70"></span>
+                              </div>
+                              <div className="flex-1 bg-white rounded px-2 py-0.5 flex items-center gap-1.5 min-w-0">
+                                {settings.favicon_url ? (
+                                  <img src={`${settings.favicon_url}?v=${Date.now()}`} alt="" className="w-3.5 h-3.5 object-contain flex-shrink-0" />
+                                ) : (
+                                  <span className="material-symbols-outlined text-slate-300 text-[14px] flex-shrink-0">language</span>
+                                )}
+                                <span className="text-[9px] text-slate-500 font-medium truncate">LOTTE Mart</span>
+                              </div>
+                            </div>
+                            {/* Page area */}
+                            <div className="bg-white h-14 flex items-center justify-center">
+                              {settings.favicon_url ? (
+                                <img src={`${settings.favicon_url}?v=${Date.now()}`} alt="Favicon" className="w-10 h-10 object-contain" />
+                              ) : (
+                                <span className="text-[10px] text-slate-300 font-medium">No icon</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Upload / Change button */}
                           <button
                             type="button"
-                            onClick={() => handleSettingChange('brand_logo_url', '')}
-                            className="text-rose-500 hover:text-rose-700 transition-colors ml-1"
-                            title={t('settings.logoDelete', 'Xóa logo')}
+                            onClick={() => faviconInputRef.current?.click()}
+                            disabled={uploadingFavicon}
+                            className="w-[180px] flex items-center justify-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:border-blue-300 hover:text-blue-600 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group"
                           >
-                            <span className="material-symbols-outlined text-[16px]">delete</span>
+                            {uploadingFavicon ? (
+                              <>
+                                <div className="w-3.5 h-3.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                                <span>{t('adminSettings.saving')}</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="material-symbols-outlined text-[16px] group-hover:text-blue-500 transition-colors">
+                                  {settings.favicon_url ? 'swap_horiz' : 'cloud_upload'}
+                                </span>
+                                <span>{settings.favicon_url ? t('adminSettings.changeFavicon') : t('adminSettings.upload')}</span>
+                              </>
+                            )}
                           </button>
                         </div>
-                      )}
-                      <p className="text-[10px] text-slate-400">{t('settings.logoNote', 'Hiển thị trên header, email, và hóa đơn.')}</p>
+
+                        {/* Right: Info + actions */}
+                        <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
+                          <div className="space-y-3">
+                            <div className="flex items-start gap-2 text-[11px] text-slate-500">
+                              <span className="material-symbols-outlined text-[14px] text-slate-400 mt-px flex-shrink-0">info</span>
+                              <span>{t('adminSettings.faviconFormats')}</span>
+                            </div>
+                            {settings.favicon_url && (
+                              <div className="bg-slate-50/80 rounded-lg p-3 space-y-1.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="material-symbols-outlined text-[14px] text-slate-400">link</span>
+                                  <code className="text-[10px] text-slate-500 font-mono truncate block">{settings.favicon_url}</code>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {settings.favicon_url && (
+                            <button
+                              type="button"
+                              onClick={() => { handleSettingChange('favicon_url', ''); applyFaviconToDom('/favicon.ico'); }}
+                              className="self-start flex items-center gap-1.5 text-[11px] text-rose-400 hover:text-rose-600 font-medium transition-colors mt-2 cursor-pointer"
+                            >
+                              <span className="material-symbols-outlined text-[14px]">delete_outline</span>
+                              {t('adminSettings.removeFavicon')}
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
+                    <input ref={faviconInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon,.ico" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleFaviconUpload(f); }} />
                   </div>
 
+                  {/* ── Text fields ── */}
                   <div className="grid grid-cols-2 gap-6">
                     <div className="col-span-2 md:col-span-1 space-y-1.5">
-                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">Tên hệ thống</label>
-                      <input className="w-full bg-surface-container-low border border-transparent rounded-xl px-4 py-3 text-sm focus:bg-white focus:border-blue-500 outline-none transition-all" type="text" placeholder="VD: Lotte Mart Online" value={settings.system_name || ''} onChange={e => handleSettingChange('system_name', e.target.value)} />
+                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.systemName')}</label>
+                      <input className={inputCls} type="text" placeholder="VD: Lotte Mart Online" value={settings.system_name || ''} onChange={e => handleSettingChange('system_name', e.target.value)} />
                     </div>
                     <div className="col-span-2 md:col-span-1 space-y-1.5">
-                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">Tên thương hiệu hiển thị</label>
-                      <input className="w-full bg-surface-container-low border border-transparent rounded-xl px-4 py-3 text-sm focus:bg-white focus:border-blue-500 outline-none transition-all" placeholder="VD: LOTTE Mart" value={settings.brand_name || ''} onChange={e => handleSettingChange('brand_name', e.target.value)} />
+                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.brandName')}</label>
+                      <input className={inputCls} placeholder="VD: LOTTE Mart" value={settings.brand_name || ''} onChange={e => handleSettingChange('brand_name', e.target.value)} />
                     </div>
                     <div className="col-span-2 md:col-span-1 space-y-1.5">
-                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">Email liên hệ</label>
-                      <input className="w-full bg-surface-container-low border border-transparent rounded-xl px-4 py-3 text-sm focus:bg-white focus:border-blue-500 outline-none transition-all" type="email" placeholder="VD: support@lottemart.vn" value={settings.support_email || ''} onChange={e => handleSettingChange('support_email', e.target.value)} />
+                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.headerLogoText')}</label>
+                      <input className={inputCls} placeholder="VD: LOTTE Mart" value={settings.header_logo_text || ''} onChange={e => handleSettingChange('header_logo_text', e.target.value)} />
                     </div>
                     <div className="col-span-2 md:col-span-1 space-y-1.5">
-                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">Hotline / Switchboard</label>
-                      <input className="w-full bg-surface-container-low border border-transparent rounded-xl px-4 py-3 text-sm focus:bg-white focus:border-blue-500 outline-none transition-all" type="text" placeholder="VD: 1900 xxxx" value={settings.support_phone || ''} onChange={e => handleSettingChange('support_phone', e.target.value)} />
+                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.supportEmail')}</label>
+                      <input className={inputCls} type="email" placeholder="VD: support@lottemart.vn" value={settings.support_email || ''} onChange={e => handleSettingChange('support_email', e.target.value)} />
                     </div>
-                  </div>
-                </div>
-
-                <div className="bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-slate-100">
-                  <div className="flex items-center gap-3 mb-6 border-b border-slate-50 pb-4">
-                    <div className="w-2 h-6 bg-tertiary rounded-full"></div>
-                    <h3 className="text-xl font-bold uppercase tracking-tight">Khu vực & Tiền tệ</h3>
-                  </div>
-                  <div className="grid grid-cols-3 gap-6">
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">Ngôn ngữ mặc định</label>
-                      <select className="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-sm" value={settings.default_language || 'vi'} onChange={e => handleSettingChange('default_language', e.target.value)}>
-                        <option value="vi">Tiếng Việt</option>
-                        <option value="en">English (US)</option>
-                        <option value="ko">Korean</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">Múi giờ hệ thống</label>
-                      <select className="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-sm" value={settings.default_timezone || 'Asia/Ho_Chi_Minh'} onChange={e => handleSettingChange('default_timezone', e.target.value)}>
-                        <option value="Asia/Ho_Chi_Minh">(GMT+07:00) Ho Chi Minh</option>
-                        <option value="Asia/Seoul">(GMT+09:00) Seoul</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">Tiền tệ</label>
-                      <select className="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-sm" value={settings.currency || 'VND'} onChange={e => handleSettingChange('currency', e.target.value)}>
-                        <option value="VND">VND (đ)</option>
-                        <option value="USD">USD ($)</option>
-                      </select>
+                    <div className="col-span-2 space-y-1.5">
+                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.hotline')}</label>
+                      <input className={inputCls} type="text" placeholder="VD: 1800 599 907" value={settings.support_phone || ''} onChange={e => handleSettingChange('support_phone', e.target.value)} />
                     </div>
                   </div>
                 </div>
@@ -317,209 +325,98 @@ const AdminSystemSettings: React.FC = () => {
             )}
 
             {activeTab === 'orders' && (
-              <>
-                <div className="bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-slate-100">
-                  <div className="flex items-center gap-3 mb-6 border-b border-slate-50 pb-4">
-                    <div className="w-2 h-6 bg-orange-500 rounded-full"></div>
-                    <h3 className="text-xl font-bold uppercase tracking-tight">Cấu hình Vận hành & Giao hàng</h3>
+              <div className="bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-slate-100">
+                <div className="flex items-center gap-3 mb-6 border-b border-slate-50 pb-4">
+                  <div className="w-2 h-6 bg-orange-500 rounded-full"></div>
+                  <h3 className="text-xl font-bold uppercase tracking-tight">{t('adminSettings.sectionOrders')}</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.shippingFee')}</label>
+                    <input className={inputCls} type="number" value={settings.default_shipping_fee || 0} onChange={e => handleSettingChange('default_shipping_fee', Number(e.target.value))} />
                   </div>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">Phí vận chuyển mặc định (VND)</label>
-                      <input className="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-sm" type="number" value={settings.default_shipping_fee || 0} onChange={e => handleSettingChange('default_shipping_fee', Number(e.target.value))} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">Mức Free Ship (VND)</label>
-                      <input className="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-sm" type="number" value={settings.free_shipping_threshold || 0} onChange={e => handleSettingChange('free_shipping_threshold', Number(e.target.value))} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">VAT chung (%)</label>
-                      <input className="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-sm" type="number" value={settings.vat_rate || 0} onChange={e => handleSettingChange('vat_rate', Number(e.target.value))} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">Thời gian xử lý chuẩn</label>
-                      <input className="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 text-sm" type="text" value={settings.order_processing_time || ''} onChange={e => handleSettingChange('order_processing_time', e.target.value)} />
-                    </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.freeShipThreshold')}</label>
+                    <input className={inputCls} type="number" value={settings.free_shipping_threshold || 0} onChange={e => handleSettingChange('free_shipping_threshold', Number(e.target.value))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.vatRate')}</label>
+                    <input className={inputCls} type="number" value={settings.vat_rate || 0} onChange={e => handleSettingChange('vat_rate', Number(e.target.value))} />
                   </div>
                 </div>
-              </>
+              </div>
             )}
-
-            {activeTab === 'payments' && (
-              <>
-                <div className="bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-slate-100">
-                  <div className="flex items-center gap-3 mb-6 border-b border-slate-50 pb-4">
-                    <div className="w-2 h-6 bg-green-500 rounded-full"></div>
-                    <h3 className="text-xl font-bold uppercase tracking-tight">Cổng thanh toán hỗ trợ</h3>
-                  </div>
-                  <div className="space-y-4">
-                    {paymentProviders.map(provider => (
-                      <div key={provider.id} className="flex items-center justify-between p-4 border border-slate-100 rounded-xl hover:bg-slate-50 transition-colors">
-                        <div>
-                          <p className="font-bold text-on-surface">{provider.name}</p>
-                          <p className="text-xs text-secondary mt-1 tracking-wide uppercase">ID Cổng: {provider.id}</p>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input type="checkbox" className="sr-only peer" checked={provider.is_active} onChange={e => handleProviderToggle(provider.id, e.target.checked)} />
-                          <div className="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {activeTab === 'notifications' && (
-              <>
-                <div className="bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-slate-100">
-                  <div className="flex items-center gap-3 mb-6 border-b border-slate-50 pb-4">
-                    <div className="w-2 h-6 bg-purple-500 rounded-full"></div>
-                    <h3 className="text-xl font-bold uppercase tracking-tight">Kênh gửi tự động</h3>
-                  </div>
-                  <div className="grid grid-cols-3 gap-6 mb-8">
-                    {[
-                      { key: 'enable_email_notifications', label: 'Email Marketing/System', icon: 'mail' },
-                      { key: 'enable_sms_notifications', label: 'SMS Gateway', icon: 'sms' },
-                      { key: 'enable_push_notifications', label: 'App Push Notifications', icon: 'notifications_active' }
-                    ].map(ch => (
-                      <div key={ch.key} className="p-4 border border-slate-100 rounded-xl text-center flex flex-col items-center">
-                        <span className="material-symbols-outlined text-3xl text-secondary mb-3">{ch.icon}</span>
-                        <p className="text-sm font-bold mb-4">{ch.label}</p>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input type="checkbox" className="sr-only peer" checked={settings[ch.key] || false} onChange={e => handleSettingChange(ch.key, e.target.checked)} />
-                          <div className="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-500"></div>
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="pt-6 border-t border-slate-50">
-                    <h4 className="font-bold text-on-surface mb-4">Mẫu Template: Đơn hàng mới</h4>
-                    {notifyTemplates.map(tpl => (
-                      <div key={tpl.id} className="space-y-4">
-                        <div className="space-y-1.5">
-                           <label className="text-[11px] font-black uppercase tracking-wider text-secondary">Tiêu đề (Subject)</label>
-                           <input className="w-full bg-surface-container border-none rounded-xl px-4 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-purple-200" value={tpl.title} onChange={e => handleTemplateChange(tpl.id, 'title', e.target.value)} />
-                        </div>
-                        <div className="space-y-1.5">
-                           <label className="text-[11px] font-black uppercase tracking-wider text-secondary">Nội dung (Body Variables: {'{{orderId}}'}, {'{{total}}'})</label>
-                           <textarea rows={3} className="w-full bg-surface-container border-none rounded-xl px-4 py-3 text-sm focus:bg-white focus:ring-2 focus:ring-purple-200 resize-none" value={tpl.body} onChange={e => handleTemplateChange(tpl.id, 'body', e.target.value)} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {activeTab === 'security' && (
-              <>
-                <div className="bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-slate-100">
-                  <div className="flex items-center gap-3 mb-6 border-b border-slate-50 pb-4">
-                    <div className="w-2 h-6 bg-red-600 rounded-full"></div>
-                    <h3 className="text-xl font-bold uppercase tracking-tight">An ninh hệ thống</h3>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-8 mb-10">
-                    <div className="flex items-start gap-4 p-5 bg-red-50 rounded-xl border border-red-100">
-                       <input type="checkbox" id="require_2fa" className="mt-1 w-5 h-5 accent-red-600 cursor-pointer" checked={settings.require_2fa || false} onChange={e => handleSettingChange('require_2fa', e.target.checked)} />
-                       <div>
-                         <label htmlFor="require_2fa" className="font-bold text-red-900 cursor-pointer">Bắt buộc 2FA cho mọi Admin</label>
-                         <p className="text-xs text-red-800 mt-1">Sử dụng Google Authenticator hoặc tin nhắn OTP SMS để đăng nhập.</p>
-                       </div>
-                    </div>
-                    <div className="space-y-2">
-                       <label className="text-[11px] font-black uppercase tracking-wider text-secondary">Thời gian Timeout Session (Phút)</label>
-                       <input className="w-full bg-surface border-none rounded-xl px-4 py-3 text-sm" type="number" min="5" value={settings.session_timeout_minutes || 30} onChange={e => handleSettingChange('session_timeout_minutes', Number(e.target.value))} />
-                    </div>
-                  </div>
-
-                  <hr className="border-slate-50 mb-8" />
-
-                  <h4 className="font-bold mb-4 font-on-surface">Cập nhật Mật khẩu System Admin</h4>
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-1.5">
-                       <label className="text-[11px] font-black uppercase tracking-wider text-secondary">Mật khẩu hiện hành</label>
-                       <input className="w-full bg-surface-container border border-slate-100 rounded-xl px-4 py-3 text-sm focus:border-red-500 outline-none" type="password" value={passwordForm.old} onChange={e => setPasswordForm(p => ({...p, old: e.target.value}))} />
-                    </div>
-                    <div className="space-y-1.5">
-                       <label className="text-[11px] font-black uppercase tracking-wider text-secondary">Mật khẩu mới</label>
-                       <input className="w-full bg-surface-container border border-slate-100 rounded-xl px-4 py-3 text-sm focus:border-red-500 outline-none" type="password" value={passwordForm.new} onChange={e => setPasswordForm(p => ({...p, new: e.target.value}))} />
-                    </div>
-                    <div className="col-span-2 md:col-span-1 space-y-1.5">
-                       <label className="text-[11px] font-black uppercase tracking-wider text-secondary">Xác nhận mật khẩu</label>
-                       <input className="w-full bg-surface-container border border-slate-100 rounded-xl px-4 py-3 text-sm focus:border-red-500 outline-none" type="password" value={passwordForm.confirm} onChange={e => setPasswordForm(p => ({...p, confirm: e.target.value}))} />
-                    </div>
-                    <div className="col-span-2 md:col-span-1 flex items-end">
-                       <button onClick={changeAdminPassword} className="inline-flex items-center justify-center gap-2 w-full h-10 px-6 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-all shadow-lg shadow-red-500/20 cursor-pointer active:scale-[0.98]">
-                         Đổi mật khẩu
-                       </button>
-                    </div>
-                  </div>
-
-                </div>
-              </>
-            )}
-
           </div>
 
-          {/* Quick Toggles (Sidebar/Right) */}
-          <div className="col-span-12 lg:col-span-4 space-y-8">
-            <div className={`p-8 rounded-2xl border transition-colors ${settings.maintenance_mode ? 'bg-orange-50 border-orange-200 shadow-lg shadow-orange-500/10' : 'bg-surface-container-high/50 border-transparent'}`}>
-              <div className="flex items-center gap-3 mb-6">
-                <span className={`material-symbols-outlined text-3xl ${settings.maintenance_mode ? 'text-orange-500' : 'text-slate-400'}`}>construction</span>
-                <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-on-surface opacity-60">Maintenance Mode</h4>
+          {/* ── Right Sidebar ── */}
+          <div className="col-span-12 lg:col-span-4 space-y-6">
+            {/* Maintenance Toggle */}
+            <div className={`p-6 rounded-2xl border transition-colors ${settings.maintenance_mode ? 'bg-orange-50 border-orange-200 shadow-lg shadow-orange-500/10' : 'bg-surface-container-high/50 border-transparent'}`}>
+              <div className="flex items-center gap-3 mb-5">
+                <span className={`material-symbols-outlined text-2xl ${settings.maintenance_mode ? 'text-orange-500' : 'text-slate-400'}`}>construction</span>
+                <h4 className="text-[11px] font-black uppercase tracking-[0.15em] text-on-surface opacity-60">{t('adminSettings.maintenanceMode')}</h4>
               </div>
-              <div className="space-y-6">
-                <div className="flex items-center justify-between group cursor-pointer" onClick={() => handleSettingChange('maintenance_mode', !settings.maintenance_mode)}>
-                  <div>
-                    <p className={`text-sm font-bold ${settings.maintenance_mode ? 'text-orange-900' : 'text-on-surface'}`}>Công tắc Bảo trì</p>
-                    <p className="text-[10px] text-secondary mt-1 max-w-[200px] leading-relaxed">Tạm ngừng nhận đơn hàng và bảo vệ API/DB cho Developer.</p>
-                  </div>
-                  <div className="relative inline-flex items-center">
-                    <div className={`w-12 h-6 rounded-full transition-colors ${settings.maintenance_mode ? 'bg-orange-500' : 'bg-surface-variant'}`}></div>
-                    <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${settings.maintenance_mode ? 'translate-x-6' : ''}`}></div>
-                  </div>
+              <div className="flex items-center justify-between cursor-pointer" onClick={() => handleSettingChange('maintenance_mode', !settings.maintenance_mode)}>
+                <div>
+                  <p className={`text-sm font-bold ${settings.maintenance_mode ? 'text-orange-900' : 'text-on-surface'}`}>{t('adminSettings.maintenanceToggle')}</p>
+                  <p className="text-[10px] text-secondary mt-1 max-w-[200px] leading-relaxed">{t('adminSettings.maintenanceDesc')}</p>
+                </div>
+                <div className="relative inline-flex items-center flex-shrink-0">
+                  <div className={`w-11 h-6 rounded-full transition-colors ${settings.maintenance_mode ? 'bg-orange-500' : 'bg-surface-variant'}`}></div>
+                  <div className={`absolute left-0.5 top-0.5 bg-white w-5 h-5 rounded-full shadow transition-transform ${settings.maintenance_mode ? 'translate-x-5' : ''}`}></div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-8 rounded-2xl border border-slate-700 shadow-xl overflow-hidden relative">
-              <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/20 blur-3xl rounded-full"></div>
-              <h5 className="text-white font-black text-xl mb-2 relative z-10">Lotte Mart Core v3.0</h5>
-              <p className="text-white/60 text-xs leading-relaxed mb-6 font-medium relative z-10">Dữ liệu cấu hình hệ thống luôn được Backup định kì. Không nên sửa đổi liên tục trong giờ cao điểm.</p>
-              
-              <div className="space-y-3 relative z-10">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-400">Database Size</span>
-                  <span className="text-green-400 font-black">2.4 GB</span>
+            {/* System Info Card */}
+            <div className="rounded-2xl overflow-hidden shadow-sm border border-slate-200/80">
+              <div className="bg-gradient-to-r from-slate-900 to-slate-800 px-5 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-400 block"></span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 block"></span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 block"></span>
+                  </div>
+                  <span className="text-white/80 text-xs font-bold tracking-wide">Lotte Mart Core</span>
                 </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-400">Environment</span>
-                  <span className="text-blue-400 font-bold px-2 py-0.5 bg-blue-500/10 rounded">PRODUCTION</span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-400">Latest Backup</span>
-                  <span className="text-slate-300 font-medium">Hôm nay, 03:00 AM</span>
-                </div>
+                <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/15 px-2.5 py-1 rounded-full tracking-wide flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse"></span>
+                  ONLINE
+                </span>
+              </div>
+              <div className="bg-slate-950 divide-y divide-slate-800/60">
+                {[
+                  { label: t('adminSettings.infoVersion'), value: 'v3.0.0', cls: 'text-violet-400' },
+                  { label: t('adminSettings.infoEnv'), value: 'PRODUCTION', cls: 'text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded' },
+                  { label: t('adminSettings.infoDb'), value: '2.4 GB', cls: 'text-emerald-400' },
+                  { label: t('adminSettings.infoBackup'), value: t('adminSettings.infoBackupValue'), cls: 'text-slate-300' },
+                  { label: t('adminSettings.infoApi'), value: 'Healthy', cls: 'text-emerald-400' },
+                ].map(r => (
+                  <div key={r.label} className="flex items-center justify-between px-5 py-3">
+                    <span className="text-slate-500 text-[11px] font-medium">{r.label}</span>
+                    <span className={`text-[11px] font-bold font-mono ${r.cls}`}>{r.value}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-slate-900/70 px-5 py-3">
+                <p className="text-[10px] text-slate-500 leading-relaxed">{t('adminSettings.infoNote')}</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Floating Action Bar */}
+      {/* Floating Save Bar */}
       {hasChanges && (
         <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200 p-5 z-30 flex justify-between items-center shadow-2xl animate-slide-up">
           <div className="flex items-center gap-4 ml-6 lg:ml-[280px]">
             <span className="material-symbols-outlined text-orange-500 animate-pulse text-3xl">info</span>
-            <p className="text-sm font-bold text-on-surface">Có thay đổi mới chưa lưu.</p>
+            <p className="text-sm font-bold text-on-surface">{t('adminSettings.unsavedChanges')}</p>
           </div>
           <div className="flex items-center gap-3 pr-8">
-            <button onClick={resetChanges} disabled={isSaving} className="inline-flex items-center justify-center gap-2 h-10 px-5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.98] border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed">Hoàn tác</button>
+            <button onClick={resetChanges} disabled={isSaving} className="inline-flex items-center justify-center gap-2 h-10 px-5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.98] border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed">{t('adminSettings.revert')}</button>
             <button onClick={saveSettings} disabled={isSaving} className="inline-flex items-center justify-center gap-2 h-10 px-10 bg-green-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-green-600/15 hover:bg-green-700 hover:-translate-y-0.5 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
-              {isSaving ? 'Đang lưu...' : 'Lưu tất cả'}
+              {isSaving ? t('adminSettings.saving') : t('adminSettings.saveAll')}
             </button>
           </div>
         </div>

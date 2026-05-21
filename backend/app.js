@@ -44,6 +44,7 @@ import importOrderRoutes from './routes/importOrders.js';
 import importReceiptRoutes from './routes/importReceipts.js';
 import uploadRoutes from './routes/uploads.js';
 import recipeRoutes from './routes/recipes.js';
+import questionRoutes from './routes/questions.js';
 
 // Enterprise Modules
 import supplierRoutes from './routes/suppliers.js';
@@ -95,7 +96,7 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"], // Prevent inline scripts and XSS
-      styleSrc: ["'self'", "'unsafe-inline'"], 
+      styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "blob:", "http:", "https:"],
       connectSrc: ["'self'", "http:", "https:"],
       objectSrc: ["'none'"],
@@ -123,7 +124,7 @@ app.use((req, res, next) => {
   req.id = uuidv4();
   res.setHeader('X-Request-Id', req.id);
   logger.info(`Incoming ${req.method} ${req.url}`, { requestId: req.id, ip: req.ip });
-  
+
   res.on('finish', () => {
     logger.info(`Completed ${req.method} ${req.url} with status ${res.statusCode}`, { requestId: req.id });
   });
@@ -170,24 +171,24 @@ const smartKeyGenerator = (req) => {
   return `${ip}-${userAgent}-${tokenPart}`;
 };
 
-const authLimiter = rateLimit({ 
-  windowMs: 15 * 60 * 1000, 
-  max: 50, 
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
   keyGenerator: smartKeyGenerator,
   standardHeaders: true,
   legacyHeaders: false,
   validate: { xForwardedForHeader: false }, // allow custom keyGenerator without IPv6 validation error
-  message: { success: false, message: 'Quá nhiều yêu cầu, vui lòng thử lại sau.' } 
+  message: { success: false, message: 'Quá nhiều yêu cầu, vui lòng thử lại sau.' }
 });
 
-const orderLimiter = rateLimit({ 
-  windowMs: 15 * 60 * 1000, 
-  max: 100, 
+const orderLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   keyGenerator: smartKeyGenerator,
   standardHeaders: true,
   legacyHeaders: false,
   validate: { xForwardedForHeader: false },
-  message: { success: false, message: 'Quá nhiều yêu cầu, vui lòng thử lại sau.' } 
+  message: { success: false, message: 'Quá nhiều yêu cầu, vui lòng thử lại sau.' }
 });
 
 // Routes
@@ -224,6 +225,7 @@ apiRouter.use('/import-orders', importOrderRoutes);
 apiRouter.use('/import-receipts', importReceiptRoutes);
 apiRouter.use('/uploads', uploadRoutes);
 apiRouter.use('/recipes', recipeRoutes);
+apiRouter.use('/questions', questionRoutes);
 
 apiRouter.use('/suppliers', supplierRoutes);
 apiRouter.use('/purchase-orders', purchaseOrderRoutes);

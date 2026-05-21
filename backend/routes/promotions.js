@@ -7,6 +7,7 @@ const router = express.Router();
 router.get('/', optionalAuth, promotionController.list);
 router.get('/my-wallet', auth, promotionController.myWallet);
 router.get('/claims', auth, admin, promotionController.claims);
+router.post('/bulk-expiring', auth, admin, promotionController.bulkCreateExpiringPromotions);
 router.get('/applicable', optionalAuth, promotionController.applicable);
 router.post('/calculate', optionalAuth, promotionController.calculate);
 router.post('/:id/claim', auth, promotionController.claim);

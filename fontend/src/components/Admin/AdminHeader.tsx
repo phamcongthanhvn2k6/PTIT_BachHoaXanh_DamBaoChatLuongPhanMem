@@ -7,6 +7,7 @@ import { useAppSelector } from '../../store';
 import { toast } from '../Toast/toastEvent';
 import { useTranslation } from 'react-i18next';
 import LanguageSwitcher from '../../component/Header/LanguageSwitcher';
+import { AdminNotificationDropdown } from './AdminNotificationDropdown';
 
 const AdminHeader: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -66,19 +67,16 @@ const AdminHeader: React.FC = () => {
 
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-2">
-          <button onClick={() => toast.info(t('admin.noNotifications'))} className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-slate-500 relative transition-colors">
-            <span className="material-symbols-outlined leading-none block">notifications</span>
-            <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full"></span>
-          </button>
-          <button onClick={() => toast.info(t('admin.supportUpdating'))} className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors">
+          <AdminNotificationDropdown />
+          <button onClick={() => toast.info(t('admin.supportUpdating', { defaultValue: 'Support coming soon' }))} className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors">
             <span className="material-symbols-outlined leading-none block">help_outline</span>
           </button>
-          <button onClick={toggleDarkMode} className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors" title={isDarkMode ? t('admin.darkModeOff') : t('admin.darkModeOn')}>
+          <button onClick={toggleDarkMode} className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors" title={isDarkMode ? t('admin.darkModeOff', { defaultValue: 'Trang sáng' }) : t('admin.darkModeOn', { defaultValue: 'Trang tối' })}>
             <span className="material-symbols-outlined leading-none block">{isDarkMode ? 'light_mode' : 'dark_mode'}</span>
           </button>
         </div>
 
-        <LanguageSwitcher />
+        <LanguageSwitcher variant={isDarkMode ? 'dark' : 'light'} />
 
         <button 
           onClick={handleLogout}

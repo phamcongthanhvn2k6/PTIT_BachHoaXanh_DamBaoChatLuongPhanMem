@@ -42,6 +42,7 @@ const productSchema = new mongoose.Schema({
   sold_count: { type: Number, default: 0 },
   manufacture_date: { type: Date, default: null },
   expiry_date: { type: Date, default: null },
+  expiry_warning_days: { type: Number, default: 7 },
   batch_code: { type: String, default: '' },
   is_expiring_soon: { type: Boolean, default: false },
   is_expired: { type: Boolean, default: false },
@@ -61,34 +62,34 @@ const productSchema = new mongoose.Schema({
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
 
 // Soft Delete Middleware
-productSchema.pre('find', function() {
+productSchema.pre('find', function () {
   if (this.getQuery().is_deleted === undefined) {
     this.where({ is_deleted: { $ne: true } });
   }
 });
-productSchema.pre('findOne', function() {
+productSchema.pre('findOne', function () {
   if (this.getQuery().is_deleted === undefined) {
     this.where({ is_deleted: { $ne: true } });
   }
 });
-productSchema.pre('countDocuments', function() {
+productSchema.pre('countDocuments', function () {
   if (this.getQuery().is_deleted === undefined) {
     this.where({ is_deleted: { $ne: true } });
   }
 });
 
 // Cache invalidation
-productSchema.post('save', async function() {
+productSchema.post('save', async function () {
   try {
     const { deleteCachePattern } = await import('../services/redisService.js');
     await deleteCachePattern('cache:*/api*products*');
-  } catch (err) {}
+  } catch (err) { }
 });
-productSchema.post('findOneAndUpdate', async function() {
+productSchema.post('findOneAndUpdate', async function () {
   try {
     const { deleteCachePattern } = await import('../services/redisService.js');
     await deleteCachePattern('cache:*/api*products*');
-  } catch (err) {}
+  } catch (err) { }
 });
 
 productSchema.index({ name: 'text', description: 'text', brand: 'text' });

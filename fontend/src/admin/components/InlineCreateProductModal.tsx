@@ -200,7 +200,7 @@ export const InlineCreateProductModal: React.FC<InlineCreateProductModalProps> =
       title={t('importOrders.createProductTitle')}
       subtitle={t('importOrders.createProductSubtitle')}
       icon="inventory_2"
-      size="3xl"
+      size="xl"
       footer={
         <>
           <button type="button" onClick={onClose} className={cls.btnSecondary}>{t('common.cancel') || 'Hủy'}</button>
@@ -312,7 +312,7 @@ export const InlineCreateProductModal: React.FC<InlineCreateProductModalProps> =
                   <input type="number" min={0} className={cls.input} value={salePrice} onChange={e => setSalePrice(Number(e.target.value))} />
                 </FormField>
                 <FormField label="Biên lợi nhuận">
-                  <div className={`h-10 rounded-xl flex items-center px-4 font-bold ${profitMargin > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                  <div className={`h-10 rounded-xl flex items-center px-4 font-bold ${Number(profitMargin) > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
                     {profitMargin}%
                   </div>
                 </FormField>

@@ -148,6 +148,25 @@ const ProductDetail: React.FC = () => {
           const together = recommendedTogether.filter(
             (p: any) => String(p.id || p._id) !== String(resolvedProduct.id || resolvedProduct._id),
           );
+
+          // Fetch prices for related and together if they are 0
+          if (branchId) {
+             try {
+                const branchProds = await productService.getBranchProducts({ category_id: resolvedProduct.category_id, branch_id: branchId });
+                const bpMap = new Map();
+                (Array.isArray(branchProds) ? branchProds : []).forEach((bp: any) => bpMap.set(String(bp.product_id), bp));
+                
+                related.forEach((p: any) => {
+                    const bp = bpMap.get(String(p.id || p._id));
+                    if (bp) { p.price = bp.price; p.original_price = bp.original_price; }
+                });
+                together.forEach((p: any) => {
+                    const bp = bpMap.get(String(p.id || p._id));
+                    if (bp) { p.price = bp.price; p.original_price = bp.original_price; }
+                });
+             } catch {}
+          }
+
           setRelatedProducts(related);
           setBoughtTogetherProducts(together);
           setQuestions(safeQRes);
@@ -1062,7 +1081,7 @@ const ProductDetail: React.FC = () => {
                   </div>
                   <h4 className="text-sm font-bold line-clamp-2 mb-2">{p.name}</h4>
                   <span className="text-primary font-black">
-                    {(p.price || 0).toLocaleString('vi-VN')}₫
+                    {(p.price || p.original_price || p.min_price || 0) > 0 ? `${(p.price || p.original_price || p.min_price || 0).toLocaleString('vi-VN')}₫` : 'Liên hệ'}
                   </span>
                 </Link>
               ))}
@@ -1090,7 +1109,7 @@ const ProductDetail: React.FC = () => {
                   </div>
                   <h4 className="text-sm font-bold line-clamp-2 mb-2">{p.name}</h4>
                   <span className="text-primary font-black">
-                    {(p.price || 0).toLocaleString('vi-VN')}₫
+                    {(p.price || p.original_price || p.min_price || 0) > 0 ? `${(p.price || p.original_price || p.min_price || 0).toLocaleString('vi-VN')}₫` : 'Liên hệ'}
                   </span>
                 </Link>
               ))}

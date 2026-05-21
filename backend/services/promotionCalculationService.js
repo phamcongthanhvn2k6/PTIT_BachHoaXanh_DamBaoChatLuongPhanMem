@@ -132,6 +132,8 @@ const normalizeCartItem = (item) => {
         product_id: item.product_id || item._id || null,
         category_id: item.category_id || null,
         name: item.name || item.product_name || 'Sản phẩm',
+        product_name: item.product_name || item.name || 'Sản phẩm',
+        product_image: item.product_image || item.image || '',
         quantity,
         price: unitPrice,
     };
@@ -229,7 +231,7 @@ export async function validateCouponForCart({
         if (userId && coupon.usage_per_user) {
             const usageMap = await getPromotionUsageCountMap([coupon._id], userId);
             if ((usageMap.get(toIdString(coupon._id)) || 0) >= toNumber(coupon.usage_per_user, 1)) {
-                 return { valid: false, message: 'Bạn đã dùng hết lượt cho khuyến mãi này.' };
+                return { valid: false, message: 'Bạn đã dùng hết lượt cho khuyến mãi này.' };
             }
         }
     } else {
@@ -269,7 +271,7 @@ export async function validateCouponForCart({
     }
 
     let couponDiscount = 0;
-    
+
     // Support voucher_type = shipping
     const isShippingCoupon = String(coupon.voucher_type || '').toLowerCase() === 'shipping';
     if (isShippingCoupon) {
@@ -329,13 +331,13 @@ export async function getApplicablePromotions({ cartItems, branchId, userId = nu
 export async function calculateCheckoutTotals(input, branchIdArg, couponCodeArg = null, userIdArg = null, productVoucherIdArg = null, shippingVoucherIdArg = null) {
     const options = Array.isArray(input)
         ? {
-                cartItems: input,
-                branchId: branchIdArg,
-                couponCode: couponCodeArg,
-                userId: userIdArg,
-                productVoucherId: productVoucherIdArg,
-                shippingVoucherId: shippingVoucherIdArg,
-            }
+            cartItems: input,
+            branchId: branchIdArg,
+            couponCode: couponCodeArg,
+            userId: userIdArg,
+            productVoucherId: productVoucherIdArg,
+            shippingVoucherId: shippingVoucherIdArg,
+        }
         : (input || {});
 
     const now = options.now ? new Date(options.now) : new Date();
@@ -463,14 +465,14 @@ export async function calculateCheckoutTotals(input, branchIdArg, couponCodeArg 
 
             let discount = 0;
             const isShippingPromotion = String(promo.voucher_type || '').toLowerCase() === 'shipping';
-            
+
             if (isShippingPromotion) {
                 freeShippingApplied = true;
                 discount = 0;
             } else {
                 discount = calcDiscountByType(promo, lineSubtotal);
             }
-            
+
             if (discount > 0) {
                 if (promo.stackable) {
                     stackableDiscountPromos.push({ promo, discount });
@@ -604,7 +606,7 @@ export async function calculateCheckoutTotals(input, branchIdArg, couponCodeArg 
         } else {
             if (shipVal.free_shipping) freeShippingApplied = true;
             else shippingVoucherDiscount = Math.min(shippingFeeBase, toNumber(shipVal.coupon.discount_value, 0));
-            
+
             shippingVoucherApplied = {
                 id: shipVal.coupon._id, code: shipVal.coupon.code, title: shipVal.coupon.title, type: shipVal.coupon.type, discount_amount: shipVal.free_shipping ? shippingFeeBase : shippingVoucherDiscount
             };

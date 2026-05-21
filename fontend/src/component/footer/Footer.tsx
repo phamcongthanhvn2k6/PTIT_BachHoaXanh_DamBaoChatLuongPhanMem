@@ -14,25 +14,45 @@ function Footer() {
   const phone = settings?.support_phone || "1800 599 907";
   const email = settings?.support_email || "cskh@lottemart.vn";
   const brand = settings?.brand_name || "LOTTE Mart";
+  const headerText = settings?.header_logo_text || settings?.brand_name || "LOTTE Mart";
+  const [brandFirst, brandSecond] = headerText.split(" ");
+  const brandLogoUrl = settings?.brand_logo_url || '';
 
   return (
     <footer style={{ background: "#1a1a1a", color: "#ccc", padding: "48px 0 24px", marginTop: 64, fontFamily: "'Nunito', sans-serif" }}>
       <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 24px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 48, marginBottom: 48 }}>
           <div>
-            <div
-              style={{
-                background: "white",
-                borderRadius: 8,
-                padding: "6px 14px",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                marginBottom: 20,
-              }}
-            >
-              <span style={{ color: "#C1121F", fontWeight: 900, fontSize: 22, letterSpacing: -1 }}>LOTTE</span>
-              <span style={{ color: "#C1121F", fontWeight: 700, fontSize: 14, borderLeft: "2px solid #C1121F", paddingLeft: 6 }}>Mart</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+              {brandLogoUrl && (
+                <img
+                  src={brandLogoUrl}
+                  alt="Brand Logo"
+                  style={{
+                    height: 38,
+                    width: 38,
+                    objectFit: "contain",
+                    borderRadius: "50%",
+                    background: "white",
+                    padding: "2px",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+                  }}
+                />
+              )}
+              <div
+                style={{
+                  background: "white",
+                  borderRadius: 8,
+                  padding: "6px 14px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+                }}
+              >
+                <span style={{ color: "#C1121F", fontWeight: 900, fontSize: 22, letterSpacing: -1 }}>{brandFirst || "LOTTE"}</span>
+                <span style={{ color: "#C1121F", fontWeight: 700, fontSize: 14, borderLeft: "2px solid #C1121F", paddingLeft: 6 }}>{brandSecond || "Mart"}</span>
+              </div>
             </div>
             <p style={{ fontSize: 13, lineHeight: 1.8, color: "#999", marginBottom: 20 }}>
               {t('footer.description', { brand })}

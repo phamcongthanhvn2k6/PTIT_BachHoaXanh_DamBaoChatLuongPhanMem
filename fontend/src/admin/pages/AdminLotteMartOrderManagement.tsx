@@ -35,7 +35,9 @@ const AdminLotteMartOrderManagement: React.FC = () => {
   const [statusNote, setStatusNote] = useState("");
   const [cancelReason, setCancelReason] = useState("");
   const [refundReason, setRefundReason] = useState("");
-  const [isTrackingModalOpen, setTrackingModalOpen] = useState(false);
+  
+  // Shipping input specifically for changing to 'SHIPPING'
+  const [dispatchBranch, setDispatchBranch] = useState("");
   const [trackingNumber, setTrackingNumber] = useState("");
   const [shippingProvider, setShippingProvider] = useState("");
 
@@ -154,14 +156,26 @@ const AdminLotteMartOrderManagement: React.FC = () => {
 
   const handleUpdateStatus = async () => {
     if (!selectedOrder) return;
+    if (newStatus === 'SHIPPING') {
+      if (!trackingNumber.trim()) return toast.error("Vui lòng nhập mã vận đơn khi chuyển trạng thái Đang giao hàng!");
+      if (!dispatchBranch.trim()) return toast.error("Vui lòng nhập kho xuất hàng!");
+    }
     try {
-      const updated = await dataService.updateOrderStatus(selectedOrder.id, newStatus, statusNote);
+      const updated = await dataService.updateOrderStatus(selectedOrder.id, newStatus, statusNote, newStatus === 'SHIPPING' ? {
+        tracking_number: trackingNumber,
+        carrier: shippingProvider,
+        dispatch_branch_name: dispatchBranch,
+        dispatch_branch: dispatchBranch, // Optional ID representation, using name for simplicity here
+      } : undefined);
       setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
       setSelectedOrder(updated);
       toast.success("Cập nhật trạng thái thành công!");
       setStatusModalOpen(false);
       setNewStatus("");
       setStatusNote("");
+      setDispatchBranch("");
+      setTrackingNumber("");
+      setShippingProvider("");
     } catch (error: any) {
       toast.error(error.message || "Lỗi khi cập nhật trạng thái");
     }
@@ -203,24 +217,7 @@ const AdminLotteMartOrderManagement: React.FC = () => {
     }
   };
 
-  const handleAssignTracking = async () => {
-    if (!selectedOrder) return;
-    if (!trackingNumber.trim()) {
-      toast.error("Vui lòng nhập mã vận đơn!");
-      return;
-    }
-    try {
-      const updated = await dataService.assignTrackingNumber(selectedOrder.id, trackingNumber, shippingProvider);
-      setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
-      setSelectedOrder(updated);
-      toast.success("Đã gán mã vận đơn thành công!");
-      setTrackingModalOpen(false);
-      setTrackingNumber("");
-    } catch (error: any) {
-      toast.error(error.message || "Lỗi khi gán mã vận đơn!");
-    }
-  };
-
+  // Legacy Tracking Function has been merged into updateStatus.
   const handlePrintInvoice = () => {
     if (!selectedOrder) return;
     const printWindow = window.open('', '_blank');
@@ -268,7 +265,7 @@ const AdminLotteMartOrderManagement: React.FC = () => {
             <tbody>
               ${(selectedOrder.items || []).map((item: any) => `
                 <tr>
-                  <td>${item.product_name}</td>
+                  <td>${item.product_name || item.name || 'Sản phẩm'}</td>
                   <td>${item.quantity}</td>
                   <td>${Number(item.price).toLocaleString('vi-VN')} ₫</td>
                   <td>${(item.quantity * Number(item.price)).toLocaleString('vi-VN')} ₫</td>
@@ -511,7 +508,7 @@ const AdminLotteMartOrderManagement: React.FC = () => {
             )}
           </section>
 
-      <aside className={`fixed top-0 right-0 w-full sm:w-[420px] lg:w-[480px] h-screen bg-white shadow-[-20px_0_40px_rgba(0,0,0,0.05)] z-[60] transform transition-transform duration-500 ease-in-out border-l border-slate-100 flex flex-col ${selectedOrder ? "translate-x-0" : "translate-x-full"}`}>
+      <aside className={`fixed top-0 bottom-0 right-0 w-full sm:w-[420px] lg:w-[480px] bg-white shadow-[-20px_0_40px_rgba(0,0,0,0.05)] z-[60] transform transition-transform duration-500 ease-in-out border-l border-slate-100 flex flex-col ${selectedOrder ? "translate-x-0" : "translate-x-full"}`}>
         {selectedOrder && (
           <>
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-surface-container-low/50">
@@ -524,7 +521,7 @@ const AdminLotteMartOrderManagement: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-hide">
+            <div className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-hide min-h-0">
               {/* STATUS INDICATOR */}
               <div className="flex items-center justify-between bg-surface-container-lowest p-4 rounded-xl border border-slate-100">
                 <span className="text-sm font-bold text-slate-500">Trạng thái: </span>
@@ -589,10 +586,16 @@ const AdminLotteMartOrderManagement: React.FC = () => {
                     <span className="text-[10px] font-medium text-slate-400">Thanh toán:</span>
                     <span className="text-xs font-bold uppercase">{selectedOrder.payment?.method || selectedOrder.payment_method} - {selectedOrder.payment?.status || selectedOrder.payment_status}</span>
                   </div>
-                  {selectedOrder.tracking_number && (
+                  {selectedOrder.tracking?.tracking_number && (
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-medium text-slate-400">Vận chuyển:</span>
-                      <span className="text-xs font-bold text-blue-600">{selectedOrder.shipping_provider || 'Hệ thống'} - {selectedOrder.tracking_number}</span>
+                      <span className="text-xs font-bold text-blue-600">{selectedOrder.tracking.carrier || selectedOrder.shipping_provider || 'Hệ thống'} - {selectedOrder.tracking.tracking_number}</span>
+                    </div>
+                  )}
+                  {selectedOrder.tracking?.dispatch_branch_name && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-medium text-slate-400">Kho Xuất Hàng:</span>
+                      <span className="text-xs font-bold">{selectedOrder.tracking.dispatch_branch_name}</span>
                     </div>
                   )}
                 </div>
@@ -620,7 +623,7 @@ const AdminLotteMartOrderManagement: React.FC = () => {
                       <div className="flex-1">
                         <p className="text-xs font-bold line-clamp-2 leading-tight">
                           {isGift && <span className="text-primary mr-1">[Quà tặng]</span>}
-                          {item.product_name}
+                          {item.product_name || item.name || 'Sản phẩm'}
                         </p>
                         <div className="text-[10px] text-slate-400 flex items-center gap-1 flex-wrap">
                           <span>SL: {item.quantity}</span>
@@ -690,14 +693,6 @@ const AdminLotteMartOrderManagement: React.FC = () => {
                 In Hóa đơn
               </button>
 
-              {(!selectedOrder.tracking_number && selectedOrder.status !== 'CANCELLED' && selectedOrder.status !== 'REFUNDED') && (
-                <button 
-                  onClick={() => setTrackingModalOpen(true)}
-                  className="inline-flex items-center justify-center gap-2 h-10 px-5 bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.98] flex-1 min-w-[120px]"
-                >
-                  Gán Shipping
-                </button>
-              )}
 
               {(selectedOrder.status === 'PENDING' || selectedOrder.status === 'CONFIRMED' || selectedOrder.status === 'PROCESSING') && (
                 <button 
@@ -731,23 +726,31 @@ const AdminLotteMartOrderManagement: React.FC = () => {
       {/* OVERLAYS & MODALS */}
       {/* Update Status Modal */}
       {isStatusModalOpen && selectedOrder && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setStatusModalOpen(false)}></div>
-          <div className="bg-white w-full max-w-[380px] max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl p-6 space-y-4 z-10 relative">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-primary text-xl">update</span>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => {
+            setStatusModalOpen(false); setNewStatus(""); setStatusNote(""); setDispatchBranch(""); setTrackingNumber(""); setShippingProvider("");
+          }}></div>
+          <div className="bg-white w-full max-w-[440px] max-h-[90vh] flex flex-col rounded-2xl shadow-2xl z-10 relative overflow-hidden">
+            
+            {/* Modal Header */}
+            <div className="p-6 pb-4 border-b border-slate-100 flex-shrink-0 bg-white">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-primary text-xl">update</span>
+                </div>
+                <div>
+                  <h3 className="text-base font-black">Cập nhật trạng thái</h3>
+                  <p className="text-[10px] text-slate-400">#{selectedOrder.id}</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-base font-black">Cập nhật trạng thái</h3>
-                <p className="text-[10px] text-slate-400">#{selectedOrder.id}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-400">Hiện tại:</span>
+                {getStatusBadge(selectedOrder.status)}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold text-slate-400">Hiện tại:</span>
-              {getStatusBadge(selectedOrder.status)}
-            </div>
-            <div className="space-y-4">
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1 scrollbar-thin min-h-0">
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Trạng thái mới</label>
                 <select 
@@ -766,8 +769,50 @@ const AdminLotteMartOrderManagement: React.FC = () => {
                   <p className="text-xs text-red-500 font-bold mt-1">Đơn hàng ở trạng thái cuối, không thể chuyển tiếp.</p>
                 )}
               </div>
+              
+              {newStatus === 'SHIPPING' && (
+                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 space-y-4 mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="material-symbols-outlined text-blue-600 text-sm">local_shipping</span>
+                    <span className="text-xs font-black uppercase text-blue-700 tracking-wide">Thông tin giao hàng</span>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Kho xuất hàng (Bắt buộc)*</label>
+                    <input
+                      type="text"
+                      className="w-full bg-white border border-slate-200 rounded-xl text-sm py-2 px-3 focus:ring-2 focus:ring-primary/20"
+                      placeholder="VD: Lotte Mart Q7..."
+                      value={dispatchBranch}
+                      onChange={(e) => setDispatchBranch(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">ĐV Vận chuyển</label>
+                      <input
+                        type="text"
+                        className="w-full bg-white border border-slate-200 rounded-xl text-sm py-2 px-3 focus:ring-2 focus:ring-primary/20"
+                        placeholder="VD: GHTK"
+                        value={shippingProvider}
+                        onChange={(e) => setShippingProvider(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Mã vận đơn *</label>
+                      <input
+                        type="text"
+                        className="w-full bg-white border border-slate-200 rounded-xl text-sm py-2 px-3 focus:ring-2 focus:ring-primary/20"
+                        placeholder="Nhập mã tracking..."
+                        value={trackingNumber}
+                        onChange={(e) => setTrackingNumber(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Ghi chú (Tùy chọn)</label>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Ghi chú nội bộ (Tùy chọn)</label>
                 <textarea
                   className="w-full bg-surface-container-low border-none rounded-xl text-sm py-3 px-4 h-24 focus:ring-2 focus:ring-primary/20 resize-none"
                   placeholder="Ghi chú nội bộ..."
@@ -776,8 +821,14 @@ const AdminLotteMartOrderManagement: React.FC = () => {
                 ></textarea>
               </div>
             </div>
-            <div className="flex gap-3">
-              <button onClick={() => setStatusModalOpen(false)} className="flex-1 inline-flex items-center justify-center h-10 px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.98]">Đóng</button>
+
+            {/* Modal Footer */}
+            <div className="p-6 pt-4 border-t border-slate-100 flex gap-3 flex-shrink-0 bg-white">
+              <button 
+                onClick={() => { setStatusModalOpen(false); setNewStatus(""); setStatusNote(""); setDispatchBranch(""); setTrackingNumber(""); setShippingProvider(""); }} 
+                className="flex-1 inline-flex items-center justify-center h-10 px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.98]">
+                  Đóng
+              </button>
               <button 
                 onClick={handleUpdateStatus} 
                 disabled={!newStatus}
@@ -786,25 +837,30 @@ const AdminLotteMartOrderManagement: React.FC = () => {
                 Lưu
               </button>
             </div>
+            
           </div>
         </div>
       )}
 
       {/* Cancel Order Modal */}
       {isCancelModalOpen && selectedOrder && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setCancelModalOpen(false)}></div>
-          <div className="bg-white w-full max-w-[380px] max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl p-6 space-y-4 z-10 relative">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-red-600 text-xl">cancel</span>
-              </div>
-              <div>
-                <h3 className="text-base font-black text-red-600">Hủy đơn hàng</h3>
-                <p className="text-[10px] text-slate-400">Không thể hoàn tác</p>
+          <div className="bg-white w-full max-w-[440px] max-h-[90vh] flex flex-col rounded-2xl shadow-2xl z-10 relative overflow-hidden">
+            
+            <div className="p-6 pb-4 border-b border-slate-100 flex-shrink-0 bg-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-red-600 text-xl">cancel</span>
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-red-600">Hủy đơn hàng</h3>
+                  <p className="text-[10px] text-slate-400">Không thể hoàn tác</p>
+                </div>
               </div>
             </div>
-            <div className="space-y-4">
+
+            <div className="p-6 overflow-y-auto space-y-4 flex-1 scrollbar-thin min-h-0">
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Lý do hủy (Bắt buộc)*</label>
                 <textarea
@@ -815,7 +871,8 @@ const AdminLotteMartOrderManagement: React.FC = () => {
                 ></textarea>
               </div>
             </div>
-            <div className="flex gap-3">
+
+            <div className="p-6 pt-4 border-t border-slate-100 flex gap-3 flex-shrink-0 bg-white">
               <button onClick={() => setCancelModalOpen(false)} className="flex-1 inline-flex items-center justify-center h-10 px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.98]">Đóng</button>
               <button 
                 onClick={handleCancelOrder} 
@@ -831,19 +888,23 @@ const AdminLotteMartOrderManagement: React.FC = () => {
 
       {/* Refund Modal */}
       {isRefundModalOpen && selectedOrder && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setRefundModalOpen(false)}></div>
-          <div className="bg-white w-full max-w-[380px] max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl p-6 space-y-4 z-10 relative">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-purple-50 rounded-full flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-purple-600 text-xl">currency_exchange</span>
-              </div>
-              <div>
-                <h3 className="text-base font-black text-purple-600">Hoàn tiền</h3>
-                <p className="text-[10px] text-slate-400">Số tiền: <strong>{(selectedOrder.total_amount || 0).toLocaleString('vi-VN')} ₫</strong></p>
+          <div className="bg-white w-full max-w-[440px] max-h-[90vh] flex flex-col rounded-2xl shadow-2xl z-10 relative overflow-hidden">
+            
+            <div className="p-6 pb-4 border-b border-slate-100 flex-shrink-0 bg-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-50 rounded-full flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-purple-600 text-xl">currency_exchange</span>
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-purple-600">Hoàn tiền</h3>
+                  <p className="text-[10px] text-slate-400">Số tiền: <strong>{(selectedOrder.total_amount || 0).toLocaleString('vi-VN')} ₫</strong></p>
+                </div>
               </div>
             </div>
-            <div className="space-y-4">
+
+            <div className="p-6 overflow-y-auto space-y-4 flex-1 scrollbar-thin min-h-0">
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Lý do hoàn tiền / Ghi chú</label>
                 <textarea
@@ -854,8 +915,9 @@ const AdminLotteMartOrderManagement: React.FC = () => {
                 ></textarea>
               </div>
             </div>
-            <div className="flex gap-3">
-              <button onClick={() => setRefundModalOpen(false)} className="flex-1 inline-flex items-center justify-center h-10 px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.98]">Tra sau</button>
+
+            <div className="p-6 pt-4 border-t border-slate-100 flex gap-3 flex-shrink-0 bg-white">
+              <button onClick={() => setRefundModalOpen(false)} className="flex-1 inline-flex items-center justify-center h-10 px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.98]">Trở lại</button>
               <button 
                 onClick={handleRefundOrder} 
                 className="flex-1 inline-flex items-center justify-center h-10 px-5 bg-purple-600 text-white hover:bg-purple-700 rounded-xl text-sm font-bold shadow-lg shadow-purple-600/15 transition-all cursor-pointer active:scale-[0.98]"
@@ -867,55 +929,7 @@ const AdminLotteMartOrderManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Tracking Modal */}
-      {isTrackingModalOpen && selectedOrder && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setTrackingModalOpen(false)}></div>
-          <div className="bg-white w-full max-w-[380px] max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl p-6 space-y-4 z-10 relative">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-blue-600 text-xl">local_shipping</span>
-              </div>
-              <div>
-                <h3 className="text-base font-black text-blue-600">Gán mã vận đơn</h3>
-                <p className="text-[10px] text-slate-400">#{selectedOrder.id}</p>
-              </div>
-            </div>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Đơn vị vận chuyển (Tùy chọn)</label>
-                <input
-                  type="text"
-                  className="w-full bg-surface-container-low border-none rounded-xl text-sm py-3 px-4 focus:ring-2 focus:ring-primary/20"
-                  placeholder="VD: GHTK, Viettel Post, AhaMove..."
-                  value={shippingProvider}
-                  onChange={(e) => setShippingProvider(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Mã vận đơn (Bắt buộc)*</label>
-                <input
-                  type="text"
-                  className="w-full bg-surface-container-low border-none rounded-xl text-sm py-3 px-4 focus:ring-2 focus:ring-primary/20"
-                  placeholder="Nhập mã tracking..."
-                  value={trackingNumber}
-                  onChange={(e) => setTrackingNumber(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setTrackingModalOpen(false)} className="flex-1 inline-flex items-center justify-center h-10 px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.98]">Đóng</button>
-              <button 
-                onClick={handleAssignTracking} 
-                disabled={!trackingNumber.trim()}
-                className="flex-1 inline-flex items-center justify-center h-10 px-5 bg-blue-600 text-white hover:bg-blue-700 rounded-xl text-sm font-bold shadow-lg shadow-blue-600/15 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Cập nhật
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
     </div>
   );

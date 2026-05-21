@@ -63,10 +63,10 @@ const normalizeQuestion = (questionDoc) => {
     answer: q.answer || null,
     answers: q.answer?.content
       ? [{
-          content: q.answer.content,
-          created_at: q.answer.answered_at || q.updated_at,
-          admin_name: q.answer.admin_name || 'Lotte Mart',
-        }]
+        content: q.answer.content,
+        created_at: q.answer.answered_at || q.updated_at,
+        admin_name: q.answer.admin_name || 'Lotte Mart',
+      }]
       : [],
   };
 };
@@ -93,9 +93,13 @@ export const list = async (req, res) => {
 
     // Match Product Core Phase
     const matchStage = { is_active: true };
-    if (category) matchStage.category_id = category;
+    if (category) {
+      matchStage.category_id = mongoose.Types.ObjectId.isValid(category) 
+        ? new mongoose.Types.ObjectId(category) 
+        : category;
+    }
     if (featured === 'true') matchStage.is_featured = true;
-    
+
     pipeline.push({ $match: matchStage });
 
     // Lookup Branch Products if branchId is given
@@ -117,7 +121,7 @@ export const list = async (req, res) => {
           preserveNullAndEmptyArrays: false // Only return products that exist in this branch
         }
       });
-      
+
       // Override Product price/stock with BranchProduct
       pipeline.push({
         $addFields: {
@@ -151,13 +155,13 @@ export const list = async (req, res) => {
     if (sort === 'best-seller' || sort === 'best') sortStage = { sold_count: -1 };
     if (sort === 'newest') sortStage = { created_at: -1 };
     if (sort === 'stock-desc') sortStage = { stock: -1 };
-    
+
     pipeline.push({ $sort: sortStage });
 
     // Pagination Phase
     const p = Math.max(1, parseInt(page));
     const l = Math.min(100, Math.max(1, parseInt(limit)));
-    
+
     pipeline.push({
       $facet: {
         metadata: [{ $count: "total" }],
@@ -166,33 +170,33 @@ export const list = async (req, res) => {
     });
 
     const result = await Product.aggregate(pipeline);
-    
+
     const total = result[0]?.metadata[0]?.total || 0;
     const data = result[0]?.data || [];
 
     // Get active promotions to attach badges
     const minDate = new Date();
     const activePromotions = await Promotion.find({
-        is_active: true,
-        status: 'active',
-        start_date: { $lte: minDate },
-        end_date: { $gte: minDate },
-        $or: [
-            { usage_limit: null },
-            { $expr: { $lt: ["$usage_count", "$usage_limit"] } }
-        ]
+      is_active: true,
+      status: 'active',
+      start_date: { $lte: minDate },
+      end_date: { $gte: minDate },
+      $or: [
+        { usage_limit: null },
+        { $expr: { $lt: ["$usage_count", "$usage_limit"] } }
+      ]
     }).sort({ priority: -1 });
 
     const isTargetMatched = (scopeArray, idToMatch) => {
-        if (!scopeArray || scopeArray.length === 0) return false;
-        const stringArray = scopeArray.map(id => String(id));
-        return stringArray.includes(String(idToMatch));
+      if (!scopeArray || scopeArray.length === 0) return false;
+      const stringArray = scopeArray.map(id => String(id));
+      return stringArray.includes(String(idToMatch));
     };
 
     // Map `id` from `_id` and cleanup
     const mappedData = data.map(item => {
-      item.id = item._id; 
-      
+      item.id = item._id;
+
       const applicablePromotions = activePromotions.filter(promo => {
         if (isTargetMatched(promo.excluded_product_ids, item._id)) return false;
         if (isTargetMatched(promo.excluded_category_ids, item.category_id)) return false;
@@ -215,9 +219,9 @@ export const list = async (req, res) => {
       return item;
     });
 
-    return res.json({ 
-      success: true, 
-      data: mappedData, 
+    return res.json({
+      success: true,
+      data: mappedData,
       pagination: {
         page: p,
         limit: l,
@@ -233,29 +237,29 @@ export const list = async (req, res) => {
 // GET /api/products/search — with $regex fallback for partial matches
 export const search = async (req, res) => {
   req.query.search = req.query.q || req.query.search || '';
-  
+
   // Clone response to intercept — if $text returns 0 results, retry with $regex
   const originalJson = res.json.bind(res);
   const searchTerm = String(req.query.search || '').trim();
-  
+
   // If search term is very short (< 2 chars), skip $text entirely and use $regex
   if (searchTerm && searchTerm.length < 2) {
     req.query.search = '';  // disable $text in list()
     req.query._regexSearch = searchTerm;
   }
-  
+
   // Wrap res.json to detect empty $text results and retry with $regex
   let responded = false;
   res.json = (body) => {
     if (responded) return;
     responded = true;
-    
+
     // If $text returned 0 results and we have a search term, retry with $regex
     if (body?.success && body?.data?.length === 0 && searchTerm.length >= 2) {
       // Reset and use regex fallback
       responded = false;
       res.json = originalJson;  // restore original
-      
+
       // Build regex pipeline manually
       const regexQuery = {
         is_active: true,
@@ -265,10 +269,10 @@ export const search = async (req, res) => {
           { description: { $regex: searchTerm, $options: 'i' } }
         ]
       };
-      
+
       const page = Math.max(1, parseInt(req.query.page || 1));
       const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || 20)));
-      
+
       Product.countDocuments(regexQuery).then(total => {
         Product.find(regexQuery)
           .sort({ created_at: -1 })
@@ -287,10 +291,10 @@ export const search = async (req, res) => {
       });
       return;
     }
-    
+
     return originalJson(body);
   };
-  
+
   return list(req, res);
 };
 
@@ -612,7 +616,7 @@ export const smartRecommendations = async (req, res) => {
     if (category_id) {
       filter.category_id = isNaN(Number(category_id)) ? category_id : Number(category_id);
     }
-    
+
     if (min_price || max_price) {
       filter.price = {};
       if (min_price) filter.price.$gte = Number(min_price);
@@ -716,7 +720,7 @@ export const promotionsDetail = async (req, res) => {
   try {
     const idParam = req.params.id;
     const branchId = req.query.branchId || null;
-    
+
     let product = null;
     if (mongoose.Types.ObjectId.isValid(idParam)) {
       product = await Product.findById(idParam);
@@ -731,34 +735,34 @@ export const promotionsDetail = async (req, res) => {
 
     const minDate = new Date();
     const activePromotions = await Promotion.find({
-        is_active: true,
-        status: 'active',
-        start_date: { $lte: minDate },
-        end_date: { $gte: minDate },
-        $or: [
-            { usage_limit: null },
-            { $expr: { $lt: ["$usage_count", "$usage_limit"] } }
-        ]
+      is_active: true,
+      status: 'active',
+      start_date: { $lte: minDate },
+      end_date: { $gte: minDate },
+      $or: [
+        { usage_limit: null },
+        { $expr: { $lt: ["$usage_count", "$usage_limit"] } }
+      ]
     }).sort({ priority: -1 });
 
     const isTargetMatched = (scopeArray, idToMatch) => {
-        if (!scopeArray || scopeArray.length === 0) return false;
-        const stringArray = scopeArray.map(id => String(id));
-        return stringArray.includes(String(idToMatch));
+      if (!scopeArray || scopeArray.length === 0) return false;
+      const stringArray = scopeArray.map(id => String(id));
+      return stringArray.includes(String(idToMatch));
     };
 
     const applicablePromotions = activePromotions.filter(promo => {
-        if (isTargetMatched(promo.excluded_product_ids, product._id)) return false;
-        if (isTargetMatched(promo.excluded_category_ids, product.category_id)) return false;
+      if (isTargetMatched(promo.excluded_product_ids, product._id)) return false;
+      if (isTargetMatched(promo.excluded_category_ids, product.category_id)) return false;
 
-        if (promo.scope === 'product') return isTargetMatched(promo.target_product_ids, product._id);
-        if (promo.scope === 'category') return isTargetMatched(promo.target_category_ids, product.category_id);
-        if (promo.scope === 'branch') return branchId ? isTargetMatched(promo.target_branch_ids, branchId) : false;
-        return promo.scope === 'all';
+      if (promo.scope === 'product') return isTargetMatched(promo.target_product_ids, product._id);
+      if (promo.scope === 'category') return isTargetMatched(promo.target_category_ids, product.category_id);
+      if (promo.scope === 'branch') return branchId ? isTargetMatched(promo.target_branch_ids, branchId) : false;
+      return promo.scope === 'all';
     });
 
     return res.json({ success: true, data: applicablePromotions });
-  } catch(err) {
+  } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -820,9 +824,86 @@ const processProductData = (data) => {
     const diffMs = expDate.getTime() - now.getTime();
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
     data.is_expired = diffDays < 0;
-    data.is_expiring_soon = diffDays >= 0 && diffDays <= 7;
+    const warningDays = data.expiry_warning_days || 7;
+    data.is_expiring_soon = diffDays >= 0 && diffDays <= warningDays;
   }
   return data;
+};
+
+// GET /api/products/expiring
+export const getExpiringProducts = async (req, res) => {
+  try {
+    const { branchId } = req.query;
+
+    // 1. Fetch products with expiry_date that are active
+    const productsDoc = await Product.find({
+      is_active: true,
+      expiry_date: { $ne: null }
+    }).lean();
+
+    // 2. Fetch active promotions to avoid duplicates
+    const activePromotions = await Promotion.find({
+      is_active: true,
+      status: 'active',
+      end_date: { $gte: new Date() }
+    }).lean();
+
+    // Quick lookup for product_ids already in active promotion
+    const promotedProductIds = new Set();
+    activePromotions.forEach(promo => {
+      if (promo.scope === 'product' && Array.isArray(promo.target_product_ids)) {
+        promo.target_product_ids.forEach(id => promotedProductIds.add(String(id)));
+      }
+    });
+
+    const expiringProducts = [];
+
+    for (const product of productsDoc) {
+      if (promotedProductIds.has(String(product._id))) continue;
+
+      let stock = product.stock || 0;
+      let isAvailable = true;
+
+      if (branchId) {
+        const bp = await BranchProduct.findOne({
+          product_id: product._id,
+          branch_id: parseBranchId(branchId),
+          is_available: true
+        }).lean();
+        if (!bp || bp.stock <= 0) continue; // Out of stock
+        stock = bp.stock;
+      } else {
+        if (stock <= 0) continue; // Total out of stock
+      }
+
+      const expDate = new Date(product.expiry_date);
+      const now = new Date();
+      const diffMs = expDate.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+      if (diffDays < 0) continue; // Already expired
+
+      const warningDays = product.expiry_warning_days ?? 7;
+
+      if (diffDays <= warningDays) {
+        expiringProducts.push({
+          ...product,
+          id: product._id,
+          stock: stock,
+          days_until_expiry: diffDays,
+          expiry_status: diffDays <= (warningDays / 2) ? 'critical' : 'warning'
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: expiringProducts
+    });
+
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 // POST /api/products (admin)

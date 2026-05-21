@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { couponService } from '../../services/couponService';
 import { promotionService } from '../../services/promotionService';
 import { bannerService } from '../../services/bannerService';
@@ -8,6 +10,7 @@ import { hotDealService } from '../../services/hotDealService';
 import { productService } from '../../services/productService';
 import { branchService } from '../../services/branchService';
 import { categoryService } from '../../services/categoryService';
+import PromotionImageDisplay from '../../components/PromotionImageFallback/PromotionImageFallback';
 
 type GenericItem = {
   id: string | number;
@@ -134,14 +137,6 @@ type BasicAssetFormState = {
   overlay_color: string;
   text_shadow: boolean;
 };
-
-const PROMOTION_STEPS = [
-  'Thông tin chiến dịch',
-  'Quy tắc giảm giá',
-  'Phạm vi áp dụng',
-  'Giới hạn & coupon/claim',
-  'Xem trước',
-];
 
 const toItemId = (item: any): string => String(item?.id || item?._id || '');
 
@@ -371,7 +366,8 @@ const CampaignPreview: React.FC<{
   form: PromotionFormState;
   sampleOrderAmount: string;
   onSampleChange: (value: string) => void;
-}> = ({ form, sampleOrderAmount, onSampleChange }) => {
+  t: TFunction;
+}> = ({ form, sampleOrderAmount, onSampleChange, t }) => {
   const sample = Math.max(0, Number(sampleOrderAmount || 0));
 
   const estimatedDiscount = useMemo(() => {
@@ -397,12 +393,12 @@ const CampaignPreview: React.FC<{
 
   const scopeSummary =
     form.scope === 'all'
-      ? 'Toàn hệ thống'
+      ? t('admin.promotions.scopeAll', 'Toàn hệ thống')
       : form.scope === 'product'
-      ? `${form.target_product_ids.length || parseCsvIds(form.manualTargetIds).length} sản phẩm`
+      ? `${form.target_product_ids.length || parseCsvIds(form.manualTargetIds).length} ${t('admin.promotions.previewProducts', 'sản phẩm')}`
       : form.scope === 'category'
-      ? `${form.target_category_ids.length || parseCsvIds(form.manualTargetIds).length} danh mục`
-      : `${form.target_branch_ids.length || parseCsvIds(form.manualTargetIds).length} chi nhánh`;
+      ? `${form.target_category_ids.length || parseCsvIds(form.manualTargetIds).length} ${t('admin.promotions.previewCategories', 'danh mục')}`
+      : `${form.target_branch_ids.length || parseCsvIds(form.manualTargetIds).length} ${t('admin.promotions.previewBranches', 'chi nhánh')}`;
 
   const totalQty = Number(form.total_quantity || 0);
 
@@ -418,26 +414,28 @@ const CampaignPreview: React.FC<{
         <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-start mb-3">
-              <p className="text-xs uppercase font-black tracking-wider text-slate-400">Chiến dịch</p>
-              <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wider ${form.status === 'draft' ? 'bg-slate-100 text-slate-500' : 'bg-emerald-100 text-emerald-700'}`}>
-                {form.status}
+              <p className="text-xs uppercase font-black tracking-wider text-slate-400">{t('admin.promotions.previewCampaign', 'Chiến dịch')}</p>
+              <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wider ${form.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                {form.is_active
+                  ? t('admin.promotions.statusActiveLabel', 'Hoạt động / Active')
+                  : t('admin.promotions.statusInactiveLabel', 'Không hoạt động / Inactive')}
               </span>
             </div>
-            <h3 className="text-lg font-black text-slate-800 line-clamp-2">{form.title || 'Chưa nhập tên chiến dịch'}</h3>
+            <h3 className="text-lg font-black text-slate-800 line-clamp-2">{form.title || t('admin.promotions.previewNoTitle', 'Chưa nhập tên chiến dịch')}</h3>
             {form.badge_text && (
               <span className="inline-block mt-2 px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-lg">{form.badge_text}</span>
             )}
             
             <div className="mt-4 grid grid-cols-2 gap-y-2 text-sm text-slate-600">
-              <div className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">label</span> Loại giảm: <b>{form.type}</b></div>
-              <div className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">percent</span> Giảm: <b className="text-red-600">{form.discount_value}</b></div>
+              <div className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">label</span> {t('admin.promotions.discountType', 'Loại giảm')}: <b>{form.type}</b></div>
+              <div className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">percent</span> {t('admin.promotions.discountValue', 'Giảm')}: <b className="text-red-600">{form.discount_value}</b></div>
               <div className="flex items-center gap-1.5 col-span-2">
                  <span className="material-symbols-outlined text-[16px]">event</span>
-                 Bắt đầu: {form.start_date ? new Date(form.start_date).toLocaleString('vi-VN') : '—'}
+                 {t('admin.promotions.startDate', 'Bắt đầu')}: {form.start_date ? new Date(form.start_date).toLocaleString('vi-VN') : '—'}
               </div>
               <div className="flex items-center gap-1.5 col-span-2">
                  <span className="material-symbols-outlined text-[16px]">event_available</span>
-                 Kết thúc: {form.end_date ? new Date(form.end_date).toLocaleString('vi-VN') : '—'}
+                 {t('admin.promotions.endDate', 'Kết thúc')}: {form.end_date ? new Date(form.end_date).toLocaleString('vi-VN') : '—'}
               </div>
             </div>
           </div>
@@ -445,17 +443,17 @@ const CampaignPreview: React.FC<{
 
         {/* Banner/Image */}
         <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm flex items-center justify-center relative overflow-hidden">
-           {(form.imagePreview || form.imageUrl) ? (
-             <img src={form.imagePreview || form.imageUrl} alt="Banner" className="absolute inset-0 w-full h-full object-cover opacity-90" />
-           ) : (
-             <div className="text-center text-slate-400">
-               <span className="material-symbols-outlined text-4xl block mb-2">image</span>
-               <span className="text-xs font-bold uppercase tracking-wider">Chưa có ảnh</span>
-             </div>
-           )}
+           <PromotionImageDisplay
+             imageUrl={form.imagePreview || form.imageUrl}
+             voucherType={form.voucher_type}
+             type={form.type}
+             className="absolute inset-0 w-full h-full"
+             aspectRatio=""
+             alt={form.title || t('admin.promotions.previewCampaign', 'Chiến dịch')}
+           />
            {isExpiringSoon && (
              <div className="absolute top-2 right-2 px-2 py-1 bg-orange-500 text-white text-[10px] font-bold rounded shadow-sm flex items-center gap-1">
-               <span className="material-symbols-outlined text-[14px]">warning</span> Thời gian quá ngắn
+               <span className="material-symbols-outlined text-[14px]">warning</span> {t('admin.promotions.previewTimeShort', 'Thời gian quá ngắn')}
              </div>
            )}
         </div>
@@ -464,14 +462,14 @@ const CampaignPreview: React.FC<{
       {isLowStock && (
         <div className="p-3 rounded-xl bg-orange-50 border border-orange-200 flex items-center gap-2">
           <span className="material-symbols-outlined text-orange-600">warning</span>
-          <p className="text-sm font-semibold text-orange-800">Tồn kho / Số lượng khuyến mãi phát hành thấp (≤ 10). Chiến dịch có thể kết thúc sớm!</p>
+          <p className="text-sm font-semibold text-orange-800">{t('admin.promotions.previewLowStock', 'Tồn kho / Số lượng khuyến mãi phát hành thấp (≤ 10). Chiến dịch có thể kết thúc sớm!')}</p>
         </div>
       )}
 
       <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <p className="text-xs uppercase font-black tracking-wider text-slate-400 mb-4">Mô phỏng áp dụng</p>
+        <p className="text-xs uppercase font-black tracking-wider text-slate-400 mb-4">{t('admin.promotions.previewSimulation', 'Mô phỏng áp dụng')}</p>
         <div className="flex flex-wrap items-center gap-3">
-          <label className="text-sm font-bold text-slate-600">Nếu đơn hàng có giá trị (VNĐ)</label>
+          <label className="text-sm font-bold text-slate-600">{t('admin.promotions.previewOrderValue', 'Nếu đơn hàng có giá trị (VNĐ)')}</label>
           <input
             value={sampleOrderAmount}
             onChange={(e) => onSampleChange(e.target.value)}
@@ -480,27 +478,27 @@ const CampaignPreview: React.FC<{
           />
         </div>
         <div className="mt-4 p-4 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
-           <span className="font-semibold text-slate-600">Khách hàng sẽ được giảm:</span>
+           <span className="font-semibold text-slate-600">{t('admin.promotions.previewDiscount', 'Khách hàng sẽ được giảm')}:</span>
            <span className="text-xl font-black text-emerald-600">{Math.max(0, estimatedDiscount).toLocaleString('vi-VN')} đ</span>
         </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm">
-          <p className="text-[10px] uppercase font-black text-slate-400 mb-1">Phạm vi</p>
+          <p className="text-[10px] uppercase font-black text-slate-400 mb-1">{t('admin.promotions.previewScope', 'Phạm vi')}</p>
           <p className="text-sm font-bold">{scopeSummary}</p>
         </div>
         <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm">
-          <p className="text-[10px] uppercase font-black text-slate-400 mb-1">Tổng SL phát hành</p>
-          <p className="text-sm font-bold text-blue-600">{totalQty > 0 ? totalQty.toLocaleString('vi-VN') : 'Không giới hạn'}</p>
+          <p className="text-[10px] uppercase font-black text-slate-400 mb-1">{t('admin.promotions.previewTotalIssued', 'Tổng SL phát hành')}</p>
+          <p className="text-sm font-bold text-blue-600">{totalQty > 0 ? totalQty.toLocaleString('vi-VN') : t('admin.promotions.previewUnlimited', 'Không giới hạn')}</p>
         </div>
         <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm">
-          <p className="text-[10px] uppercase font-black text-slate-400 mb-1">Giới hạn mỗi User</p>
+          <p className="text-[10px] uppercase font-black text-slate-400 mb-1">{t('admin.promotions.previewPerUser', 'Giới hạn mỗi User')}</p>
           <p className="text-sm font-bold">{Number(form.usage_per_user || 1).toLocaleString('vi-VN')}</p>
         </div>
         <div className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm">
-          <p className="text-[10px] uppercase font-black text-slate-400 mb-1">Claim Campaign</p>
-          <p className="text-sm font-bold">{form.claim_campaign ? 'Có Yêu Cầu Nhận' : 'Tự Động Áp Dụng'}</p>
+          <p className="text-[10px] uppercase font-black text-slate-400 mb-1">{t('admin.promotions.previewClaim', 'Claim Campaign')}</p>
+          <p className="text-sm font-bold">{form.claim_campaign ? t('admin.promotions.previewClaimYes', 'Có Yêu Cầu Nhận') : t('admin.promotions.previewClaimNo', 'Tự Động Áp Dụng')}</p>
         </div>
       </div>
     </div>
@@ -508,6 +506,17 @@ const CampaignPreview: React.FC<{
 };
 
 const AdminCouponsManagement: React.FC = () => {
+  const { t } = useTranslation();
+  const createLabel = (tab: 'promotions' | 'banners' | 'hot_deals') => {
+    if (tab === 'banners') return t('admin.promotions.banner', 'Banner');
+    if (tab === 'hot_deals') return t('admin.promotions.hotDeal', 'Hot Deal');
+    return t('admin.promotions.promoCoupon', 'Khuyến mãi/Coupon');
+  };
+  const getActiveLabel = (isActive: boolean) => (
+    isActive
+      ? t('admin.promotions.statusActiveLabel', 'Hoạt động / Active')
+      : t('admin.promotions.statusInactiveLabel', 'Không hoạt động / Inactive')
+  );
   const [activeTab, setActiveTab] = useState<'promotions' | 'banners' | 'hot_deals'>('promotions');
 
   const [promotions, setPromotions] = useState<any[]>([]);
@@ -541,7 +550,6 @@ const AdminCouponsManagement: React.FC = () => {
   const [promotionForm, setPromotionForm] = useState<PromotionFormState>(defaultPromotionForm());
   const [basicForm, setBasicForm] = useState<BasicAssetFormState>(defaultBasicForm());
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [currentStep, setCurrentStep] = useState(0);
   const [sampleOrderAmount, setSampleOrderAmount] = useState('500000');
 
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
@@ -644,7 +652,6 @@ const AdminCouponsManagement: React.FC = () => {
       setActiveTab('promotions');
       setEditingItem(null);
       setFormErrors({});
-      setCurrentStep(0);
       setSelectedImageFile(null);
       setSearchProduct('');
       setSearchCategory('');
@@ -793,7 +800,6 @@ const AdminCouponsManagement: React.FC = () => {
   const openCreateModal = () => {
     setEditingItem(null);
     setFormErrors({});
-    setCurrentStep(0);
     setSelectedImageFile(null);
     setSearchProduct('');
     setSearchCategory('');
@@ -811,7 +817,6 @@ const AdminCouponsManagement: React.FC = () => {
   const openEditModal = (item: GenericItem) => {
     setEditingItem(item);
     setFormErrors({});
-    setCurrentStep(0);
     setSelectedImageFile(null);
 
     if (activeTab === 'promotions') {
@@ -829,6 +834,8 @@ const AdminCouponsManagement: React.FC = () => {
     setFormErrors({});
     setSelectedImageFile(null);
     setIsDragActive(false);
+    setPromotionForm(defaultPromotionForm());
+    setBasicForm(defaultBasicForm());
   };
 
   const setPromotionField = <K extends keyof PromotionFormState>(field: K, value: PromotionFormState[K]) => {
@@ -851,10 +858,10 @@ const AdminCouponsManagement: React.FC = () => {
     const acceptedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     const maxSize = 5 * 1024 * 1024;
     if (!acceptedTypes.includes(file.type)) {
-      return 'Chỉ chấp nhận ảnh jpg, png, webp, gif';
+      return t('admin.promotions.imageAcceptError', 'Chỉ chấp nhận ảnh jpg, png, webp, gif');
     }
     if (file.size > maxSize) {
-      return 'Ảnh vượt quá giới hạn 5MB';
+      return t('admin.promotions.imageSizeError', 'Ảnh vượt quá giới hạn 5MB');
     }
     return null;
   };
@@ -890,7 +897,7 @@ const AdminCouponsManagement: React.FC = () => {
     applySelectedImage(file);
   };
 
-  const validatePromotionStep = (step: number): boolean => {
+  const validateFullPromotionForm = (): boolean => {
     const errors: Record<string, string> = {};
 
     const mergedTargetIds = uniqueIds([
@@ -900,81 +907,59 @@ const AdminCouponsManagement: React.FC = () => {
       ...parseCsvIds(promotionForm.manualTargetIds),
     ]);
 
-    if (step === 0) {
-      if (!promotionForm.title.trim()) errors.title = 'Tên chiến dịch là bắt buộc';
-      if (!promotionForm.imageUrl && !promotionForm.imagePreview) errors.image = 'Cần chọn ảnh chiến dịch';
+    if (!promotionForm.title.trim()) errors.title = t('admin.promotions.campaignNameRequired', 'Tên chiến dịch là bắt buộc');
+
+    const validTypesPromotion = ['percent', 'fixed_amount', 'bogo', 'free_shipping', 'points_multiplier', 'gift_item', 'flash_deal'];
+    const validTypesCoupon = ['percent', 'fixed_amount', 'free_shipping', 'points'];
+    const validTypes = promotionForm.recordType === 'coupon' ? validTypesCoupon : validTypesPromotion;
+    if (!validTypes.includes(promotionForm.type)) errors.type = t('admin.promotions.discountTypeRequired', 'Loại giảm không hợp lệ');
+
+    if (promotionForm.type === 'bogo') {
+      if (!(Number(promotionForm.min_quantity || 0) > 0)) errors.min_quantity = t('admin.promotions.minQuantityError', 'BOGO cần số lượng mua tối thiểu > 0');
+      if (!(Number(promotionForm.gift_quantity || 0) > 0)) errors.gift_quantity = t('admin.promotions.giftQuantityError', 'BOGO cần số lượng tặng > 0');
     }
 
-    if (step === 1) {
-      const validTypesPromotion = ['percent', 'fixed_amount', 'bogo', 'free_shipping', 'points_multiplier', 'gift_item', 'flash_deal'];
-      const validTypesCoupon = ['percent', 'fixed_amount', 'free_shipping', 'points'];
-      const validTypes = promotionForm.recordType === 'coupon' ? validTypesCoupon : validTypesPromotion;
-      if (!validTypes.includes(promotionForm.type)) errors.type = 'Loại giảm không hợp lệ';
-
-      if (promotionForm.type === 'bogo') {
-        if (!(Number(promotionForm.min_quantity || 0) > 0)) errors.min_quantity = 'BOGO cần số lượng mua tối thiểu > 0';
-        if (!(Number(promotionForm.gift_quantity || 0) > 0)) errors.gift_quantity = 'BOGO cần số lượng tặng > 0';
-      }
-
-      if ((promotionForm.type === 'percent' || promotionForm.type === 'fixed_amount' || promotionForm.type === 'flash_deal') && Number(promotionForm.discount_value || 0) <= 0) {
-        errors.discount_value = 'Giá trị giảm phải > 0';
-      }
-
-      if (promotionForm.type === 'points_multiplier' && Number(promotionForm.points_multiplier || 1) <= 1) {
-        errors.points_multiplier = 'Điểm x2 cần hệ số > 1';
-      }
+    if ((promotionForm.type === 'percent' || promotionForm.type === 'fixed_amount' || promotionForm.type === 'flash_deal' || promotionForm.type === 'points') && Number(promotionForm.discount_value || 0) <= 0) {
+      errors.discount_value = t('admin.promotions.discountValueRequired', 'Giá trị giảm phải > 0');
     }
 
-    if (step === 2) {
-      if (promotionForm.scope !== 'all' && mergedTargetIds.length === 0) {
-        errors.scope = 'Phải chọn ít nhất 1 target theo phạm vi áp dụng';
-      }
+    if (promotionForm.type === 'points_multiplier' && Number(promotionForm.points_multiplier || 1) <= 1) {
+      errors.points_multiplier = t('admin.promotions.pointsMultiplierError', 'Điểm x2 cần hệ số > 1');
     }
 
-    if (step === 3) {
-      if (promotionForm.start_date && promotionForm.end_date) {
-        const start = new Date(promotionForm.start_date).getTime();
-        const end = new Date(promotionForm.end_date).getTime();
-        if (start >= end) errors.end_date = 'Thời gian kết thúc phải sau thời gian bắt đầu';
-      }
+    if (promotionForm.scope !== 'all' && mergedTargetIds.length === 0) {
+      errors.scope = t('admin.promotions.scopeRequired', 'Phải chọn ít nhất 1 target theo phạm vi áp dụng');
+    }
 
-      if (promotionForm.total_quantity && Number(promotionForm.total_quantity) <= 0) {
-        errors.total_quantity = 'Tổng lượt chiến dịch phải > 0';
-      }
+    if (promotionForm.start_date && promotionForm.end_date) {
+      const start = new Date(promotionForm.start_date).getTime();
+      const end = new Date(promotionForm.end_date).getTime();
+      if (start >= end) errors.end_date = t('admin.promotions.endDateError', 'Thời gian kết thúc phải sau thời gian bắt đầu');
+    }
 
-      if (promotionForm.usage_per_user && Number(promotionForm.usage_per_user) <= 0) {
-        errors.usage_per_user = 'Giới hạn mỗi user phải > 0';
-      }
+    if (promotionForm.total_quantity && Number(promotionForm.total_quantity) <= 0) {
+      errors.total_quantity = t('admin.promotions.totalQuantityError', 'Tổng lượt chiến dịch phải > 0');
+    }
 
-      if (promotionForm.recordType === 'coupon' && promotionForm.code && !/^[A-Za-z0-9_-]+$/.test(promotionForm.code)) {
-        errors.code = 'Mã coupon chỉ gồm chữ/số/_/-';
-      }
+    if (promotionForm.usage_per_user && Number(promotionForm.usage_per_user) <= 0) {
+      errors.usage_per_user = t('admin.promotions.usagePerUserError', 'Giới hạn mỗi user phải > 0');
+    }
+
+    if (promotionForm.recordType === 'coupon' && promotionForm.code && !/^[A-Za-z0-9_-]+$/.test(promotionForm.code)) {
+      errors.code = t('admin.promotions.couponCodeError', 'Mã coupon chỉ gồm chữ/số/_/-');
     }
 
     setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const validateFullPromotionForm = (): boolean => {
-    for (let step = 0; step <= 3; step += 1) {
-      const valid = validatePromotionStep(step);
-      if (!valid) {
-        setCurrentStep(step);
-        return false;
+    
+    if (Object.keys(errors).length > 0) {
+      const modal = document.querySelector('.overflow-y-auto');
+      if (modal) {
+         modal.scrollTo({ top: 0, behavior: 'smooth' });
       }
+      return false;
     }
+    
     return true;
-  };
-
-  const nextStep = () => {
-    if (currentStep >= PROMOTION_STEPS.length - 1) return;
-    const valid = validatePromotionStep(currentStep);
-    if (!valid) return;
-    setCurrentStep((prev) => Math.min(prev + 1, PROMOTION_STEPS.length - 1));
-  };
-
-  const prevStep = () => {
-    setCurrentStep((prev) => Math.max(prev - 1, 0));
   };
 
   const uploadImageIfNeeded = async (): Promise<string> => {
@@ -1006,9 +991,8 @@ const AdminCouponsManagement: React.FC = () => {
         const editingId = toItemId(editingItem);
         const existingId = toItemId(existing?.data);
         if (existing?.data && (!editingItem || existingId !== editingId)) {
-          setFormErrors((prev) => ({ ...prev, code: 'Mã coupon đã tồn tại' }));
-          toast.error('Mã coupon đã tồn tại');
-          setCurrentStep(3);
+          setFormErrors((prev) => ({ ...prev, code: t('admin.promotions.couponExists', 'Mã coupon đã tồn tại') }));
+          toast.error(t('admin.promotions.couponExists', 'Mã coupon đã tồn tại'));
           return;
         }
       }
@@ -1029,12 +1013,20 @@ const AdminCouponsManagement: React.FC = () => {
         ? uniqueIds([...promotionForm.target_branch_ids, ...manualTargets])
         : [];
 
+      const now = new Date();
+      const startDate = promotionForm.start_date ? new Date(promotionForm.start_date) : null;
+      const endDate = promotionForm.end_date ? new Date(promotionForm.end_date) : null;
+      let computedStatus = 'active';
+      if (!promotionForm.is_active) computedStatus = 'paused';
+      else if (startDate && startDate > now) computedStatus = 'scheduled';
+      else if (endDate && endDate < now) computedStatus = 'expired';
+
       const commonPayload: Record<string, any> = {
         title: promotionForm.title.trim(),
         description: promotionForm.description.trim(),
         image: finalImage,
         is_active: promotionForm.is_active,
-        status: promotionForm.status,
+        status: computedStatus,
         type: promotionForm.type,
         scope: promotionForm.scope,
         target_product_ids,
@@ -1080,10 +1072,10 @@ const AdminCouponsManagement: React.FC = () => {
 
         if (editingItem && editingItem.item_type === 'coupon') {
           await couponService.updateCoupon(editingId, couponPayload);
-          toast.success('Cập nhật coupon thành công');
+          toast.success(t('admin.promotions.saveSuccess', 'Lưu thành công'));
         } else {
           await couponService.createCoupon(couponPayload);
-          toast.success('Tạo coupon thành công');
+          toast.success(t('admin.promotions.saveSuccess', 'Lưu thành công'));
         }
       } else {
         const promotionPayload = {
@@ -1094,17 +1086,17 @@ const AdminCouponsManagement: React.FC = () => {
 
         if (editingItem && editingItem.item_type === 'promotion') {
           await promotionService.updatePromotion(editingId, promotionPayload);
-          toast.success('Cập nhật promotion thành công');
+          toast.success(t('admin.promotions.saveSuccess', 'Lưu thành công'));
         } else {
           await promotionService.createPromotion(promotionPayload);
-          toast.success('Tạo promotion thành công');
+          toast.success(t('admin.promotions.saveSuccess', 'Lưu thành công'));
         }
       }
 
       closeModal();
       await loadData();
     } catch (err: any) {
-      toast.error(err?.message || 'Không thể lưu chiến dịch');
+      toast.error(err?.message || t('admin.promotions.saveError', 'Không thể lưu chiến dịch'));
     } finally {
       setSaving(false);
     }
@@ -1118,11 +1110,11 @@ const AdminCouponsManagement: React.FC = () => {
 
       if (activeTab === 'banners') {
         if (!basicForm.title.trim()) {
-          toast.error('Banner cần tiêu đề');
+          toast.error(t('admin.promotions.bannerTitleRequired', 'Banner cần tiêu đề'));
           return;
         }
         if (!finalImage) {
-          toast.error('Banner cần ảnh');
+          toast.error(t('admin.promotions.bannerImageRequired', 'Banner cần ảnh'));
           return;
         }
 
@@ -1142,20 +1134,20 @@ const AdminCouponsManagement: React.FC = () => {
 
         if (editingItem && editingItem.item_type === 'banner') {
           await bannerService.updateBanner(editingId, payload);
-          toast.success('Cập nhật banner thành công');
+          toast.success(t('admin.promotions.saveSuccess', 'Lưu thành công'));
         } else {
           await bannerService.createBanner(payload);
-          toast.success('Tạo banner thành công');
+          toast.success(t('admin.promotions.saveSuccess', 'Lưu thành công'));
         }
       }
 
       if (activeTab === 'hot_deals') {
         if (!basicForm.product_id.trim()) {
-          toast.error('Hot Deal cần product_id');
+          toast.error(t('admin.promotions.hotDealProductRequired', 'Hot Deal cần product_id'));
           return;
         }
         if (Number(basicForm.original_price || 0) <= 0 || Number(basicForm.deal_price || 0) <= 0) {
-          toast.error('Giá gốc và giá deal phải > 0');
+          toast.error(t('admin.promotions.hotDealPriceRequired', 'Giá gốc và giá deal phải > 0'));
           return;
         }
 
@@ -1184,17 +1176,17 @@ const AdminCouponsManagement: React.FC = () => {
 
         if (editingItem && editingItem.item_type === 'hot_deal') {
           await hotDealService.updateHotDeal(editingId, payload);
-          toast.success('Cập nhật hot deal thành công');
+          toast.success(t('admin.promotions.saveSuccess', 'Lưu thành công'));
         } else {
           await hotDealService.createHotDeal(payload);
-          toast.success('Tạo hot deal thành công');
+          toast.success(t('admin.promotions.saveSuccess', 'Lưu thành công'));
         }
       }
 
       closeModal();
       await loadData();
     } catch (err: any) {
-      toast.error(err?.message || 'Không thể lưu dữ liệu');
+      toast.error(err?.message || t('admin.promotions.saveError', 'Không thể lưu dữ liệu'));
     } finally {
       setSaving(false);
     }
@@ -1214,7 +1206,7 @@ const AdminCouponsManagement: React.FC = () => {
       const nextStatus = !item.is_active;
 
       if (item.item_type === 'promotion') {
-        await promotionService.updatePromotion(itemId, { is_active: nextStatus });
+        await promotionService.updatePromotion(itemId, { is_active: nextStatus, status: nextStatus ? 'active' : 'paused' });
       } else if (item.item_type === 'coupon') {
         await couponService.updateCoupon(itemId, { is_active: nextStatus });
       } else if (item.item_type === 'banner') {
@@ -1223,10 +1215,10 @@ const AdminCouponsManagement: React.FC = () => {
         await hotDealService.updateHotDeal(itemId, { is_active: nextStatus });
       }
 
-      toast.success(`Đã ${nextStatus ? 'bật' : 'tắt'} thành công`);
+      toast.success(t('admin.promotions.toggleSuccess', { action: nextStatus ? t('admin.promotions.toggleEnabled', 'bật') : t('admin.promotions.toggleDisabled', 'tắt'), defaultValue: 'Đã {{action}} thành công' }));
       await loadData();
     } catch (err: any) {
-      toast.error(err?.message || 'Không đổi được trạng thái');
+      toast.error(err?.message || t('admin.promotions.toggleError', 'Không đổi được trạng thái'));
     }
   };
 
@@ -1240,631 +1232,483 @@ const AdminCouponsManagement: React.FC = () => {
       if (deleteConfirm.type === 'hot_deal') await hotDealService.deleteHotDeal(String(deleteConfirm.id));
 
       setDeleteConfirm({ show: false, id: null, type: '' });
-      toast.success('Xóa thành công');
+      toast.success(t('admin.promotions.deleteSuccess', 'Xóa thành công'));
       await loadData();
     } catch (err: any) {
-      toast.error(err?.message || 'Không thể xóa bản ghi');
+      toast.error(err?.message || t('admin.promotions.deleteError', 'Không thể xóa bản ghi'));
     }
   };
 
   const renderPromotionStepContent = () => {
-    const discountOptions =
-      promotionForm.recordType === 'coupon'
-        ? [
-            { value: 'percent', label: 'Phần trăm (%)' },
-            { value: 'fixed_amount', label: 'Giá trị cố định' },
-            { value: 'free_shipping', label: 'Freeship' },
-            { value: 'points', label: 'Điểm thưởng' },
-          ]
-        : [
-            { value: 'percent', label: 'Phần trăm (%)' },
-            { value: 'fixed_amount', label: 'Giá trị cố định' },
-            { value: 'bogo', label: 'Mua X tặng Y (BOGO)' },
-            { value: 'free_shipping', label: 'Freeship' },
-            { value: 'points_multiplier', label: 'Điểm x2' },
-            { value: 'gift_item', label: 'Tặng kèm' },
-            { value: 'flash_deal', label: 'Flash deal' },
-          ];
+    const isShip = promotionForm.voucher_type === 'shipping';
+    const isCpn = promotionForm.recordType === 'coupon';
+    
+    const allOpts = isCpn
+      ? [
+          { v: 'percent', l: t('admin.promotions.percent', 'Phần trăm (%)') },
+          { v: 'fixed_amount', l: t('admin.promotions.fixedAmount', 'Giá trị cố định') },
+          { v: 'free_shipping', l: t('admin.promotions.freeShipping', 'Freeship') },
+          { v: 'points', l: t('admin.promotions.points', 'Điểm thưởng') }
+        ]
+      : [
+          { v: 'percent', l: t('admin.promotions.percent', 'Phần trăm (%)') },
+          { v: 'fixed_amount', l: t('admin.promotions.fixedAmount', 'Giá trị cố định') },
+          { v: 'bogo', l: t('admin.promotions.bogo', 'Mua X tặng Y (BOGO)') },
+          { v: 'free_shipping', l: t('admin.promotions.freeShipping', 'Freeship') },
+          { v: 'points_multiplier', l: t('admin.promotions.pointsMultiplier', 'Điểm x2') },
+          { v: 'gift_item', l: t('admin.promotions.giftItem', 'Tặng kèm') },
+          { v: 'flash_deal', l: t('admin.promotions.flashDeal', 'Flash deal') }
+        ];
 
-    if (currentStep === 0) {
-      return (
-        <div className="space-y-5">
+    const opts = isShip 
+      ? allOpts.filter(o => ['percent', 'fixed_amount', 'free_shipping'].includes(o.v)) 
+      : isCpn 
+        ? allOpts.filter(o => o.v !== 'free_shipping') 
+        : allOpts;
+
+    const ic = "w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-shadow";
+    const lc = "block text-xs font-bold text-slate-500 mb-2 tracking-wide uppercase";
+    
+    const showVal = ['percent', 'fixed_amount', 'flash_deal', 'points'].includes(promotionForm.type);
+    const showMax = promotionForm.type === 'percent' || promotionForm.type === 'flash_deal' || promotionForm.type === 'points';
+    const showBogo = (promotionForm.type === 'bogo' || promotionForm.type === 'gift_item') && !isShip;
+    const showPts = (promotionForm.type === 'points_multiplier' || promotionForm.type === 'points') && !isShip;
+
+    return (
+      <div className="flex flex-col gap-6 w-full max-w-4xl mx-auto pb-10">
+        <div className="space-y-6 w-full">
           {promotionForm.is_auto_generated && (
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center gap-2">
-              <span className="material-symbols-outlined text-blue-600 text-[18px]">lightbulb</span>
-              <p className="text-sm text-blue-800 font-medium">✨ Đề xuất từ cảnh báo hạn dùng! Các thông tin đã được tự động điền dựa trên tồn kho và hạn sử dụng thực tế.</p>
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-center gap-3">
+              <span className="material-symbols-outlined text-blue-600 text-xl">lightbulb</span>
+              <p className="text-sm text-blue-800 font-medium">{t('admin.promotions.expiryAlertHint', 'Đề xuất từ cảnh báo hạn dùng — thông tin đã được tự động điền.')}</p>
             </div>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold mb-2">Loại bản ghi</label>
-              <select
-                value={promotionForm.recordType}
-                onChange={(e) => setPromotionField('recordType', e.target.value as PromotionRecordType)}
-                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-              >
-                <option value="promotion">Promotion</option>
-                <option value="coupon">Coupon</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">Loại voucher</label>
-              <select
-                value={promotionForm.voucher_type}
-                onChange={(e) => setPromotionField('voucher_type', e.target.value as 'product' | 'shipping')}
-                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-              >
-                <option value="product">🛒 Giảm giá sản phẩm</option>
-                <option value="shipping">🚚 Giảm phí vận chuyển</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">Trạng thái</label>
-              <select
-                value={promotionForm.status}
-                onChange={(e) => setPromotionField('status', e.target.value as PromotionFormState['status'])}
-                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-              >
-                <option value="active">Active</option>
-                <option value="scheduled">Scheduled</option>
-                <option value="paused">Paused</option>
-                <option value="draft">Draft</option>
-                <option value="expired">Expired</option>
-              </select>
-            </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-bold mb-2">Tên chiến dịch *</label>
-            <input
-              value={promotionForm.title}
-              onChange={(e) => setPromotionField('title', e.target.value)}
-              className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-              placeholder="Ví dụ: Summer Mega Sale"
-            />
-            {formErrors.title && <p className="text-xs text-red-600 mt-1">{formErrors.title}</p>}
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold mb-2">Mô tả</label>
-            <textarea
-              value={promotionForm.description}
-              onChange={(e) => setPromotionField('description', e.target.value)}
-              rows={3}
-              className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl resize-none"
-              placeholder="Mô tả ngắn về chiến dịch"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold mb-2">Hình ảnh chiến dịch *</label>
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragActive(true);
-              }}
-              onDragLeave={() => setIsDragActive(false)}
-              onDrop={handleImageDrop}
-              className={`border-2 border-dashed rounded-xl p-4 transition ${isDragActive ? 'border-primary bg-primary/5' : 'border-slate-300 bg-surface-container'}`}
-            >
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                className="hidden"
-                onChange={handleImageFileInputChange}
-              />
-              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold">Kéo thả ảnh vào đây hoặc chọn từ máy</p>
-                  <p className="text-xs text-secondary mt-1">Hỗ trợ JPG/PNG/WEBP/GIF, tối đa 5MB</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => imageInputRef.current?.click()}
-                  className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-bold"
+          {/* 1) BASIC INFO */}
+          <section className="bg-white rounded-2xl border border-slate-200 p-6 space-y-5 shadow-sm">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+              <span className="material-symbols-outlined text-primary text-xl">info</span>
+              <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">{t('admin.promotions.stepBasicInfo', 'Thông tin cơ bản')}</h4>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-5">
+              <div>
+                <label className={lc}>{t('admin.promotions.recordType', 'Loại bản ghi')}</label>
+                <select
+                  value={promotionForm.recordType}
+                  onChange={(e) => setPromotionField('recordType', e.target.value as any)}
+                  className={ic}
                 >
-                  Chọn ảnh
-                </button>
+                  <option value="promotion">{t('admin.promotions.promotion', 'Promotion')}</option>
+                  <option value="coupon">{t('admin.promotions.coupon', 'Coupon')}</option>
+                </select>
               </div>
-              {(promotionForm.imagePreview || promotionForm.imageUrl) && (
-                <div className="mt-4">
-                  <img
-                    src={promotionForm.imagePreview || promotionForm.imageUrl}
-                    alt="Preview"
-                    className="w-full max-w-sm h-40 object-cover rounded-lg border border-slate-200"
+              <div>
+                <label className={lc}>{t('admin.promotions.voucherType', 'Loại voucher')}</label>
+                <select 
+                  value={promotionForm.voucher_type} 
+                  onChange={e => setPromotionField('voucher_type', e.target.value as any)} 
+                  className={ic}
+                >
+                  <option value="product">{t('admin.promotions.productDiscount', '🛒 Giảm giá sản phẩm')}</option>
+                  <option value="shipping">{t('admin.promotions.shippingDiscount', '🚚 Giảm phí vận chuyển')}</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className={lc}>{t('admin.promotions.campaignName', 'Tên chiến dịch')} *</label>
+              <input 
+                value={promotionForm.title} 
+                onChange={e => setPromotionField('title', e.target.value)} 
+                className={ic} 
+                placeholder={t('admin.promotions.campaignNamePlaceholder', 'Ví dụ: Summer Mega Sale')} 
+              />
+              {formErrors.title && <p className="text-xs text-red-600 mt-1.5 font-semibold">{formErrors.title}</p>}
+            </div>
+
+            <div>
+              <label className={lc}>{t('admin.promotions.description', 'Mô tả')}</label>
+              <textarea 
+                value={promotionForm.description} 
+                onChange={e => setPromotionField('description', e.target.value)} 
+                rows={2} 
+                className={`${ic} resize-none`} 
+                placeholder={t('admin.promotions.descriptionPlaceholder', 'Mô tả ngắn về chiến dịch')} 
+              />
+            </div>
+
+            <div>
+              <label className={lc}>{t('admin.promotions.campaignImage', 'Hình ảnh')} <span className="font-normal text-slate-400 lowercase">{t('admin.promotions.imageOptional', '(tuỳ chọn)')}</span></label>
+              <div 
+                onDragOver={e => { e.preventDefault(); setIsDragActive(true); }} 
+                onDragLeave={() => setIsDragActive(false)} 
+                onDrop={handleImageDrop} 
+                className={`border-2 border-dashed rounded-xl p-6 transition-all text-center ${isDragActive ? 'border-primary bg-primary/5 scale-[1.01]' : 'border-slate-300 bg-slate-50/50 hover:bg-slate-50'}`}
+              >
+                <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={handleImageFileInputChange} />
+                
+                {!(promotionForm.imagePreview || promotionForm.imageUrl) ? (
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    <span className="material-symbols-outlined text-4xl text-slate-300">cloud_upload</span>
+                    <p className="text-sm font-bold text-slate-700">{t('admin.promotions.dragDropImage', 'Kéo thả ảnh vào đây hoặc chọn từ máy')}</p>
+                    <p className="text-xs text-slate-500 font-medium">{t('admin.promotions.imageFormats', 'Hỗ trợ JPG/PNG/WEBP/GIF, tối đa 5MB')}</p>
+                    <button type="button" onClick={() => imageInputRef.current?.click()} className="mt-3 px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-bold shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-colors">
+                      {t('admin.promotions.selectImage', 'Chọn ảnh')}
+                    </button>
+                    
+                    <div className="mt-6 w-full max-w-sm mx-auto pt-6 border-t border-slate-200/60">
+                      <p className="text-[10px] font-black text-slate-400 mb-3 uppercase tracking-widest">{t('admin.promotions.noImageFallback', 'Mặt hiển thị mặc định nếu không tải ảnh')}</p>
+                      <PromotionImageDisplay 
+                        imageUrl="" 
+                        voucherType={promotionForm.voucher_type} 
+                        type={promotionForm.type} 
+                        className="w-full h-36 rounded-xl shadow-sm" 
+                        aspectRatio=""
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="relative inline-block group">
+                    <img src={promotionForm.imagePreview || promotionForm.imageUrl} alt="Preview" className="w-full max-w-md h-48 object-cover rounded-xl shadow-md border border-slate-200 transition-transform group-hover:scale-[1.02]" />
+                    <button 
+                      type="button" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPromotionField('imageUrl', '');
+                        setPromotionField('imagePreview', '');
+                        setSelectedImageFile(null);
+                        if (imageInputRef.current) imageInputRef.current.value = '';
+                      }} 
+                      className="absolute -top-3 -right-3 bg-red-500 text-white rounded-full p-1.5 shadow-lg hover:bg-red-600 hover:scale-110 transition-all z-10"
+                    >
+                      <span className="material-symbols-outlined text-sm font-black">close</span>
+                    </button>
+                    <div className="mt-4 flex justify-center">
+                       <button type="button" onClick={() => imageInputRef.current?.click()} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-bold shadow-sm hover:bg-slate-50">{t('admin.promotions.changeImage', 'Đổi ảnh khác')}</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <label className="inline-flex items-center gap-3 text-sm font-bold cursor-pointer mt-4 bg-slate-50 p-4 rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors">
+              <input
+                type="checkbox"
+                checked={promotionForm.is_active}
+                onChange={(e) => {
+                  const isActive = e.target.checked;
+                  setPromotionForm((prev) => ({
+                    ...prev,
+                    is_active: isActive,
+                    status: isActive ? 'active' : (prev.status === 'draft' ? 'draft' : 'paused'),
+                  }));
+                }}
+                className="h-5 w-5 rounded text-primary focus:ring-primary"
+              />
+              <span className="flex items-center gap-2">
+                 {promotionForm.is_active ? <span className="h-2.5 w-2.5 bg-green-500 rounded-full inline-block animate-pulse"></span> : <span className="h-2.5 w-2.5 bg-slate-400 rounded-full inline-block"></span>}
+                 {promotionForm.is_active
+                   ? t('admin.promotions.statusActiveLabel', 'Hoạt động / Active')
+                   : t('admin.promotions.statusInactiveLabel', 'Không hoạt động / Inactive')}
+              </span>
+            </label>
+          </section>
+
+          {/* 2) DISCOUNT RULES */}
+          <section className="bg-white rounded-2xl border border-slate-200 p-6 space-y-5 shadow-sm">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+              <span className="material-symbols-outlined text-primary text-xl">sell</span>
+              <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">{t('admin.promotions.stepDiscountRules', 'Quy tắc giảm giá')}</h4>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-5">
+              <div>
+                <label className={lc}>{t('admin.promotions.discountType', 'Loại giảm')} *</label>
+                <select value={promotionForm.type} onChange={e => setPromotionField('type', e.target.value as any)} className={ic}>
+                  {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+                </select>
+                {formErrors.type && <p className="text-xs text-red-600 mt-1.5 font-semibold">{formErrors.type}</p>}
+              </div>
+              
+              {showVal && (
+                <div>
+                  <label className={lc}>{t('admin.promotions.discountValue', 'Giá trị giảm')} *</label>
+                  <input 
+                    type="number" 
+                    value={promotionForm.discount_value} 
+                    onChange={e => setPromotionField('discount_value', e.target.value)} 
+                    className={ic} 
+                    placeholder={promotionForm.type === 'percent'
+                      ? t('admin.promotions.discountValuePlaceholderPercent', 'Ví dụ: 20')
+                      : t('admin.promotions.discountValuePlaceholderFixed', 'Ví dụ: 50000')}
+                  />
+                  {formErrors.discount_value && <p className="text-xs text-red-600 mt-1.5 font-semibold">{formErrors.discount_value}</p>}
+                </div>
+              )}
+              
+              {promotionForm.type === 'free_shipping' && (
+                <div className="flex items-end">
+                  <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl w-full flex items-center gap-2">
+                    <span className="material-symbols-outlined text-teal-600 text-xl">local_shipping</span>
+                    <p className="text-sm font-bold text-teal-800">{t('admin.promotions.freeShippingFull', 'Miễn phí vận chuyển hoàn toàn')}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-5">
+              <div>
+                <label className={lc}>{t('admin.promotions.minOrder', 'Đơn tối thiểu (VNĐ)')}</label>
+                <input 
+                  type="number" 
+                  value={promotionForm.min_order_amount} 
+                  onChange={e => setPromotionField('min_order_amount', e.target.value)} 
+                  className={ic} 
+                  placeholder="0" 
+                />
+              </div>
+              {showMax && (
+                <div>
+                  <label className={lc}>{t('admin.promotions.maxDiscount', 'Giảm tối đa (VNĐ)')}</label>
+                  <input 
+                    type="number" 
+                    value={promotionForm.max_discount_amount} 
+                    onChange={e => setPromotionField('max_discount_amount', e.target.value)} 
+                    className={ic} 
+                    placeholder={t('admin.promotions.previewUnlimited', 'Không giới hạn')} 
                   />
                 </div>
               )}
             </div>
-            {formErrors.image && <p className="text-xs text-red-600 mt-1">{formErrors.image}</p>}
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold mb-2">Badge text</label>
-              <input
-                value={promotionForm.badge_text}
-                onChange={(e) => setPromotionField('badge_text', e.target.value)}
-                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-                placeholder="HOT / FLASH SALE"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">URL đích (tuỳ chọn)</label>
-              <input
-                value={promotionForm.banner_url}
-                onChange={(e) => setPromotionField('banner_url', e.target.value)}
-                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-                placeholder="/promotions"
-              />
-            </div>
-          </div>
-
-          <label className="inline-flex items-center gap-2 text-sm font-semibold cursor-pointer">
-            <input
-              type="checkbox"
-              checked={promotionForm.is_active}
-              onChange={(e) => setPromotionField('is_active', e.target.checked)}
-              className="h-4 w-4"
-            />
-            Kích hoạt hiển thị
-          </label>
-        </div>
-      );
-    }
-
-    if (currentStep === 1) {
-      // Smart discount options based on voucher_type
-      const isShippingVoucher = promotionForm.voucher_type === 'shipping';
-      
-      let filteredDiscountOptions = discountOptions;
-      if (isShippingVoucher) {
-        // Shipping vouchers: only show shipping-relevant discount types
-        filteredDiscountOptions = discountOptions.filter(opt => 
-          ['percent', 'fixed_amount', 'free_shipping'].includes(opt.value)
-        );
-        // Auto-set to free_shipping if current type isn't valid for shipping
-        if (!['percent', 'fixed_amount', 'free_shipping'].includes(promotionForm.type)) {
-          setPromotionField('type', 'free_shipping' as any);
-        }
-      } else {
-        // Product vouchers: hide free_shipping from the list (that's a shipping concern)
-        if (promotionForm.recordType === 'coupon') {
-          filteredDiscountOptions = discountOptions.filter(opt => opt.value !== 'free_shipping');
-        }
-      }
-
-      const showDiscountValue = ['percent', 'fixed_amount', 'flash_deal'].includes(promotionForm.type);
-      const showMinOrder = true; // Always relevant
-      const showMinQuantity = !isShippingVoucher; // Only for product vouchers
-      const showMaxDiscount = promotionForm.type === 'percent' || promotionForm.type === 'flash_deal';
-      const showBogo = (promotionForm.type === 'bogo' || promotionForm.type === 'gift_item') && !isShippingVoucher;
-      const showPoints = (promotionForm.type === 'points_multiplier' || promotionForm.type === 'points') && !isShippingVoucher;
-
-      return (
-        <div className="space-y-5">
-          {isShippingVoucher && (
-            <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl flex items-center gap-2">
-              <span className="material-symbols-outlined text-teal-600 text-[18px]">local_shipping</span>
-              <p className="text-sm text-teal-800 font-medium">🚚 Voucher vận chuyển — chỉ hiện các trường liên quan đến giảm phí ship.</p>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold mb-2">Loại giảm *</label>
-              <select
-                value={promotionForm.type}
-                onChange={(e) => setPromotionField('type', e.target.value as PromotionFormState['type'])}
-                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-              >
-                {filteredDiscountOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-              {formErrors.type && <p className="text-xs text-red-600 mt-1">{formErrors.type}</p>}
-            </div>
-            {showDiscountValue && (
-              <div>
-                <label className="block text-sm font-bold mb-2">
-                  {isShippingVoucher ? 'Giá trị giảm phí ship' : 'Giá trị giảm'}
-                </label>
-                <input
-                  type="number"
-                  value={promotionForm.discount_value}
-                  onChange={(e) => setPromotionField('discount_value', e.target.value)}
-                  className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-                  placeholder={promotionForm.type === 'percent' ? 'Ví dụ: 20 (%)' : 'Ví dụ: 50000 (VNĐ)'}
-                />
-                {formErrors.discount_value && <p className="text-xs text-red-600 mt-1">{formErrors.discount_value}</p>}
-              </div>
-            )}
-            {promotionForm.type === 'free_shipping' && (
-              <div className="flex items-center">
-                <div className="p-4 bg-teal-50 border border-teal-200 rounded-xl w-full">
-                  <p className="text-sm font-bold text-teal-700 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[18px]">check_circle</span>
-                    Miễn phí vận chuyển hoàn toàn
-                  </p>
+            {showBogo && (
+              <div className="grid grid-cols-3 gap-5 p-5 bg-amber-50 border border-amber-200 rounded-xl mt-2 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-2 opacity-10">
+                  <span className="material-symbols-outlined text-6xl">card_giftcard</span>
+                </div>
+                <div className="relative z-10">
+                  <label className="block text-xs font-black mb-2 text-amber-900 uppercase tracking-wide">{t('admin.promotions.buyX', 'Mua X')}</label>
+                  <input type="number" value={promotionForm.min_quantity} onChange={e => setPromotionField('min_quantity', e.target.value)} className="w-full px-4 py-2.5 bg-white border border-amber-200 rounded-xl text-sm font-bold focus:ring-amber-500/30" placeholder="1" />
+                  {formErrors.min_quantity && <p className="text-xs text-red-600 mt-1.5 font-semibold">{formErrors.min_quantity}</p>}
+                </div>
+                <div className="relative z-10">
+                  <label className="block text-xs font-black mb-2 text-amber-900 uppercase tracking-wide">{t('admin.promotions.getY', 'Tặng Y')}</label>
+                  <input type="number" value={promotionForm.gift_quantity} onChange={e => setPromotionField('gift_quantity', e.target.value)} className="w-full px-4 py-2.5 bg-white border border-amber-200 rounded-xl text-sm font-bold focus:ring-amber-500/30" placeholder="1" />
+                  {formErrors.gift_quantity && <p className="text-xs text-red-600 mt-1.5 font-semibold">{formErrors.gift_quantity}</p>}
+                </div>
+                <div className="relative z-10">
+                  <label className="block text-xs font-black mb-2 text-amber-900 uppercase tracking-wide">{t('admin.promotions.giftProductId', 'Gift Product ID')}</label>
+                  <input value={promotionForm.gift_product_id} onChange={e => setPromotionField('gift_product_id', e.target.value)} className="w-full px-4 py-2.5 bg-white border border-amber-200 rounded-xl text-sm font-medium focus:ring-amber-500/30" placeholder={t('admin.promotions.optional', 'Tuỳ chọn')} />
                 </div>
               </div>
             )}
-          </div>
 
-          <div className={`grid grid-cols-1 gap-4 ${showMinQuantity && showMaxDiscount ? 'sm:grid-cols-3' : showMaxDiscount ? 'sm:grid-cols-2' : showMinQuantity ? 'sm:grid-cols-2' : ''}`}>
-            {showMinOrder && (
-              <div>
-                <label className="block text-sm font-bold mb-2">
-                  {isShippingVoucher ? 'Đơn tối thiểu để miễn ship' : 'Đơn tối thiểu'}
-                </label>
-                <input
-                  type="number"
-                  value={promotionForm.min_order_amount}
-                  onChange={(e) => setPromotionField('min_order_amount', e.target.value)}
-                  className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-                />
+            {showPts && (
+              <div className="grid grid-cols-2 gap-5 p-5 bg-indigo-50 border border-indigo-100 rounded-xl mt-2 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-2 opacity-10">
+                  <span className="material-symbols-outlined text-6xl">stars</span>
+                </div>
+                <div className="relative z-10">
+                  <label className="block text-xs font-black mb-2 text-indigo-900 uppercase tracking-wide">{t('admin.promotions.pointsCoeff', 'Hệ số điểm')}</label>
+                  <input type="number" value={promotionForm.points_multiplier} onChange={e => setPromotionField('points_multiplier', e.target.value)} className="w-full px-4 py-2.5 bg-white border border-indigo-200 rounded-xl text-sm font-bold focus:ring-indigo-500/30" placeholder="2" />
+                  {formErrors.points_multiplier && <p className="text-xs text-red-600 mt-1.5 font-semibold">{formErrors.points_multiplier}</p>}
+                </div>
+                <div className="flex items-center pt-6 relative z-10">
+                  <label className="inline-flex items-center gap-3 text-sm font-bold cursor-pointer text-indigo-900 hover:text-indigo-700 transition-colors">
+                    <input type="checkbox" checked={promotionForm.stackable} onChange={e => setPromotionField('stackable', e.target.checked)} className="h-5 w-5 rounded text-indigo-600 border-indigo-300 focus:ring-indigo-500" />
+                    <span>{t('admin.promotions.stackable', 'Cộng dồn với khuyến mãi khác')}</span>
+                  </label>
+                </div>
               </div>
             )}
-            {showMinQuantity && (
-              <div>
-                <label className="block text-sm font-bold mb-2">Số lượng tối thiểu</label>
-                <input
-                  type="number"
-                  value={promotionForm.min_quantity}
-                  onChange={(e) => setPromotionField('min_quantity', e.target.value)}
-                  className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-                />
-                {formErrors.min_quantity && <p className="text-xs text-red-600 mt-1">{formErrors.min_quantity}</p>}
-              </div>
-            )}
-            {showMaxDiscount && (
-              <div>
-                <label className="block text-sm font-bold mb-2">Giảm tối đa (VNĐ)</label>
-                <input
-                  type="number"
-                  value={promotionForm.max_discount_amount}
-                  onChange={(e) => setPromotionField('max_discount_amount', e.target.value)}
-                  className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-                />
-              </div>
-            )}
-          </div>
+          </section>
 
-          {showBogo && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-              <div>
-                <label className="block text-sm font-bold mb-2">Mua X</label>
-                <input
-                  type="number"
-                  value={promotionForm.min_quantity}
-                  onChange={(e) => setPromotionField('min_quantity', e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-bold mb-2">Tặng Y</label>
-                <input
-                  type="number"
-                  value={promotionForm.gift_quantity}
-                  onChange={(e) => setPromotionField('gift_quantity', e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl"
-                />
-                {formErrors.gift_quantity && <p className="text-xs text-red-600 mt-1">{formErrors.gift_quantity}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-bold mb-2">Gift product id</label>
-                <input
-                  value={promotionForm.gift_product_id}
-                  onChange={(e) => setPromotionField('gift_product_id', e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-amber-200 rounded-xl"
-                  placeholder="Tuỳ chọn"
-                />
-              </div>
+          {/* 3) SCOPE */}
+          <section className="bg-white rounded-2xl border border-slate-200 p-6 space-y-5 shadow-sm">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+              <span className="material-symbols-outlined text-primary text-xl">category</span>
+              <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">{t('admin.promotions.stepScope', 'Phạm vi áp dụng')}</h4>
             </div>
-          )}
-
-          {showPoints && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-bold mb-2">Hệ số điểm</label>
-                <input
-                  type="number"
-                  value={promotionForm.points_multiplier}
-                  onChange={(e) => setPromotionField('points_multiplier', e.target.value)}
-                  className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-                />
-                {formErrors.points_multiplier && <p className="text-xs text-red-600 mt-1">{formErrors.points_multiplier}</p>}
-              </div>
-              <label className="inline-flex items-center gap-2 text-sm font-semibold mt-8">
-                <input
-                  type="checkbox"
-                  checked={promotionForm.stackable}
-                  onChange={(e) => setPromotionField('stackable', e.target.checked)}
-                  className="h-4 w-4"
-                />
-                Có thể cộng dồn với khuyến mãi khác
-              </label>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (currentStep === 2) {
-      const isShippingVoucher = promotionForm.voucher_type === 'shipping';
-
-      return (
-        <div className="space-y-5">
-          {isShippingVoucher && (
-            <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl flex items-center gap-2">
-              <span className="material-symbols-outlined text-teal-600 text-[18px]">info</span>
-              <p className="text-sm text-teal-800 font-medium">🚚 Voucher vận chuyển thường áp dụng toàn hệ thống. Chỉ chọn phạm vi khác nếu cần giới hạn theo chi nhánh.</p>
-            </div>
-          )}
-          <div>
-            <label className="block text-sm font-bold mb-2">Phạm vi áp dụng *</label>
-            <select
-              value={promotionForm.scope}
-              onChange={(e) => setPromotionField('scope', e.target.value as CampaignScope)}
-              className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-            >
-              <option value="all">Toàn hệ thống</option>
-              {!isShippingVoucher && <option value="product">Sản phẩm cụ thể</option>}
-              {!isShippingVoucher && <option value="category">Danh mục</option>}
-              <option value="branch">Chi nhánh</option>
-            </select>
-            {formErrors.scope && <p className="text-xs text-red-600 mt-1">{formErrors.scope}</p>}
-          </div>
-
-          {optionLoading && <p className="text-sm text-secondary">Đang tải bộ chọn...</p>}
-
-          {!optionLoading && promotionForm.scope === 'product' && (
-            <SearchableMultiSelect
-              title="Chọn sản phẩm áp dụng"
-              options={productOptions}
-              selected={promotionForm.target_product_ids}
-              searchText={searchProduct}
-              onSearchChange={setSearchProduct}
-              onToggle={(id) => toggleIdInField('target_product_ids', id)}
-              emptyLabel="Không tìm thấy sản phẩm"
-            />
-          )}
-
-          {!optionLoading && promotionForm.scope === 'category' && (
-            <SearchableMultiSelect
-              title="Chọn danh mục áp dụng"
-              options={categoryOptions}
-              selected={promotionForm.target_category_ids}
-              searchText={searchCategory}
-              onSearchChange={setSearchCategory}
-              onToggle={(id) => toggleIdInField('target_category_ids', id)}
-              emptyLabel="Không tìm thấy danh mục"
-            />
-          )}
-
-          {!optionLoading && promotionForm.scope === 'branch' && (
-            <SearchableMultiSelect
-              title="Chọn chi nhánh áp dụng"
-              options={branchOptions}
-              selected={promotionForm.target_branch_ids}
-              searchText={searchBranch}
-              onSearchChange={setSearchBranch}
-              onToggle={(id) => toggleIdInField('target_branch_ids', id)}
-              emptyLabel="Không tìm thấy chi nhánh"
-            />
-          )}
-
-          {promotionForm.scope !== 'all' && (
-            <details className="rounded-xl border border-slate-200 p-4 bg-surface-container-lowest">
-              <summary className="cursor-pointer text-sm font-bold">Fallback nhập ID thủ công</summary>
-              <p className="text-xs text-secondary mt-2">Dùng khi chưa có dữ liệu picker đầy đủ. Cách nhau bởi dấu phẩy.</p>
-              <textarea
-                value={promotionForm.manualTargetIds}
-                onChange={(e) => setPromotionField('manualTargetIds', e.target.value)}
-                className="mt-3 w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm"
-                rows={3}
-                placeholder="VD: 67f4..., 67f5..."
-              />
-            </details>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {!optionLoading && (
-              <SearchableMultiSelect
-                title="Loại trừ sản phẩm"
-                options={productOptions}
-                selected={promotionForm.excluded_product_ids}
-                searchText={searchProduct}
-                onSearchChange={setSearchProduct}
-                onToggle={(id) => toggleIdInField('excluded_product_ids', id)}
-                emptyLabel="Không có dữ liệu"
-              />
-            )}
-            {!optionLoading && (
-              <SearchableMultiSelect
-                title="Loại trừ danh mục"
-                options={categoryOptions}
-                selected={promotionForm.excluded_category_ids}
-                searchText={searchCategory}
-                onSearchChange={setSearchCategory}
-                onToggle={(id) => toggleIdInField('excluded_category_ids', id)}
-                emptyLabel="Không có dữ liệu"
-              />
-            )}
-          </div>
-
-          <details className="rounded-xl border border-slate-200 p-4 bg-surface-container-lowest">
-            <summary className="cursor-pointer text-sm font-bold">Fallback nhập ID loại trừ thủ công</summary>
-            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <textarea
-                value={promotionForm.manualExcludedProductIds}
-                onChange={(e) => setPromotionField('manualExcludedProductIds', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm"
-                rows={3}
-                placeholder="Product IDs"
-              />
-              <textarea
-                value={promotionForm.manualExcludedCategoryIds}
-                onChange={(e) => setPromotionField('manualExcludedCategoryIds', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm"
-                rows={3}
-                placeholder="Category IDs"
-              />
-            </div>
-          </details>
-        </div>
-      );
-    }
-
-    if (currentStep === 3) {
-      const isCoupon = promotionForm.recordType === 'coupon';
-      const isShippingVoucher = promotionForm.voucher_type === 'shipping';
-
-      return (
-        <div className="space-y-5">
-          {/* Core limits - always visible */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            
             <div>
-              <label className="block text-sm font-bold mb-2">Tổng lượt phát hành</label>
-              <input
-                type="number"
-                value={promotionForm.total_quantity}
-                onChange={(e) => setPromotionField('total_quantity', e.target.value)}
-                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-                placeholder="Để trống nếu không giới hạn"
-              />
-              {formErrors.total_quantity && <p className="text-xs text-red-600 mt-1">{formErrors.total_quantity}</p>}
+              <label className={lc}>{t('admin.promotions.scope', 'Phạm vi')}</label>
+              <select value={promotionForm.scope} onChange={e => setPromotionField('scope', e.target.value as any)} className={ic}>
+                <option value="all">{t('admin.promotions.scopeAll', 'Toàn hệ thống')}</option>
+                {!isShip && <option value="product">{t('admin.promotions.scopeProduct', 'Sản phẩm cụ thể')}</option>}
+                {!isShip && <option value="category">{t('admin.promotions.scopeCategory', 'Danh mục')}</option>}
+                <option value="branch">{t('admin.promotions.scopeBranch', 'Chi nhánh')}</option>
+              </select>
+              {formErrors.scope && <p className="text-xs text-red-600 mt-1.5 font-semibold">{formErrors.scope}</p>}
             </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">Giới hạn mỗi user</label>
-              <input
-                type="number"
-                value={promotionForm.usage_per_user}
-                onChange={(e) => setPromotionField('usage_per_user', e.target.value)}
-                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-              />
-              {formErrors.usage_per_user && <p className="text-xs text-red-600 mt-1">{formErrors.usage_per_user}</p>}
-            </div>
-          </div>
 
-          {/* Time range - always visible */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold mb-2">Bắt đầu</label>
-              <input
-                type="datetime-local"
-                value={promotionForm.start_date}
-                onChange={(e) => setPromotionField('start_date', e.target.value)}
-                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2">Kết thúc</label>
-              <input
-                type="datetime-local"
-                value={promotionForm.end_date}
-                onChange={(e) => setPromotionField('end_date', e.target.value)}
-                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-              />
-              {formErrors.end_date && <p className="text-xs text-red-600 mt-1">{formErrors.end_date}</p>}
-            </div>
-          </div>
-
-          {/* Coupon code - only for coupon recordType */}
-          {isCoupon && (
-            <div>
-              <label className="block text-sm font-bold mb-2">Mã coupon</label>
-              <input
-                value={promotionForm.code}
-                onChange={(e) => setPromotionField('code', e.target.value.toUpperCase())}
-                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-                placeholder="Để trống để auto-generate"
-              />
-              {formErrors.code && <p className="text-xs text-red-600 mt-1">{formErrors.code}</p>}
-            </div>
-          )}
-
-          {/* Toggles row */}
-          <div className="flex flex-wrap gap-x-6 gap-y-3">
-            <label className="inline-flex items-center gap-2 text-sm font-semibold cursor-pointer">
-              <input
-                type="checkbox"
-                checked={promotionForm.claim_campaign}
-                onChange={(e) => setPromotionField('claim_campaign', e.target.checked)}
-                className="h-4 w-4"
-              />
-              Yêu cầu nhận (Claim)
-            </label>
-            {!isShippingVoucher && (
-              <label className="inline-flex items-center gap-2 text-sm font-semibold cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={promotionForm.stackable}
-                  onChange={(e) => setPromotionField('stackable', e.target.checked)}
-                  className="h-4 w-4"
-                />
-                Cộng dồn (Stackable)
-              </label>
+            {optionLoading && (
+              <div className="flex items-center gap-2 text-sm font-medium text-slate-500 p-4 bg-slate-50 rounded-xl border border-slate-100 animate-pulse">
+                <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+                {t('admin.promotions.loadingOptions', 'Đang tải bộ chọn...')}
+              </div>
             )}
-            <label className="inline-flex items-center gap-2 text-sm font-semibold cursor-pointer">
-              <input
-                type="checkbox"
-                checked={promotionForm.is_active}
-                onChange={(e) => setPromotionField('is_active', e.target.checked)}
-                className="h-4 w-4"
-              />
-              Kích hoạt ngay
-            </label>
-          </div>
+            
+            {!optionLoading && promotionForm.scope === 'product' && (
+              <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                <SearchableMultiSelect title={t('admin.promotions.selectProducts', 'Chọn sản phẩm')} options={productOptions} selected={promotionForm.target_product_ids} searchText={searchProduct} onSearchChange={setSearchProduct} onToggle={id => toggleIdInField('target_product_ids', id)} emptyLabel={t('admin.promotions.noProducts', 'Không tìm thấy sản phẩm')} />
+              </div>
+            )}
+            
+            {!optionLoading && promotionForm.scope === 'category' && (
+              <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                <SearchableMultiSelect title={t('admin.promotions.selectCategories', 'Chọn danh mục')} options={categoryOptions} selected={promotionForm.target_category_ids} searchText={searchCategory} onSearchChange={setSearchCategory} onToggle={id => toggleIdInField('target_category_ids', id)} emptyLabel={t('admin.promotions.noCategories', 'Không tìm thấy danh mục')} />
+              </div>
+            )}
+            
+            {!optionLoading && promotionForm.scope === 'branch' && (
+              <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                <SearchableMultiSelect title={t('admin.promotions.selectBranches', 'Chọn chi nhánh')} options={branchOptions} selected={promotionForm.target_branch_ids} searchText={searchBranch} onSearchChange={setSearchBranch} onToggle={id => toggleIdInField('target_branch_ids', id)} emptyLabel={t('admin.promotions.noBranches', 'Không tìm thấy chi nhánh')} />
+              </div>
+            )}
+          </section>
 
-          {/* Advanced settings - collapsed by default */}
-          <details className="rounded-xl border border-slate-200 p-4 bg-surface-container-lowest">
-            <summary className="cursor-pointer text-sm font-bold flex items-center gap-2">
-              <span className="material-symbols-outlined text-[16px]">tune</span>
-              Cài đặt nâng cao
+          {/* 4) LIMITS & VALIDITY */}
+          <section className="bg-white rounded-2xl border border-slate-200 p-6 space-y-5 shadow-sm">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+              <span className="material-symbols-outlined text-primary text-xl">schedule</span>
+              <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">{t('admin.promotions.stepLimits', 'Giới hạn & Hiệu lực')}</h4>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-5">
+              <div>
+                <label className={lc}>{t('admin.promotions.totalIssued', 'Tổng lượt phát hành')}</label>
+                <input type="number" value={promotionForm.total_quantity} onChange={e => setPromotionField('total_quantity', e.target.value)} className={ic} placeholder={t('admin.promotions.previewUnlimited', 'Không giới hạn')} />
+                {formErrors.total_quantity && <p className="text-xs text-red-600 mt-1.5 font-semibold">{formErrors.total_quantity}</p>}
+              </div>
+              <div>
+                <label className={lc}>{t('admin.promotions.perUserLimit', 'Giới hạn mỗi user')}</label>
+                <input type="number" value={promotionForm.usage_per_user} onChange={e => setPromotionField('usage_per_user', e.target.value)} className={ic} placeholder="1" />
+                {formErrors.usage_per_user && <p className="text-xs text-red-600 mt-1.5 font-semibold">{formErrors.usage_per_user}</p>}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-5">
+              <div>
+                <label className={lc}>{t('admin.promotions.startDate', 'Bắt đầu')}</label>
+                <input type="datetime-local" value={promotionForm.start_date} onChange={e => setPromotionField('start_date', e.target.value)} className={ic} />
+              </div>
+              <div>
+                <label className={lc}>{t('admin.promotions.endDate', 'Kết thúc')}</label>
+                <input type="datetime-local" value={promotionForm.end_date} onChange={e => setPromotionField('end_date', e.target.value)} className={ic} />
+                {formErrors.end_date && <p className="text-xs text-red-600 mt-1.5 font-semibold">{formErrors.end_date}</p>}
+              </div>
+            </div>
+            
+            {isCpn && (
+              <div>
+                <label className={lc}>{t('admin.promotions.couponCode', 'Mã coupon')}</label>
+                <input value={promotionForm.code} onChange={e => setPromotionField('code', e.target.value.toUpperCase())} className={`${ic} font-mono uppercase tracking-widest bg-slate-50 border-slate-300 font-bold text-lg`} placeholder={t('admin.promotions.couponCodeAutoHint', 'ĐỂ TRỐNG ĐỂ TỰ TẠO')} />
+                {formErrors.code && <p className="text-xs text-red-600 mt-1.5 font-semibold">{formErrors.code}</p>}
+              </div>
+            )}
+          </section>
+
+          {/* 5) ADVANCED (collapsed) */}
+          <details className="bg-white rounded-2xl border border-slate-200 shadow-sm group">
+            <summary className="cursor-pointer p-6 text-sm font-black flex items-center gap-3 text-slate-700 hover:text-primary transition-colors uppercase tracking-wider">
+              <span className="material-symbols-outlined text-[24px] transition-transform group-open:rotate-90 text-slate-400 group-hover:text-primary">chevron_right</span>
+              <span className="material-symbols-outlined text-[20px]">settings</span>
+              {t('admin.promotions.advancedSettings', 'Cài đặt nâng cao')}
             </summary>
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-bold mb-2">Priority</label>
-                <input
-                  type="number"
-                  value={promotionForm.priority}
-                  onChange={(e) => setPromotionField('priority', e.target.value)}
-                  className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-                />
+            
+            <div className="p-6 pt-2 space-y-6 border-t border-slate-100">
+              {!isShip && !showBogo && (
+                <div>
+                  <label className={lc}>{t('admin.promotions.minQuantity', 'Số lượng tối thiểu')}</label>
+                  <input type="number" value={promotionForm.min_quantity} onChange={e => setPromotionField('min_quantity', e.target.value)} className={ic} placeholder="0" />
+                  {formErrors.min_quantity && <p className="text-xs text-red-600 mt-1.5 font-semibold">{formErrors.min_quantity}</p>}
+                </div>
+              )}
+              
+              <div className="flex flex-wrap gap-x-8 gap-y-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <label className="inline-flex items-center gap-3 text-sm font-bold cursor-pointer text-slate-700 hover:text-primary transition-colors">
+                  <input type="checkbox" checked={promotionForm.claim_campaign} onChange={e => setPromotionField('claim_campaign', e.target.checked)} className="h-5 w-5 rounded text-primary focus:ring-primary" />
+                  <span>{t('admin.promotions.claimRequired', 'Yêu cầu nhận (Claim)')}</span>
+                </label>
+                
+                {!isShip && !showPts && (
+                  <label className="inline-flex items-center gap-3 text-sm font-bold cursor-pointer text-slate-700 hover:text-primary transition-colors">
+                    <input type="checkbox" checked={promotionForm.stackable} onChange={e => setPromotionField('stackable', e.target.checked)} className="h-5 w-5 rounded text-primary focus:ring-primary" />
+                    <span>{t('admin.promotions.stackableLabel', 'Cộng dồn (Stackable)')}</span>
+                  </label>
+                )}
               </div>
-              <div>
-                <label className="block text-sm font-bold mb-2">Max redemptions</label>
-                <input
-                  type="number"
-                  value={promotionForm.max_redemptions}
-                  onChange={(e) => setPromotionField('max_redemptions', e.target.value)}
-                  className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-                  placeholder="Để trống = không giới hạn"
-                />
+
+              <div className="grid grid-cols-3 gap-5">
+                <div>
+                  <label className={lc}>{t('admin.promotions.priority', 'Độ ưu tiên')}</label>
+                  <input type="number" value={promotionForm.priority} onChange={e => setPromotionField('priority', e.target.value)} className={ic} placeholder="0" />
+                </div>
+                <div>
+                  <label className={lc}>{t('admin.promotions.maxRedemptions', 'Số lượt tối đa')}</label>
+                  <input type="number" value={promotionForm.max_redemptions} onChange={e => setPromotionField('max_redemptions', e.target.value)} className={ic} placeholder={t('admin.promotions.previewUnlimited', 'Không giới hạn')} />
+                </div>
+                <div>
+                  <label className={lc}>{t('admin.promotions.hideAfterExpired', 'Ẩn sau hết hạn (giờ)')}</label>
+                  <input type="number" value={promotionForm.hide_after_expired_hours} onChange={e => setPromotionField('hide_after_expired_hours', e.target.value)} className={ic} placeholder="24" />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-bold mb-2">Ẩn sau hết hạn (giờ)</label>
-                <input
-                  type="number"
-                  value={promotionForm.hide_after_expired_hours}
-                  onChange={(e) => setPromotionField('hide_after_expired_hours', e.target.value)}
-                  className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-                />
+
+              <div className="grid grid-cols-2 gap-5">
+                <div>
+                  <label className={lc}>{t('admin.promotions.badgeText', 'Nhãn hiển thị (Badge text)')}</label>
+                  <input value={promotionForm.badge_text} onChange={e => setPromotionField('badge_text', e.target.value)} className={ic} placeholder="HOT / FLASH SALE" />
+                </div>
+                <div>
+                  <label className={lc}>{t('admin.promotions.targetUrl', 'URL đích')}</label>
+                  <input value={promotionForm.banner_url} onChange={e => setPromotionField('banner_url', e.target.value)} className={ic} placeholder="/promotions" />
+                </div>
+              </div>
+
+              {promotionForm.scope !== 'all' && (
+                <div>
+                  <label className={lc}>{t('admin.promotions.manualIdFallback', 'Nhập ID thủ công (phẩy)')}</label>
+                  <textarea value={promotionForm.manualTargetIds} onChange={e => setPromotionField('manualTargetIds', e.target.value)} className={`${ic} resize-none font-mono text-xs`} rows={3} placeholder="67f4..., 67f5..." />
+                </div>
+              )}
+
+              <div className="rounded-2xl border border-slate-200 p-5 bg-slate-50/50">
+                <h5 className="text-xs font-black text-slate-800 mb-4 uppercase tracking-wider flex items-center gap-2">
+                   <span className="material-symbols-outlined text-red-500 text-lg">block</span>
+                   {t('admin.promotions.excludeProducts', 'Loại trừ sản phẩm / danh mục')}
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {!optionLoading && <SearchableMultiSelect title={t('admin.promotions.excludeProducts', 'Loại trừ SP')} options={productOptions} selected={promotionForm.excluded_product_ids} searchText={searchProduct} onSearchChange={setSearchProduct} onToggle={id => toggleIdInField('excluded_product_ids', id)} emptyLabel={t('admin.promotions.noDataAvailable', 'Không có')} />}
+                  {!optionLoading && <SearchableMultiSelect title={t('admin.promotions.excludeCategories', 'Loại trừ DM')} options={categoryOptions} selected={promotionForm.excluded_category_ids} searchText={searchCategory} onSearchChange={setSearchCategory} onToggle={id => toggleIdInField('excluded_category_ids', id)} emptyLabel={t('admin.promotions.noDataAvailable', 'Không có')} />}
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-5">
+                  <div>
+                    <label className={lc}>{t('admin.promotions.manualExcludeFallback', 'ID loại trừ SP (thủ công)')}</label>
+                    <input value={promotionForm.manualExcludedProductIds} onChange={e => setPromotionField('manualExcludedProductIds', e.target.value)} className={ic} placeholder="Nhập ID sản phẩm cần loại trừ..." />
+                  </div>
+                  <div>
+                    <label className={lc}>{t('admin.promotions.manualExcludeFallback', 'ID loại trừ DM (thủ công)')}</label>
+                    <input value={promotionForm.manualExcludedCategoryIds} onChange={e => setPromotionField('manualExcludedCategoryIds', e.target.value)} className={ic} placeholder="Nhập ID danh mục cần loại trừ..." />
+                  </div>
+                </div>
               </div>
             </div>
           </details>
-        </div>
-      );
-    }
 
-    return (
-      <CampaignPreview
-        form={promotionForm}
-        sampleOrderAmount={sampleOrderAmount}
-        onSampleChange={setSampleOrderAmount}
-      />
+          {/* 6) PREVIEW SECTION */}
+          <section className="bg-slate-50 rounded-2xl border border-slate-200 p-6 shadow-inner">
+            <div className="flex items-center gap-3 pb-4 border-b border-slate-200 mb-5">
+              <span className="material-symbols-outlined text-primary text-xl">visibility</span>
+              <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">{t('admin.promotions.stepPreview', 'Xem trước hiển thị')}</h4>
+            </div>
+            <div className="w-full">
+              <CampaignPreview form={promotionForm} sampleOrderAmount={sampleOrderAmount} onSampleChange={setSampleOrderAmount} t={t} />
+            </div>
+          </section>
+
+        </div>
+      </div>
     );
   };
 
@@ -2103,9 +1947,9 @@ const AdminCouponsManagement: React.FC = () => {
       <main className="max-w-7xl mx-auto">
         <section className="mb-8 flex justify-between items-end">
           <div>
-            <h1 className="text-3xl font-black tracking-tight mb-2">Quản lý Khuyến Mãi</h1>
+            <h1 className="text-3xl font-black tracking-tight mb-2">{t('admin.promotions.pageTitle', 'Quản lý Khuyến Mãi')}</h1>
             <nav className="flex gap-2 text-sm font-medium text-secondary">
-              <span>Hệ thống</span><span>/</span><span className="text-primary">Khuyến mãi & Marketing</span>
+              <span>{t('admin.promotions.breadcrumbSystem', 'Hệ thống')}</span><span>/</span><span className="text-primary">{t('admin.promotions.breadcrumbPromo', 'Khuyến mãi & Marketing')}</span>
             </nav>
           </div>
           <button
@@ -2113,15 +1957,15 @@ const AdminCouponsManagement: React.FC = () => {
             className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-container text-white font-bold rounded-xl shadow-lg shadow-red-500/20 hover:scale-105 transition-all"
           >
             <span className="material-symbols-outlined text-xl">add</span>
-            Tạo {activeTab === 'promotions' ? 'Khuyến mãi' : activeTab === 'banners' ? 'Banner' : 'Hot Deal'} mới
+            {t('admin.promotions.createNew', 'Tạo mới')} {createLabel(activeTab)}
           </button>
         </section>
 
-        <div className="flex border-b border-slate-200 mb-6 gap-6">
+        <div className="flex items-center gap-6 border-b border-slate-200 mb-6">
           {[
-            { id: 'promotions', label: 'Khuyến mãi / Coupons' },
-            { id: 'banners', label: 'Banners' },
-            { id: 'hot_deals', label: 'Hot Deals' },
+            { id: 'promotions', label: t('admin.promotions.tabPromotions', 'Khuyến mãi / Coupons') },
+            { id: 'banners', label: t('admin.promotions.tabBanners', 'Banners') },
+            { id: 'hot_deals', label: t('admin.promotions.tabHotDeals', 'Hot Deals') }
           ].map((tab) => (
             <button
               key={tab.id}
@@ -2150,7 +1994,7 @@ const AdminCouponsManagement: React.FC = () => {
                 setCurrentPage(1);
               }}
               className="w-full pl-10 pr-4 py-2.5 bg-surface-container border-none rounded-xl text-sm focus:ring-2 focus:ring-red-500/20"
-              placeholder="Tìm kiếm theo tên..."
+              placeholder={t('admin.promotions.searchPlaceholder', 'Tìm kiếm theo tên...')}
               type="text"
             />
           </div>
@@ -2162,10 +2006,10 @@ const AdminCouponsManagement: React.FC = () => {
             }}
             className="min-w-35 px-4 py-2.5 bg-surface-container border-none rounded-xl text-sm font-medium"
           >
-            <option value="all">Tất cả trạng thái</option>
-            <option value="active">Đang hoạt động</option>
-            <option value="inactive">Đã tắt</option>
-            <option value="expired">Đã hết hạn</option>
+            <option value="all">{t('admin.promotions.allStatus', 'Tất cả trạng thái')}</option>
+            <option value="active">{t('admin.promotions.active', 'Hoạt động')}</option>
+            <option value="inactive">{t('admin.promotions.inactive', 'Không hoạt động')}</option>
+            <option value="expired">{t('admin.promotions.expired', 'Đã hết hạn')}</option>
           </select>
           <select
             value={sortOrder}
@@ -2175,8 +2019,8 @@ const AdminCouponsManagement: React.FC = () => {
             }}
             className="min-w-35 px-4 py-2.5 bg-surface-container border-none rounded-xl text-sm font-medium"
           >
-            <option value="newest">Mới nhất</option>
-            <option value="expiring">Sắp hết hạn</option>
+            <option value="newest">{t('admin.promotions.newest', 'Mới nhất')}</option>
+            <option value="expiring">{t('admin.promotions.expiringSoon', 'Sắp hết hạn')}</option>
           </select>
         </section>
 
@@ -2184,18 +2028,18 @@ const AdminCouponsManagement: React.FC = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-surface-container-low border-b border-slate-100 text-secondary text-xs font-black uppercase tracking-wider">
-                <th className="px-6 py-4">Tên / Hình ảnh</th>
-                <th className="px-6 py-4">Loại / Giá trị</th>
-                <th className="px-6 py-4">Thời gian</th>
-                <th className="px-6 py-4 text-center">Trạng thái</th>
-                <th className="px-6 py-4 text-right">Hành động</th>
+                <th className="px-6 py-4">{t('admin.promotions.tableName', 'Tên / Hình ảnh')}</th>
+                <th className="px-6 py-4">{t('admin.promotions.tableType', 'Loại / Giá trị')}</th>
+                <th className="px-6 py-4">{t('admin.promotions.tableTime', 'Thời gian')}</th>
+                <th className="px-6 py-4 text-center">{t('admin.promotions.tableStatus', 'Trạng thái')}</th>
+                <th className="px-6 py-4 text-right">{t('admin.promotions.tableActions', 'Hành động')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {loading ? (
-                <tr><td colSpan={5} className="py-8 text-center text-secondary font-medium">Đang tải dữ liệu...</td></tr>
+                <tr><td colSpan={5} className="py-8 text-center text-secondary font-medium">{t('admin.promotions.loading', 'Đang tải dữ liệu...')}</td></tr>
               ) : paginatedList.length === 0 ? (
-                <tr><td colSpan={5} className="py-8 text-center text-secondary font-medium">Không tìm thấy dữ liệu phù hợp</td></tr>
+                <tr><td colSpan={5} className="py-8 text-center text-secondary font-medium">{t('admin.promotions.noData', 'Không tìm thấy dữ liệu phù hợp')}</td></tr>
               ) : (
                 paginatedList.map((item) => {
                   const itemId = toItemId(item);
@@ -2206,13 +2050,31 @@ const AdminCouponsManagement: React.FC = () => {
                     ? Number(item.remaining_quantity)
                     : (total > 0 ? Math.max(0, total - used) : null);
                   const isSoldOut = Boolean(item.is_sold_out || (remaining !== null && remaining <= 0));
-                  const img = item.image || item.image_url || 'https://via.placeholder.com/80';
+                  const isPromo = item.item_type === 'promotion' || item.item_type === 'coupon';
+                  const imageUrl = item.image || item.image_url || (item as any).banner_image || '';
+                  const statusLabel = getActiveLabel(item.is_active);
+                  const secondaryStatus = isSoldOut
+                    ? t('admin.promotions.soldOut', 'Hết lượt')
+                    : isExpired
+                    ? t('admin.promotions.expired', 'Đã hết hạn')
+                    : '';
 
                   return (
                     <tr key={itemId} className="hover:bg-slate-50 transition-colors group">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-4">
-                          <img src={img} alt="Thumb" className="w-16 h-10 object-cover rounded shadow-sm border border-slate-200" />
+                          {isPromo ? (
+                            <PromotionImageDisplay
+                              imageUrl={imageUrl}
+                              voucherType={(item as any).voucher_type}
+                              type={item.type}
+                              alt={item.title || item.code || 'Promotion'}
+                              className="w-16 h-10 rounded shadow-sm border border-slate-200"
+                              aspectRatio=""
+                            />
+                          ) : (
+                            <img src={imageUrl || 'https://via.placeholder.com/80'} alt="Thumb" className="w-16 h-10 object-cover rounded shadow-sm border border-slate-200" />
+                          )}
                           <div className="flex flex-col min-w-0">
                             <span className="text-sm font-bold text-on-surface line-clamp-1">{item.title || item.code || '-'}</span>
                             <span className="text-xs text-secondary mt-0.5 uppercase tracking-wide">ID: {itemId}</span>
@@ -2230,31 +2092,28 @@ const AdminCouponsManagement: React.FC = () => {
                             {item.link ? `Link: ${item.link}` : ''}
                           </span>
                           {total > 0 && (
-                            <span className="text-xs text-secondary mt-1">Còn lại: {Number(remaining || 0).toLocaleString('vi-VN')} / {Number(total).toLocaleString('vi-VN')}</span>
+                            <span className="text-xs text-secondary mt-1">{t('admin.promotions.remainingLabel', 'Còn lại')}: {Number(remaining || 0).toLocaleString('vi-VN')} / {Number(total).toLocaleString('vi-VN')}</span>
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-xs text-on-surface">
-                          <div><strong>Từ:</strong> {item.start_date ? new Date(item.start_date).toLocaleDateString() : '—'}</div>
-                          <div><strong>Đến:</strong> {item.end_date ? new Date(item.end_date).toLocaleDateString() : '—'}</div>
+                          <div><strong>{t('admin.promotions.from', 'Từ')}:</strong> {item.start_date ? new Date(item.start_date).toLocaleDateString() : '—'}</div>
+                          <div><strong>{t('admin.promotions.to', 'Đến')}:</strong> {item.end_date ? new Date(item.end_date).toLocaleDateString() : '—'}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-center">
                         <button
                           onClick={() => handleToggleActive(item)}
                           className={`px-3 py-1 rounded-full text-xs font-black uppercase transition-all ${
-                            !item.is_active
-                              ? 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                              : isSoldOut
-                              ? 'bg-red-100 text-red-700'
-                              : isExpired
-                              ? 'bg-orange-100 text-orange-700'
-                              : 'bg-green-100 text-green-700 hover:bg-green-200'
+                            item.is_active ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                           }`}
                         >
-                          {!item.is_active ? 'Disabled' : isSoldOut ? 'Sold Out' : isExpired ? 'Expired' : 'Active'}
+                          {statusLabel}
                         </button>
+                        {secondaryStatus && (
+                          <div className="text-[10px] text-slate-500 mt-1 font-semibold">{secondaryStatus}</div>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-2">
@@ -2272,7 +2131,9 @@ const AdminCouponsManagement: React.FC = () => {
 
           {totalPages > 1 && (
             <div className="bg-surface-container-lowest px-6 py-4 flex items-center justify-between border-t border-slate-50">
-              <span className="text-xs font-medium text-secondary">Hiển thị {paginatedList.length} trong số {activeList.length} kết quả</span>
+              <span className="text-xs font-medium text-secondary">
+                {t('admin.promotions.showing', 'Hiển thị')} {paginatedList.length} {t('admin.promotions.of', 'trong số')} {activeList.length} {t('admin.promotions.results', 'kết quả')}
+              </span>
               <div className="flex gap-2">
                 <button
                   disabled={currentPage === 1}
@@ -2301,39 +2162,16 @@ const AdminCouponsManagement: React.FC = () => {
             <div className="px-5 py-3 border-b flex justify-between items-center bg-surface sticky top-0 z-10">
               <div>
                 <h3 className="text-xl font-black">
-                  {editingItem ? 'Chỉnh sửa' : 'Tạo mới'} {activeTab === 'promotions' ? 'Khuyến mãi/Coupon' : activeTab === 'banners' ? 'Banner' : 'Hot Deal'}
+                  {editingItem ? t('admin.promotions.editTitle', 'Chỉnh sửa') : t('admin.promotions.createTitle', 'Tạo mới')} {createLabel(activeTab)}
                 </h3>
                 {editingItem && <p className="text-xs text-secondary mt-1 tracking-wide">ID: {toItemId(editingItem)}</p>}
               </div>
               <button type="button" onClick={closeModal} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><span className="material-symbols-outlined">close</span></button>
             </div>
 
-            {activeTab === 'promotions' && (
-              <div className="px-5 pt-3 bg-surface border-b border-slate-100">
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-2 pb-3">
-                  {PROMOTION_STEPS.map((label, index) => {
-                    const active = index === currentStep;
-                    const done = index < currentStep;
-                    return (
-                      <button
-                        key={label}
-                        type="button"
-                        onClick={() => setCurrentStep(index)}
-                        className={`px-3 py-2 rounded-lg text-xs font-bold transition ${
-                          active ? 'bg-primary text-white' : done ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                        }`}
-                      >
-                        {index + 1}. {label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
             <div className="flex-1 overflow-y-auto">
               {activeTab === 'promotions' ? (
-                <div className="p-5 space-y-4">
+                <div className="p-0">
                   {renderPromotionStepContent()}
                 </div>
               ) : (
@@ -2342,39 +2180,16 @@ const AdminCouponsManagement: React.FC = () => {
             </div>
 
             <div className="px-5 py-3 border-t border-slate-100 bg-surface flex flex-wrap justify-between gap-3 sticky bottom-0 z-10">
-              <div className="flex items-center gap-2">
-                {activeTab === 'promotions' && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={prevStep}
-                      disabled={currentStep === 0}
-                      className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-semibold disabled:opacity-40"
-                    >
-                      Quay lại
-                    </button>
-                    {currentStep < PROMOTION_STEPS.length - 1 && (
-                      <button
-                        type="button"
-                        onClick={nextStep}
-                        className="px-4 py-2.5 rounded-xl bg-blue-600 text-white font-semibold"
-                      >
-                        Tiếp theo
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-
+              <div />
               <div className="flex items-center gap-3">
-                <button type="button" onClick={closeModal} className="px-6 py-2.5 text-secondary font-medium hover:bg-slate-50 rounded-xl transition-colors">Hủy bỏ</button>
+                <button type="button" onClick={closeModal} className="px-6 py-2.5 text-secondary font-medium hover:bg-slate-50 rounded-xl transition-colors">{t('admin.promotions.cancel', 'Hủy bỏ')}</button>
                 <button
                   type="button"
                   onClick={handleSave}
-                  disabled={saving || uploadingImage || (activeTab === 'promotions' && currentStep < PROMOTION_STEPS.length - 1)}
+                  disabled={saving || uploadingImage}
                   className="px-8 py-2.5 bg-primary text-white font-bold rounded-xl shadow-lg shadow-red-500/20 disabled:opacity-60"
                 >
-                  {uploadingImage ? 'Đang upload ảnh...' : saving ? 'Đang lưu...' : 'Lưu dữ liệu'}
+                  {uploadingImage ? t('admin.promotions.uploadingImage', 'Đang upload ảnh...') : saving ? t('admin.promotions.saving', 'Đang lưu...') : t('admin.promotions.saveData', 'Lưu dữ liệu')}
                 </button>
               </div>
             </div>
@@ -2394,36 +2209,43 @@ const AdminCouponsManagement: React.FC = () => {
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              <img src={detailItem.image || detailItem.image_url || 'https://via.placeholder.com/400'} alt="Detail" className="w-full rounded-2xl shadow-sm border border-slate-100 object-cover aspect-video" />
+              <PromotionImageDisplay
+                imageUrl={detailItem.image || detailItem.image_url || (detailItem as any).banner_image || ''}
+                voucherType={(detailItem as any).voucher_type}
+                type={detailItem.type}
+                alt={detailItem.title || 'Promotion'}
+                className="w-full rounded-2xl shadow-sm border border-slate-100"
+                aspectRatio="aspect-video"
+              />
 
               <div className="space-y-4">
                 <div className="p-4 bg-surface-container-lowest rounded-xl border border-slate-100 shadow-sm flex justify-between items-center">
-                  <span className="text-secondary font-bold text-sm">Trạng thái</span>
+                  <span className="text-secondary font-bold text-sm">{t('admin.promotions.status', 'Trạng thái')}</span>
                   <span className={`px-3 py-1 rounded-full text-xs font-black uppercase ${detailItem.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                    {detailItem.is_active ? 'Đang hoạt động' : 'Tạm ẩn'}
+                    {getActiveLabel(detailItem.is_active)}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-surface-container-lowest rounded-xl border border-slate-100 shadow-sm">
-                    <span className="block text-xs uppercase font-bold text-secondary mb-1">Thời gian bắt đầu</span>
+                    <span className="block text-xs uppercase font-bold text-secondary mb-1">{t('admin.promotions.startDate', 'Bắt đầu')}</span>
                     <span className="text-sm font-semibold">{detailItem.start_date ? new Date(detailItem.start_date).toLocaleString() : '—'}</span>
                   </div>
                   <div className="p-4 bg-surface-container-lowest rounded-xl border border-slate-100 shadow-sm">
-                    <span className="block text-xs uppercase font-bold text-secondary mb-1">Thời gian kết thúc</span>
+                    <span className="block text-xs uppercase font-bold text-secondary mb-1">{t('admin.promotions.endDate', 'Kết thúc')}</span>
                     <span className="text-sm font-semibold">{detailItem.end_date ? new Date(detailItem.end_date).toLocaleString() : '—'}</span>
                   </div>
                 </div>
 
                 {detailItem.item_type === 'promotion' && (
                   <div className="p-4 bg-red-50 text-red-900 rounded-xl border border-red-100">
-                    <span className="block text-xs uppercase font-black mb-1">Giá trị khuyến mãi</span>
+                    <span className="block text-xs uppercase font-black mb-1">{t('admin.promotions.promoValue', 'Giá trị khuyến mãi')}</span>
                     <span className="text-2xl font-black">
                       {detailItem.type === 'percentage' || detailItem.type === 'percent'
-                        ? `Giảm ${detailItem.value}%`
+                        ? `${t('admin.promotions.discountPrefix', 'Giảm')} ${detailItem.value}%`
                         : detailItem.type === 'bogo'
-                        ? 'Mua 1 Tặng 1'
-                        : `Giảm ${detailItem.value?.toLocaleString()}đ`}
+                        ? t('admin.promotions.bogo', 'Mua X tặng Y (BOGO)')
+                        : `${t('admin.promotions.discountPrefix', 'Giảm')} ${detailItem.value?.toLocaleString()}đ`}
                     </span>
                   </div>
                 )}
@@ -2431,11 +2253,11 @@ const AdminCouponsManagement: React.FC = () => {
                 {detailItem.item_type === 'hot_deal' && (
                   <div className="p-4 bg-orange-50 text-orange-900 rounded-xl border border-orange-100">
                     <div className="flex justify-between items-baseline mb-2">
-                      <span className="block text-xs uppercase font-black">Giá gốc</span>
+                      <span className="block text-xs uppercase font-black">{t('admin.promotions.originalPrice', 'Giá gốc')}</span>
                       <span className="text-sm font-semibold line-through opacity-70">{detailItem.original_price?.toLocaleString()}đ</span>
                     </div>
                     <div className="flex justify-between items-baseline">
-                      <span className="block text-xs uppercase font-black">Giá Hot Deal</span>
+                      <span className="block text-xs uppercase font-black">{t('admin.promotions.hotDealPrice', 'Giá Hot Deal')}</span>
                       <span className="text-2xl font-black">{detailItem.deal_price?.toLocaleString()}đ</span>
                     </div>
                   </div>
@@ -2443,14 +2265,14 @@ const AdminCouponsManagement: React.FC = () => {
 
                 {detailItem.description && (
                   <div className="p-4 bg-surface-container-lowest rounded-xl border border-slate-100 shadow-sm">
-                    <span className="block text-xs uppercase font-bold text-secondary mb-1">Mô tả chi tiết</span>
+                    <span className="block text-xs uppercase font-bold text-secondary mb-1">{t('admin.promotions.detailDescription', 'Mô tả chi tiết')}</span>
                     <p className="text-sm text-on-surface leading-relaxed text-justify">{detailItem.description}</p>
                   </div>
                 )}
 
                 {detailItem.link && (
                   <div className="p-4 bg-blue-50 text-blue-900 rounded-xl border border-blue-100 overflow-hidden text-ellipsis">
-                    <span className="block text-xs uppercase font-black mb-1">URL Đích</span>
+                    <span className="block text-xs uppercase font-black mb-1">{t('admin.promotions.targetUrl', 'URL đích (tuỳ chọn)')}</span>
                     {detailItem.link.startsWith('http') ? (
                       <a href={detailItem.link} target="_blank" rel="noreferrer" className="text-sm font-semibold hover:underline text-blue-700">{detailItem.link}</a>
                     ) : (
@@ -2470,11 +2292,11 @@ const AdminCouponsManagement: React.FC = () => {
             <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="material-symbols-outlined text-3xl">warning</span>
             </div>
-            <h3 className="text-xl font-black mb-2">Xác nhận xóa?</h3>
-            <p className="text-secondary text-sm mb-8 leading-relaxed">Dữ liệu sau khi xóa sẽ không thể khôi phục. Bạn có chắc chắn muốn xóa mục này khỏi hệ thống?</p>
+            <h3 className="text-xl font-black mb-2">{t('admin.promotions.deleteConfirmTitle', 'Xác nhận xóa?')}</h3>
+            <p className="text-secondary text-sm mb-8 leading-relaxed">{t('admin.promotions.deleteConfirmText', 'Dữ liệu sau khi xóa sẽ không thể khôi phục. Bạn có chắc chắn muốn xóa?')}</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteConfirm({ show: false, id: null, type: '' })} className="flex-1 py-3 text-secondary font-bold hover:bg-slate-100 rounded-xl transition-colors">Hủy bỏ</button>
-              <button onClick={handleDelete} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl shadow-lg shadow-red-500/20 hover:scale-105 transition-all">Đồng ý xóa</button>
+              <button onClick={() => setDeleteConfirm({ show: false, id: null, type: '' })} className="flex-1 py-3 text-secondary font-bold hover:bg-slate-100 rounded-xl transition-colors">{t('admin.promotions.deleteCancel', 'Hủy bỏ')}</button>
+              <button onClick={handleDelete} className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl shadow-lg shadow-red-500/20 hover:scale-105 transition-all">{t('admin.promotions.deleteConfirm', 'Đồng ý xóa')}</button>
             </div>
           </div>
         </div>

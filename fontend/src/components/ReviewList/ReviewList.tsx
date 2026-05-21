@@ -55,8 +55,8 @@ const ReviewList: React.FC<ReviewListProps> = ({ productId }) => {
       return;
     }
 
-    if (newReview.comment.trim().length < 10) {
-      toast.warning("Vui lòng nhập đánh giá ít nhất 10 ký tự!");
+    if (newReview.comment.trim().length < 2) {
+      toast.warning("Vui lòng nhập đánh giá ít nhất 2 ký tự!");
       return;
     }
 
@@ -93,7 +93,41 @@ const ReviewList: React.FC<ReviewListProps> = ({ productId }) => {
 
   return (
     <div>
-      <h3 className="text-xl font-bold mb-8">Đánh giá khách hàng ({reviews.length})</h3>
+      <h3 className="text-2xl font-black mb-6 text-slate-800 dark:text-white">Đánh giá sản phẩm</h3>
+
+      {/* Review Summary UI (Shopee/Lazada style) */}
+      <div className="bg-orange-50/50 dark:bg-slate-900 border border-orange-100 dark:border-slate-800 rounded-2xl p-6 mb-8 flex flex-col md:flex-row items-center gap-8">
+        <div className="flex flex-col items-center justify-center min-w-[150px]">
+          <div className="text-5xl font-black text-orange-500 mb-1">
+            {reviews.length > 0 ? (reviews.reduce((acc, curr) => acc + curr.rating, 0) / reviews.length).toFixed(1) : '0.0'}
+          </div>
+          <div className="flex gap-1 text-orange-500 mb-2">
+            {[1, 2, 3, 4, 5].map(star => (
+              <span key={star} className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+            ))}
+          </div>
+          <p className="text-sm font-medium text-slate-500">{reviews.length} đánh giá</p>
+        </div>
+
+        <div className="flex-1 w-full space-y-2">
+          {[5, 4, 3, 2, 1].map(star => {
+            const count = reviews.filter(r => r.rating === star).length;
+            const percent = reviews.length > 0 ? Math.round((count / reviews.length) * 100) : 0;
+            return (
+              <div key={star} className="flex items-center gap-3">
+                <div className="flex items-center gap-1 w-12 shrink-0">
+                  <span className="text-sm font-bold text-slate-600 dark:text-slate-400">{star}</span>
+                  <span className="material-symbols-outlined text-[14px] text-slate-400" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                </div>
+                <div className="h-2 flex-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-orange-500 rounded-full" style={{ width: `${percent}%` }}></div>
+                </div>
+                <div className="w-10 shrink-0 text-right text-xs font-medium text-slate-500">{count}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {status === 'loading' && <div className="py-4 text-center">Đang tải đánh giá...</div>}
       
@@ -154,31 +188,49 @@ const ReviewList: React.FC<ReviewListProps> = ({ productId }) => {
         <textarea
           value={newReview.comment}
           onChange={(e) => setNewReview((prev) => ({ ...prev, comment: e.target.value }))}
-          placeholder="Chia sẻ cảm nhận của bạn về sản phẩm (tối thiểu 10 ký tự)..."
-          className="w-full h-32 p-4 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-primary resize-y"
+          placeholder="Chia sẻ cảm nhận của bạn về sản phẩm (tối thiểu 2 ký tự)..."
+          className="w-full h-32 p-4 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-primary resize-y bg-slate-50 dark:bg-slate-800"
         />
 
-        <div className="mt-3">
-          <label className="block text-sm font-semibold mb-2">Ảnh đánh giá (tối đa 5 ảnh)</label>
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={(e) => {
-              const files = Array.from(e.target.files || []).slice(0, 5);
-              setImageFiles(files);
-            }}
-            className="block w-full text-sm"
-          />
-          {imageFiles.length > 0 && (
-            <div className="mt-2 flex gap-2 flex-wrap">
-              {imageFiles.map((file, idx) => (
-                <span key={`${file.name}-${idx}`} className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-600">
-                  {file.name}
-                </span>
-              ))}
-            </div>
-          )}
+        <div className="mt-4">
+          <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">Hình ảnh thực tế (tối đa 5 ảnh)</label>
+          <div className="flex flex-wrap gap-3">
+            {imageFiles.map((file, idx) => {
+              const fileUrl = URL.createObjectURL(file);
+              return (
+                <div key={`${file.name}-${idx}`} className="relative w-24 h-24 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 group shadow-sm bg-white">
+                  <img src={fileUrl} alt="preview" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <button
+                      onClick={() => setImageFiles(prev => prev.filter((_, i) => i !== idx))}
+                      className="w-8 h-8 bg-white/20 hover:bg-red-500 text-white rounded-full flex items-center justify-center backdrop-blur-sm transition-colors"
+                      title="Xóa ảnh"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            
+            {imageFiles.length < 5 && (
+              <label className="w-24 h-24 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl cursor-pointer hover:border-primary hover:bg-primary/5 transition-all group">
+                <span className="material-symbols-outlined text-slate-400 group-hover:text-primary animate-bounce_slow text-2xl mb-1 mt-2">add_photo_alternate</span>
+                <span className="text-[10px] font-bold text-slate-500 group-hover:text-primary">Thêm ảnh</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    setImageFiles(prev => [...prev, ...files].slice(0, 5));
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            )}
+          </div>
         </div>
 
         <button

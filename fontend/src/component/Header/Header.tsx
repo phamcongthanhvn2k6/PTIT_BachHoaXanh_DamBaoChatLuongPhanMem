@@ -45,8 +45,9 @@ const Header: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  const brand = settings?.brand_name || "LOTTE Mart";
-  const [brandFirst, brandSecond] = brand.split(" ");
+  const headerText = settings?.header_logo_text || settings?.brand_name || "LOTTE Mart";
+  const [brandFirst, brandSecond] = headerText.split(" ");
+  const brandLogoUrl = settings?.brand_logo_url || '';
 
   const navItems = [
     { label: t("nav.home"), path: "/home" },
@@ -164,7 +165,22 @@ const Header: React.FC = () => {
         }}
       >
         <Link to="/home" style={{ textDecoration: "none" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 180, cursor: "pointer" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+            {brandLogoUrl && (
+              <img
+                src={brandLogoUrl}
+                alt="Brand Logo"
+                style={{
+                  height: 38,
+                  width: 38,
+                  objectFit: "contain",
+                  borderRadius: "50%",
+                  background: "white",
+                  padding: "2px",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
+                }}
+              />
+            )}
             <div
               style={{
                 background: "white",
@@ -173,6 +189,7 @@ const Header: React.FC = () => {
                 display: "flex",
                 alignItems: "center",
                 gap: 4,
+                boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
               }}
             >
               <span style={{ color: "#C1121F", fontWeight: 900, fontSize: 22, letterSpacing: -1 }}>
@@ -182,7 +199,7 @@ const Header: React.FC = () => {
                 {brandSecond || "Mart"}
               </span>
             </div>
-            <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 11 }}>{t("common.vietnam")}</span>
+            <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, marginLeft: 2 }}>{t("common.vietnam")}</span>
           </div>
         </Link>
 

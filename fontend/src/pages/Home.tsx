@@ -9,6 +9,7 @@ import { bannerService } from '../services/bannerService';
 import flashDealService from '../services/flashDealService';
 import { useBranchData } from '../hooks/useBranchData';
 import { filterVisibleFlashDeals, evaluateFlashDealVisibility } from '../utils/flashDeal';
+import { HotDealCountdown } from '../components/HotDealCountdown/HotDealCountdown';
 
 const Home: React.FC = () => {
   const { t } = useTranslation();
@@ -97,7 +98,17 @@ const Home: React.FC = () => {
   }, [currentBranchId, filterBanners, flashDealRefreshTick]);
 
   const newProducts = useMemo(() => {
-    return (availableProducts || []).filter((item: any) => item && item.is_new).slice(0, 8);
+    const products = availableProducts || [];
+    let filtered = products.filter((item: any) => item && item.is_new);
+    
+    if (filtered.length === 0 && products.length > 0) {
+      filtered = products.filter((item: any) => item && item.is_featured);
+      if (filtered.length === 0) {
+        filtered = [...products].reverse(); 
+      }
+    }
+    
+    return filtered.slice(0, 8);
   }, [availableProducts]);
 
   const suggestedProducts = useMemo(() => {
@@ -469,6 +480,9 @@ const Home: React.FC = () => {
                         <span className="text-rose-600 font-black text-lg">{Number(deal.deal_price || 0).toLocaleString('vi-VN')}₫</span>
                         <span className="text-slate-400 text-xs line-through">{Number(deal.original_price || 0).toLocaleString('vi-VN')}₫</span>
                       </div>
+                    </div>
+                    <div className="mb-3">
+                      <HotDealCountdown endDate={deal.end_date} />
                     </div>
                     {deal.total_quantity > 0 && deal.remaining_quantity != null && (
                       <div className="mt-auto w-full bg-slate-100 dark:bg-slate-700 rounded-full h-3 relative overflow-hidden flex items-center justify-center border border-rose-100 dark:border-rose-900">

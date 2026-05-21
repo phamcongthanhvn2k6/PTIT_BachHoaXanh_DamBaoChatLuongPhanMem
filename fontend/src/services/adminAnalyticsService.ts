@@ -121,10 +121,12 @@ export const adminAnalyticsService = {
       .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
       .slice(0, 5)
       .map((o: any) => {
-        const user = users.find((u: any) => Number(u.id) === Number(o.user_id));
+        // Compare as strings so MongoDB ObjectId matches work
+        const userId = String(o.user_id || '');
+        const user = users.find((u: any) => String(u.id || u._id || '') === userId);
         return {
-          id: `#ORD-${o.id}`,
-          customerName: user ? (user.full_name || user.username) : 'Unknown',
+          id: `#ORD-${String(o.id || o._id || '').slice(-8)}`,
+          customerName: user ? (user.full_name || user.username || '') : '',
           amount: o.total_amount || 0,
           status: o.status || 'PENDING'
         };
@@ -135,10 +137,10 @@ export const adminAnalyticsService = {
     const topProducts: ProductItem[] = products
       .map((p: any) => ({
         id: Number(p.id) || 0,
-        name: p.name || 'Unknown',
+        name: p.name || '',
         price: p.discount_price || p.original_price || 0,
         image: Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : '',
-        soldCount: p.sold_count || 0 // No more mock random sales
+        soldCount: p.sold_count || 0
       }))
       .sort((a: any, b: any) => b.soldCount - a.soldCount)
       .slice(0, 5);
@@ -163,7 +165,7 @@ export const adminAnalyticsService = {
           id: branchId,
           name: b.name || `Branch ${branchId}`,
           sales: sales,
-          score: Math.floor((sales / maxSales) * 100) || 50
+          score: sales > 0 ? Math.floor((sales / maxSales) * 100) : 0
         };
       })
       .sort((a: any, b: any) => b.sales - a.sales)
@@ -184,13 +186,21 @@ export const adminAnalyticsService = {
 
     const support: SupportOverview = { open, urgent, resolved, waiting };
 
+    // 8. Compute Order Status Breakdown
+    const statusCounts: Record<string, number> = {};
+    filteredOrders.forEach((o: any) => {
+      const status = o.status || 'PENDING';
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+    });
+
     return {
       summary,
       revenueSeries,
       recentOrders,
       topProducts,
       topBranches,
-      support
+      support,
+      statusCounts
     };
   }
 };

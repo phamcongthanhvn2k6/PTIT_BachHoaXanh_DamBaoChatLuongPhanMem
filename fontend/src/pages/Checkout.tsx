@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppSelector, useAppDispatch } from '../store';
 import { loadAddresses, addAddressThunk } from '../slices/addressSlice';
-import { loadAllBranchCarts, selectCurrentBranchItems } from '../slices/cartSlice';
+import { loadAllBranchCarts, selectCurrentBranchItems, removeCoupon } from '../slices/cartSlice';
 import { verifySession } from '../slices/authSlice';
 import { toast } from '../components/Toast/toastEvent';
 import { dataService } from '../services/dataService';

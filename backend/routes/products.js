@@ -10,6 +10,7 @@ router.get('/', cacheMiddleware(60), c.list);
 router.get('/search', cacheMiddleware(60), c.search);
 router.get('/policies', cacheMiddleware(300), c.policies);
 router.get('/compare', cacheMiddleware(60), c.compare);
+router.get('/expiring', cacheMiddleware(60), c.getExpiringProducts);
 router.get('/recommendations', c.smartRecommendations); // Must be before /:id
 router.get('/:id', cacheMiddleware(60), c.detail);
 router.get('/:id/related', cacheMiddleware(120), c.related);

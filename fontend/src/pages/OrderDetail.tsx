@@ -226,10 +226,17 @@ const OrderDetail: React.FC = () => {
         <p className="text-slate-500 text-sm">
             Ngày đặt: {new Date(order.created_at).toLocaleString('vi-VN')}
         </p>
-        {/* Branch Info */}
-        <div className="flex items-center gap-2 mt-2 bg-primary/5 px-4 py-2 rounded-lg w-fit">
-          <span className="material-symbols-outlined text-primary text-lg">storefront</span>
-          <span className="text-sm font-bold text-primary">{(order as any).branch_name || getBranchName(order.branch_id)}</span>
+        <div className="flex flex-wrap items-center gap-3 mt-2">
+          <div className="flex items-center gap-2 bg-primary/5 px-4 py-2 rounded-lg w-fit">
+            <span className="material-symbols-outlined text-primary text-lg">storefront</span>
+            <span className="text-sm font-bold text-primary">{(order as any).branch_name || getBranchName(order.branch_id)}</span>
+          </div>
+          {order.tracking?.tracking_number && (
+             <div className="flex items-center gap-2 bg-blue-50/50 px-4 py-2 rounded-lg w-fit border border-blue-100">
+               <span className="material-symbols-outlined text-blue-600 text-lg">local_shipping</span>
+               <span className="text-sm font-bold text-blue-700">{order.tracking.carrier || 'Hệ thống'} • {order.tracking.tracking_number}</span>
+             </div>
+          )}
         </div>
       </div>
 
@@ -277,7 +284,7 @@ const OrderDetail: React.FC = () => {
                                </div>
                              </div>
                              <div className="flex-1 min-w-0">
-                           <Link to={`/products/${item.product_id || item.branch_product_id}`} className="font-bold text-slate-900 hover:text-primary truncate block">{item.product_name}</Link>
+                           <Link to={`/products/${item.product_id || item.branch_product_id}`} className="font-bold text-slate-900 hover:text-primary truncate block">{item.product_name || (item as any).name || 'Sản phẩm'}</Link>
                            <div className="flex flex-col gap-0.5 mt-1.5 mb-2">
                              <p className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded w-max">
                                SKU: {(item as any).sku || 'N/A'}

@@ -11,6 +11,8 @@ const productQuestionSchema = new mongoose.Schema({
     enum: ['pending', 'answered', 'hidden'],
     index: true,
   },
+  is_pinned: { type: Boolean, default: false },
+  is_official_answer: { type: Boolean, default: false },
   answer: {
     content: { type: String, default: '' },
     admin_id: { type: mongoose.Schema.Types.Mixed, default: null },

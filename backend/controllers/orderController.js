@@ -53,7 +53,7 @@ const recordPromotionAndCouponUsage = async ({
     const promoId = toObjectIdIfValid(promo.promotion_id);
 
     const updateResult = await Promotion.updateOne(
-      { 
+      {
         _id: promoId,
         $or: [
           { usage_limit: null },
@@ -93,7 +93,7 @@ const recordPromotionAndCouponUsage = async ({
       const coupon = await Coupon.findOne({ code: normalizedCode }).session(session);
       if (coupon) {
         const updateResult = await Coupon.updateOne(
-          { 
+          {
             _id: coupon._id,
             $or: [
               { usage_limit: null },
@@ -118,32 +118,32 @@ const recordPromotionAndCouponUsage = async ({
         }], { session });
       }
     } else if (cInfo.id) {
-       // Must be a Promotion
-       const promoId = toObjectIdIfValid(cInfo.id);
-       const updateResult = await Promotion.updateOne(
-          { 
-            _id: promoId,
-            $or: [
-              { usage_limit: null },
-              { $expr: { $lt: ['$usage_count', '$usage_limit'] } },
-              { total_quantity: null },
-              { $expr: { $lt: ['$usage_count', '$total_quantity'] } }
-            ]
-          },
-          { $inc: { usage_count: 1, claimed_count: 1 } },
-          { session },
-        );
+      // Must be a Promotion
+      const promoId = toObjectIdIfValid(cInfo.id);
+      const updateResult = await Promotion.updateOne(
+        {
+          _id: promoId,
+          $or: [
+            { usage_limit: null },
+            { $expr: { $lt: ['$usage_count', '$usage_limit'] } },
+            { total_quantity: null },
+            { $expr: { $lt: ['$usage_count', '$total_quantity'] } }
+          ]
+        },
+        { $inc: { usage_count: 1, claimed_count: 1 } },
+        { session },
+      );
 
-        if (updateResult.modifiedCount === 0) {
-          throw new Error(`Khuyến mãi đã hết lượt sử dụng`);
-        }
+      if (updateResult.modifiedCount === 0) {
+        throw new Error(`Khuyến mãi đã hết lượt sử dụng`);
+      }
 
-        await PromotionUsage.create([{
-          promotion_id: promoId,
-          user_id: userId || null,
-          order_id: orderId,
-          discount_amount: Number(cInfo.discount_amount || 0),
-        }], { session });
+      await PromotionUsage.create([{
+        promotion_id: promoId,
+        user_id: userId || null,
+        order_id: orderId,
+        discount_amount: Number(cInfo.discount_amount || 0),
+      }], { session });
     }
   }
 };
@@ -179,7 +179,7 @@ export const create = async (req, res) => {
       return res.status(500).json({ success: false, message: 'Lỗi hệ thống khi kiểm tra Idempotency' });
     }
   }
-  
+
   let session = null;
   try {
     session = await mongoose.startSession();
@@ -254,9 +254,9 @@ export const create = async (req, res) => {
     let orderAddress = order_address;
     if (!orderAddress) {
       orderAddress = {
-         receiver_name: 'Test User',
-         phone: normalizedUserPhone,
-         full_address: 'Default Address'
+        receiver_name: 'Test User',
+        phone: normalizedUserPhone,
+        full_address: 'Default Address'
       };
     } else if (orderAddress && orderAddress.city && !orderAddress.full_address) {
       const parts = [orderAddress.street, orderAddress.ward, orderAddress.district, orderAddress.city].filter(Boolean);
@@ -269,18 +269,18 @@ export const create = async (req, res) => {
 
     let branchName = req.body.branch_name || '';
     if (!branchName && branch_id_val) {
-       try {
-         let branch = null;
-         if (mongoose.Types.ObjectId.isValid(branch_id_val)) {
-           branch = await Branch.findById(branch_id_val).session(session);
-         }
-         if (!branch) {
-           branch = await Branch.findOne({ name: { $regex: branch_id_val, $options: 'i' } }).session(session);
-         }
-         if (branch) branchName = branch.name;
-       } catch (e) {
-         console.warn('[OrderCreate] Could not resolve branch name:', e.message);
-       }
+      try {
+        let branch = null;
+        if (mongoose.Types.ObjectId.isValid(branch_id_val)) {
+          branch = await Branch.findById(branch_id_val).session(session);
+        }
+        if (!branch) {
+          branch = await Branch.findOne({ name: { $regex: branch_id_val, $options: 'i' } }).session(session);
+        }
+        if (branch) branchName = branch.name;
+      } catch (e) {
+        console.warn('[OrderCreate] Could not resolve branch name:', e.message);
+      }
     }
 
     try {
@@ -295,32 +295,33 @@ export const create = async (req, res) => {
       }
       return res.status(409).json({ success: false, message: 'Không đủ số lượng tồn kho để đặt hàng.', error: invErr.message });
     }
-    
+
     // ── 3. Resolve product_id and snapshot metadata for each item from BranchProduct/Product ──
     for (const item of items) {
       if (item.branch_product_id) {
         try {
           const bp = await BranchProduct.findById(item.branch_product_id).session(session);
           if (bp) {
-             item.product_id = item.product_id || bp.product_id;
-             item.sku = item.sku || bp.sku;
-             item.category_name = item.category_name || bp.category_name;
-             item.supplier_name = item.supplier_name || bp.supplier_name;
-             item.expiry_date = item.expiry_date || bp.expiry_date;
-             
-             // 🔥 SECURITY FIX: Enforce server-side pricing from DB
-             item.price = bp.price;
-             item.unit_price = bp.price;
-             
-             if (!item.sku || !item.category_name || !item.supplier_name) {
-                const p = await Product.findById(bp.product_id).session(session);
-                if (p) {
-                   item.sku = item.sku || p.sku;
-                   item.category_name = item.category_name || p.category_name;
-                   item.supplier_name = item.supplier_name || p.supplier_name;
-                   item.expiry_date = item.expiry_date || p.expiry_date;
-                }
-             }
+            item.product_id = item.product_id || bp.product_id;
+            item.sku = item.sku || bp.sku;
+            item.category_name = item.category_name || bp.category_name;
+            item.supplier_name = item.supplier_name || bp.supplier_name;
+            item.expiry_date = item.expiry_date || bp.expiry_date;
+
+            // 🔥 SECURITY FIX: Enforce server-side pricing from DB
+            item.price = bp.price;
+            item.unit_price = bp.price;
+
+            const p = await Product.findById(bp.product_id).session(session);
+            if (p) {
+              item.sku = item.sku || p.sku;
+              item.category_name = item.category_name || p.category_name;
+              item.supplier_name = item.supplier_name || p.supplier_name;
+              item.expiry_date = item.expiry_date || p.expiry_date;
+              item.product_name = p.name || p.product_name || item.product_name || item.name;
+              item.name = item.product_name; // Normalize for calculation service
+              item.product_image = p.image || p.product_image || item.product_image || item.image;
+            }
           }
         } catch (e) { console.warn('Snapshot logic error:', e.message); }
       }
@@ -373,7 +374,7 @@ export const create = async (req, res) => {
 
     // Order.create is an array when used with session
     const [order] = await Order.create([orderData], { session });
-    
+
     // ── 5. Tăng sold_count sau khi đặt hàng thành công ──
     for (const item of items) {
       if (!item.branch_product_id) continue;
@@ -567,7 +568,7 @@ export const list = async (req, res) => {
   try {
     const { page = 1, limit = 20, status, user_id, branch_id } = req.query;
     const filter = {};
-    
+
     // Admin/superadmin (role_id 1 or 2) can query all orders or filter by user_id
     // Regular users (role_id 3) always see only their own
     const roleId = Number(req.user?.role_id);
@@ -582,9 +583,9 @@ export const list = async (req, res) => {
       // Regular user — only own orders
       filter.user_id = req.userId;
     }
-    
+
     if (status && status !== 'ALL') filter.status = status;
-    
+
     const p = Math.max(1, parseInt(page));
     const l = Math.min(100, Math.max(1, parseInt(limit)));
     const total = await Order.countDocuments(filter);
@@ -621,7 +622,7 @@ export const cancel = async (req, res) => {
   let session = null;
   try {
     if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ success: false, message: 'ID đơn hàng không hợp lệ' });
-    
+
     session = await mongoose.startSession();
     session.startTransaction();
 
@@ -641,7 +642,7 @@ export const cancel = async (req, res) => {
     }
     order.status = 'CANCELLED';
     order.tracking.history.push({ status: 'CANCELLED', note: req.body.reason || 'Hủy bởi khách hàng', timestamp: new Date() });
-    
+
     // 1. Restore stock back to BranchProduct + InventoryBatch
     await inventoryService.restoreInventoryFromOrder(order.items, session);
 
@@ -662,7 +663,7 @@ export const cancel = async (req, res) => {
         }
       } catch (e) { console.warn('[OrderCancel] sold_count revert error:', e.message); }
     }
-    
+
     await order.save({ session });
 
     await session.commitTransaction();
@@ -704,13 +705,13 @@ export const tracking = async (req, res) => {
 
 // Valid status transitions map
 const VALID_TRANSITIONS = {
-  PENDING:    ['CONFIRMED', 'CANCELLED'],
-  CONFIRMED:  ['PROCESSING', 'CANCELLED'],
+  PENDING: ['CONFIRMED', 'CANCELLED'],
+  CONFIRMED: ['PROCESSING', 'CANCELLED'],
   PROCESSING: ['SHIPPING', 'CANCELLED'],
-  SHIPPING:   ['DELIVERED'],
-  DELIVERED:  ['RETURNED'],
-  CANCELLED:  [],         // terminal
-  RETURNED:   [],         // terminal
+  SHIPPING: ['DELIVERED'],
+  DELIVERED: ['RETURNED'],
+  CANCELLED: [],         // terminal
+  RETURNED: [],         // terminal
 };
 
 // PUT /api/orders/:id/status
@@ -723,7 +724,7 @@ export const updateStatus = async (req, res) => {
     if (req.user?.role_id === 3 && String(order.user_id) !== String(req.userId)) {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
-    const { status, note } = req.body;
+    const { status, note, tracking_number, carrier, dispatch_branch, dispatch_branch_name, internal_note } = req.body;
     if (!status) return res.status(400).json({ success: false, message: 'status is required' });
 
     const allowed = VALID_TRANSITIONS[order.status] || [];
@@ -734,16 +735,55 @@ export const updateStatus = async (req, res) => {
       });
     }
 
+    // ── When transitioning to SHIPPING, require shipping data ──
+    if (status === 'SHIPPING') {
+      if (!tracking_number || !String(tracking_number).trim()) {
+        return res.status(400).json({ success: false, message: 'Mã vận đơn (tracking_number) là bắt buộc khi chuyển sang trạng thái Đang giao hàng' });
+      }
+      if (!dispatch_branch && !dispatch_branch_name) {
+        return res.status(400).json({ success: false, message: 'Kho xuất hàng (dispatch_branch) là bắt buộc khi chuyển sang trạng thái Đang giao hàng' });
+      }
+      // Persist shipping data into the tracking sub-document
+      order.tracking.tracking_number = String(tracking_number).trim();
+      order.tracking.carrier = carrier ? String(carrier).trim() : order.tracking.carrier;
+      order.tracking.dispatch_branch = dispatch_branch || null;
+      order.tracking.dispatch_branch_name = dispatch_branch_name || null;
+    }
+
     order.status = status;
     if (status === 'DELIVERED') order.payment.status = 'PAID';
-    order.tracking.history.push({ status, note: note || '', by: req.userId, timestamp: new Date() });
+
+    // Build history entry with optional shipping metadata
+    const historyEntry = {
+      status,
+      note: note || internal_note || '',
+      by: req.userId,
+      timestamp: new Date(),
+      meta: null,
+    };
+    if (status === 'SHIPPING') {
+      historyEntry.meta = {
+        tracking_number: order.tracking.tracking_number,
+        carrier: order.tracking.carrier || null,
+        dispatch_branch: order.tracking.dispatch_branch || null,
+        dispatch_branch_name: order.tracking.dispatch_branch_name || null,
+      };
+      // Auto-generate a human-readable note if none provided
+      if (!historyEntry.note) {
+        const parts = [`Xuất kho: ${order.tracking.dispatch_branch_name || 'N/A'}`];
+        if (order.tracking.carrier) parts.push(`Vận chuyển: ${order.tracking.carrier}`);
+        parts.push(`Mã vận đơn: ${order.tracking.tracking_number}`);
+        historyEntry.note = parts.join(' • ');
+      }
+    }
+    order.tracking.history.push(historyEntry);
     await order.save();
 
     await notifyOrderStatusSafely({
       userId: order.user_id,
       orderId: String(order._id),
       status,
-      note: note || '',
+      note: historyEntry.note || '',
     });
 
     return res.json({ success: true, data: normalizeOrder(order), message: 'Cập nhật trạng thái thành công' });
@@ -779,15 +819,15 @@ export const refund = async (req, res) => {
       session.endSession();
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
-    
+
     // Cập nhật trạng thái
     order.status = 'RETURNED';
     order.payment.status = 'REFUNDED';
     order.tracking.history.push({ status: 'RETURNED', note: req.body.reason || 'Hoàn tiền', by: req.userId, timestamp: new Date() });
-    
+
     // 1. Hoàn lại số lượng hàng vào kho
     await inventoryService.restoreInventoryFromOrder(order.items, session);
-    
+
     // 2. Trả lại tiền vào ví L.Point của User
     const user = await User.findById(order.user_id).session(session);
     if (user) {
@@ -814,7 +854,7 @@ export const refund = async (req, res) => {
     }
 
     await order.save({ session });
-    
+
     await session.commitTransaction();
     session.endSession();
 

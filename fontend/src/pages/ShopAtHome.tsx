@@ -373,9 +373,16 @@ export const ShopAtHome: React.FC = () => {
   }, [hotDeals]);
 
   const newReleaseProducts = useMemo(() => {
-    return normalizedShopProducts
-      .filter((item: any) => item.is_new === true || item.badges?.includes('new') || item?.source?.is_new === true)
-      .slice(0, 10);
+    let filtered = normalizedShopProducts.filter((item: any) => item.is_new === true || item.badges?.includes('new') || item?.source?.is_new === true);
+    
+    if (filtered.length === 0 && normalizedShopProducts.length > 0) {
+       filtered = normalizedShopProducts.filter((item: any) => item.is_featured === true || item?.source?.is_featured === true);
+       if (filtered.length === 0) {
+          filtered = [...normalizedShopProducts].reverse();
+       }
+    }
+    
+    return filtered.slice(0, 10);
   }, [normalizedShopProducts]);
 
   // Main filtered grid logic
@@ -605,16 +612,17 @@ export const ShopAtHome: React.FC = () => {
           </div>
 
           {flashDealProducts.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 lg:gap-6 relative z-10">
+            <div className="flex overflow-x-auto gap-4 lg:gap-6 pb-4 snap-x snap-mandatory scrollbar-hide relative z-10">
               {flashDealProducts.map((productItem: any) => (
-                <ProductCard
-                  key={productItem._id || productItem.id}
+                <div key={productItem._id || productItem.id} className="min-w-[180px] md:min-w-[220px] max-w-[260px] flex-shrink-0 snap-start">
+                  <ProductCard
                   product={productItem}
                   isWished={wishlist.includes(String(productItem.branch_product_id || productItem.id))}
                   onClick={handleViewProduct}
                   onAddToCart={handleAddToCart}
                   onToggleWishlist={toggleWishlist}
                 />
+                </div>
               ))}
             </div>
           ) : (
@@ -662,16 +670,17 @@ export const ShopAtHome: React.FC = () => {
             {t('product.noProducts')}
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-5">
+          <div className="flex overflow-x-auto gap-3 sm:gap-5 pb-4 snap-x snap-mandatory scrollbar-hide">
             {newReleaseProducts.map((item: any) => (
-              <ProductCard
-                key={item._id || item.id}
-                product={item}
+              <div key={item._id || item.id} className="min-w-[160px] md:min-w-[200px] max-w-[240px] flex-shrink-0 snap-start">
+                <ProductCard
+                  product={item}
                 isWished={wishlist.includes(String(item.branch_product_id || item.id))}
                 onClick={handleViewProduct}
                 onAddToCart={handleAddToCart}
                 onToggleWishlist={toggleWishlist}
               />
+              </div>
             ))}
           </div>
         )}

@@ -227,6 +227,21 @@ const OrderTracking: React.FC = () => {
               <h3 className="font-bold mb-4 pb-4 border-b border-slate-100 dark:border-slate-800">{t('orderTracking.summary')}</h3>
               <div className="space-y-4">
                 <div className="flex justify-between text-sm"><span className="text-slate-500">{t('orderTracking.orderDate')}</span><span className="font-semibold text-slate-700 dark:text-slate-300">{new Date(orderCreatedAt).toLocaleDateString('vi-VN')}</span></div>
+                
+                {tracking?.tracking_number && (
+                  <div className="flex justify-between text-sm items-center">
+                    <span className="text-slate-500 flex items-center gap-1"><span className="material-symbols-outlined text-xs">local_shipping</span> Vận chuyển</span>
+                    <span className="font-semibold text-blue-600">{tracking?.carrier || 'Hệ thống'} - {tracking.tracking_number}</span>
+                  </div>
+                )}
+                
+                {tracking?.dispatch_branch_name && (
+                  <div className="flex justify-between text-sm items-center">
+                    <span className="text-slate-500 flex items-center gap-1"><span className="material-symbols-outlined text-xs">storefront</span> Kho T/X</span>
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">{tracking.dispatch_branch_name}</span>
+                  </div>
+                )}
+
                 <div className="flex justify-between text-sm"><span className="text-slate-500">Thanh toán</span><span className="font-semibold text-slate-700 dark:text-slate-300">{orderPaymentMethod.toUpperCase()}</span></div>
                 <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center"><span className="font-bold">{t('orderTracking.totalPayment')}</span><span className="text-xl font-extrabold text-primary">{orderTotal.toLocaleString('vi-VN')}₫</span></div>
               </div>
