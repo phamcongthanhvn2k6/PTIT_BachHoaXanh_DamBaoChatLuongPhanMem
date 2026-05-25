@@ -1715,7 +1715,7 @@ const AdminCouponsManagement: React.FC = () => {
   const renderBasicForm = () => (
     <div className="space-y-4 p-5">
       <div>
-        <label className="block text-sm font-bold mb-2">Tiêu đề *</label>
+        <label className="block text-sm font-bold mb-2">{t('admin.promotions.title', 'Tiêu đề')} *</label>
         <input
           value={basicForm.title}
           onChange={(e) => setBasicField('title', e.target.value)}
@@ -1724,7 +1724,7 @@ const AdminCouponsManagement: React.FC = () => {
       </div>
 
       <div>
-        <label className="block text-sm font-bold mb-2">Hình ảnh</label>
+        <label className="block text-sm font-bold mb-2">{t('admin.promotions.image', 'Hình ảnh')}</label>
         <div
           onDragOver={(e) => {
             e.preventDefault();
@@ -1742,8 +1742,8 @@ const AdminCouponsManagement: React.FC = () => {
             onChange={handleImageFileInputChange}
           />
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm">Chọn ảnh từ máy hoặc kéo thả vào đây</p>
-            <button type="button" onClick={() => imageInputRef.current?.click()} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-bold">Chọn ảnh</button>
+            <p className="text-sm">{t('admin.promotions.dragDropImage', 'Chọn ảnh từ máy hoặc kéo thả vào đây')}</p>
+            <button type="button" onClick={() => imageInputRef.current?.click()} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-bold">{t('admin.promotions.selectImage', 'Chọn ảnh')}</button>
           </div>
           {(basicForm.imagePreview || basicForm.imageUrl) && (
             <img src={basicForm.imagePreview || basicForm.imageUrl} alt="Preview" className="mt-3 w-full max-w-sm h-36 object-cover rounded-lg border" />
@@ -1754,7 +1754,7 @@ const AdminCouponsManagement: React.FC = () => {
       {activeTab === 'banners' ? (
         <>
           <div>
-            <label className="block text-sm font-bold mb-2">Link</label>
+            <label className="block text-sm font-bold mb-2">{t('admin.promotions.link', 'Đường dẫn')}</label>
             <input
               value={basicForm.link}
               onChange={(e) => setBasicField('link', e.target.value)}
@@ -1762,7 +1762,7 @@ const AdminCouponsManagement: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-bold mb-2">Position</label>
+            <label className="block text-sm font-bold mb-2">{t('admin.promotions.position', 'Vị trí')}</label>
             <select
               value={basicForm.position}
               onChange={(e) => setBasicField('position', e.target.value)}
@@ -1775,7 +1775,7 @@ const AdminCouponsManagement: React.FC = () => {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-bold mb-2">Bắt đầu</label>
+              <label className="block text-sm font-bold mb-2">{t('admin.promotions.startDate', 'Bắt đầu')}</label>
               <input
                 type="datetime-local"
                 value={basicForm.start_date}
@@ -1784,7 +1784,7 @@ const AdminCouponsManagement: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-bold mb-2">Kết thúc</label>
+              <label className="block text-sm font-bold mb-2">{t('admin.promotions.endDate', 'Kết thúc')}</label>
               <input
                 type="datetime-local"
                 value={basicForm.end_date}
@@ -1794,10 +1794,10 @@ const AdminCouponsManagement: React.FC = () => {
             </div>
           </div>
           <div className="mt-4 p-4 rounded-xl border border-slate-200 bg-surface-container flex flex-col gap-4">
-             <h4 className="font-bold text-sm">Giao diện hiển thị</h4>
+             <h4 className="font-bold text-sm">{t('admin.promotions.displayInterface', 'Giao diện hiển thị')}</h4>
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                <div>
-                 <label className="block text-sm font-bold mb-2">Màu chữ banner (text_color)</label>
+                 <label className="block text-sm font-bold mb-2">{t('admin.promotions.textColor', 'Màu chữ banner (text_color)')}</label>
                  <div className="flex gap-2 items-center">
                    <input
                      type="color"
@@ -1839,7 +1839,7 @@ const AdminCouponsManagement: React.FC = () => {
                </div>
 
                <div>
-                 <label className="block text-sm font-bold mb-2">Lớp phủ nền (overlay_color)</label>
+                 <label className="block text-sm font-bold mb-2">{t('admin.promotions.overlayColor', 'Lớp phủ nền (overlay_color)')}</label>
                  <input
                      type="text"
                      value={basicForm.overlay_color}
@@ -1863,7 +1863,7 @@ const AdminCouponsManagement: React.FC = () => {
                 onChange={(e) => setBasicField('text_shadow', e.target.checked)}
                 className="h-4 w-4"
               />
-              Bật đổ bóng chữ (text shadow)
+              {t('admin.promotions.textShadow', 'Bật đổ bóng chữ (text shadow)')}
             </label>
 
              <div className="mt-2 border rounded-xl overflow-hidden relative" style={{ height: '120px' }}>
@@ -1871,7 +1871,7 @@ const AdminCouponsManagement: React.FC = () => {
                 <div className="absolute inset-0 flex flex-col justify-center px-6" style={{ background: basicForm.overlay_color }}>
                    <div style={{ color: basicForm.text_color, textShadow: basicForm.text_shadow ? '0 2px 6px rgba(0,0,0,0.6)' : 'none' }}>
                       <h3 className="text-xl font-bold">{basicForm.title || 'Tiêu đề Banner'}</h3>
-                      <p className="text-sm mt-1 opacity-90">Banner Subtitle Preview</p>
+                      <p className="text-sm mt-1 opacity-90">{t('admin.promotions.bannerSubtitlePreview', 'Banner Subtitle Preview')}</p>
                    </div>
                 </div>
              </div>
@@ -1880,16 +1880,37 @@ const AdminCouponsManagement: React.FC = () => {
       ) : (
         <>
           <div>
-            <label className="block text-sm font-bold mb-2">Product ID *</label>
-            <input
+            <label className="block text-sm font-bold mb-2">{t('admin.promotions.productSelect', 'Sản phẩm')} *</label>
+            <select
               value={basicForm.product_id}
-              onChange={(e) => setBasicField('product_id', e.target.value)}
+              onChange={(e) => {
+                const selectedId = e.target.value;
+                setBasicField('product_id', selectedId);
+                // Auto-fill price if we can find the product
+                const selectedProd = products.find(p => String(p.id || p._id) === selectedId);
+                if (selectedProd) {
+                  setBasicField('original_price', selectedProd.price || selectedProd.original_price || 0);
+                  if (basicForm.title === '' || basicForm.title === 'Deal') {
+                     setBasicField('title', selectedProd.name || '');
+                  }
+                  if (!basicForm.imagePreview && !basicForm.imageUrl) {
+                     setBasicField('imageUrl', selectedProd.image_url || selectedProd.image || '');
+                  }
+                }
+              }}
               className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
-            />
+            >
+              <option value="">{t('admin.promotions.selectProductPlaceholder', '-- Chọn sản phẩm --')}</option>
+              {productOptions.map(opt => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-bold mb-2">Giá gốc *</label>
+              <label className="block text-sm font-bold mb-2">{t('admin.promotions.originalPrice', 'Giá gốc')} *</label>
               <input
                 type="number"
                 value={basicForm.original_price}
@@ -1898,7 +1919,7 @@ const AdminCouponsManagement: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-bold mb-2">Giá deal *</label>
+              <label className="block text-sm font-bold mb-2">{t('admin.promotions.dealPrice', 'Giá deal')} *</label>
               <input
                 type="number"
                 value={basicForm.deal_price}
@@ -1909,7 +1930,7 @@ const AdminCouponsManagement: React.FC = () => {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-bold mb-2">Bắt đầu</label>
+              <label className="block text-sm font-bold mb-2">{t('admin.promotions.startDate', 'Bắt đầu')}</label>
               <input
                 type="datetime-local"
                 value={basicForm.start_date}
@@ -1918,7 +1939,7 @@ const AdminCouponsManagement: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-bold mb-2">Kết thúc</label>
+              <label className="block text-sm font-bold mb-2">{t('admin.promotions.endDate', 'Kết thúc')}</label>
               <input
                 type="datetime-local"
                 value={basicForm.end_date}
@@ -1937,7 +1958,7 @@ const AdminCouponsManagement: React.FC = () => {
           onChange={(e) => setBasicField('is_active', e.target.checked)}
           className="h-4 w-4"
         />
-        Kích hoạt
+        {t('admin.promotions.active', 'Kích hoạt')}
       </label>
     </div>
   );

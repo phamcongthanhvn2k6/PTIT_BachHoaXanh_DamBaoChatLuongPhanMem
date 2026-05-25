@@ -1,4 +1,5 @@
 import FlashDeal from '../models/FlashDeal.js';
+import { Product } from '../models/Product.js';
 
 const TRUTHY = ['1', 'true', 'yes', 'on'];
 const ALLOWED_TYPES = ['percent', 'fixed_amount', 'flash_deal'];

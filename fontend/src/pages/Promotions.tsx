@@ -270,7 +270,7 @@ const Promotions: React.FC = () => {
 
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Left Column - Main Content */}
-          <div className="lg:w-2/3 max-w-full overflow-hidden">
+          <div className="flex-1 min-w-0">
             
             {/* Search & Filter Section */}
             <section className="mb-8 bg-white dark:bg-slate-900 p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col gap-4">
@@ -509,74 +509,80 @@ const Promotions: React.FC = () => {
            </div>
 
            {/* Right Column - Sidebar */}
-          <aside className="lg:w-1/3 space-y-6 lg:sticky lg:top-[100px] self-start max-h-[calc(100vh-120px)] overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+          <aside className="lg:w-1/4 lg:min-w-[320px] lg:max-w-[340px] space-y-5 lg:sticky lg:top-[120px] self-start pb-8">
             
             {/* Wallet Quick Summary (If Logged In) */}
             {user && (
-               <section className="bg-gradient-to-br from-gray-900 to-black rounded-xl shadow-lg p-5 border border-gray-800 text-white relative overflow-hidden">
-                 <div className="relative z-10">
-                   <div className="flex items-center gap-3 mb-4">
-                     <div className="size-10 bg-white/10 rounded-full flex items-center justify-center shrink-0">
-                       <span className="material-symbols-outlined text-white">account_balance_wallet</span>
+               <section className="bg-red-50 dark:bg-slate-900 rounded-2xl shadow-sm border border-red-100 dark:border-slate-800 p-4 relative overflow-hidden group">
+                 <div className="relative z-10 flex flex-col h-full">
+                   <div className="flex items-start gap-3 mb-4">
+                     <div className="w-10 h-10 bg-white dark:bg-red-500/10 rounded-xl flex items-center justify-center shrink-0 shadow-sm border border-red-50 dark:border-red-500/20 mt-0.5">
+                       <span className="material-symbols-outlined text-lotteRed text-[20px]">account_balance_wallet</span>
                      </div>
-                     <div>
-                       <h3 className="font-bold">{t('promotions.walletSummary')}</h3>
-                       <p className="text-xs text-gray-400">{t('promotions.collected')}: <strong className="text-white">{myWallet.length} {t('promotions.codes')}</strong></p>
+                     <div className="min-w-0 flex-1">
+                       <h3 className="font-extrabold text-[15px] tracking-tight leading-tight mb-1 text-red-950 dark:text-white truncate">{t('promotions.walletSummary')}</h3>
+                       <p className="text-[12px] text-red-800/80 dark:text-gray-400 font-medium flex items-center flex-wrap gap-1">
+                          {t('promotions.collected')}: 
+                          <strong className="text-white bg-lotteRed dark:bg-red-500/10 px-1.5 py-0.5 rounded text-[11px] font-bold shadow-sm">{myWallet.length} {t('promotions.codes')}</strong>
+                       </p>
                      </div>
                    </div>
                    
-                   <button onClick={() => setActiveTab('my_wallet')} className="w-full py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-bold transition">
+                   <button onClick={() => { setActiveTab('my_wallet'); document.getElementById('promotion-section')?.scrollIntoView({ behavior: 'smooth' }); }} className="w-full py-2 bg-white dark:bg-slate-800 hover:bg-red-100 dark:hover:bg-slate-700 text-lotteRed dark:text-white rounded-lg text-[13px] font-bold transition-all shadow-sm">
                      {t('promotions.viewAllWallet')}
                    </button>
                  </div>
-                 <div className="absolute -right-4 -bottom-4 text-white/5 pointer-events-none">
+                 {/* Decorative background icon */}
+                 <div className="absolute -right-4 -bottom-4 text-lotteRed/5 pointer-events-none group-hover:scale-105 transition-transform duration-500">
                      <span className="material-symbols-outlined text-8xl">local_activity</span>
                  </div>
                </section>
             )}
 
             {/* Hot Deals Section */}
-            <section className="bg-white dark:bg-slate-900 rounded-xl shadow-sm p-5 border border-gray-100 dark:border-slate-800">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-lg font-black flex items-center uppercase tracking-tight text-gray-900 dark:text-white">
-                  <span className="material-symbols-outlined text-orange-500 mr-2 text-2xl fill-1">local_fire_department</span>
+            <section className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-800 p-4">
+              <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-50 dark:border-slate-800/50">
+                <h2 className="text-[15px] font-black flex items-center tracking-tight text-gray-900 dark:text-white uppercase">
+                  <span className="material-symbols-outlined text-lotteRed mr-1.5 text-[18px] fill-1">local_fire_department</span>
                   {t('promotions.hotDeals')}
                 </h2>
-                <a className="text-xs text-blue-600 font-bold hover:underline cursor-pointer bg-blue-50 px-2 py-1 rounded dark:bg-slate-800 dark:text-blue-400" onClick={() => navigate('/products')}>
+                <a className="text-[11px] text-blue-600 font-bold hover:underline cursor-pointer px-2 py-1 bg-blue-50/50 rounded-md transition-colors" onClick={() => navigate('/products')}>
                   {t('promotions.goShop')}
                 </a>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-1">
                 {hotDeals.filter(d => d.is_active).slice(0, 4).map((deal: any, idx: number) => (
-                    <div key={deal.id || idx} onClick={() => navigate(`/products/${deal.product_id || 1}`)} className="flex items-center space-x-4 p-3 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer group border border-transparent hover:border-gray-100">
-                      <div className="w-16 h-16 shrink-0 bg-gray-100 dark:bg-slate-850 rounded-lg overflow-hidden border border-gray-100 dark:border-slate-800 shadow-sm relative">
+                    <div key={deal.id || idx} onClick={() => navigate(`/products/${deal.product_id || 1}`)} className="flex items-center space-x-3 p-2 -mx-2 hover:bg-gray-50 dark:hover:bg-slate-800/50 rounded-xl transition cursor-pointer group">
+                      <div className="w-14 h-14 shrink-0 bg-gray-100 dark:bg-slate-800 rounded-lg overflow-hidden relative border border-gray-100/50">
                           <img
                              alt={deal.title || 'deal'}
-                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                              src={deal.image_url || 'https://images.unsplash.com/photo-1607082349566-187342175e1f?w=100&q=80'}
                              onError={(e) => {
                                e.currentTarget.src = 'https://images.unsplash.com/photo-1607082349566-187342175e1f?w=100&q=80';
                              }}
                           />
                           {deal.discount_percent && (
-                             <div className="absolute top-0 right-0 bg-lotteRed text-white text-[9px] font-black px-1 rounded-bl-lg">
+                             <div className="absolute top-0 right-0 bg-lotteRed text-white text-[9px] font-black px-1 py-0.5 rounded-bl-md shadow-sm">
                                 -{deal.discount_percent}%
                              </div>
                           )}
                       </div>
-                      <div className="grow min-w-0">
-                          <h4 className="text-sm font-bold line-clamp-1 text-gray-800 dark:text-white group-hover:text-lotteRed transition-colors" title={deal.title}>{deal.title || t('promotions.productDeal')}</h4>
-                          <div className="flex items-baseline space-x-2 mt-0.5 mb-1">
-                             {deal.price && <span className="text-lotteRed font-bold text-sm tracking-tight">{deal.price.toLocaleString('vi-VN')}đ</span>}
-                             {deal.original_price && <span className="text-gray-400 line-through text-[10px]">{deal.original_price.toLocaleString('vi-VN')}đ</span>}
+                      <div className="grow min-w-0 flex flex-col justify-center">
+                          <h4 className="text-[13px] font-bold line-clamp-2 leading-[1.3] text-gray-800 dark:text-white group-hover:text-lotteRed transition-colors mb-1" title={deal.title}>{deal.title || t('promotions.productDeal')}</h4>
+                          <div className="flex items-baseline space-x-1.5">
+                             {deal.price && <span className="text-lotteRed font-extrabold text-[13px] tracking-tight">{deal.price.toLocaleString('vi-VN')}đ</span>}
+                             {deal.original_price && <span className="text-gray-400 line-through text-[10px] font-medium">{deal.original_price.toLocaleString('vi-VN')}đ</span>}
                           </div>
-                          <HotDealCountdown endDate={deal.end_date} />
                       </div>
                     </div>
                 ))}
 
                 {hotDeals.length === 0 && !loading && (
-                    <p className="text-sm text-gray-500 text-center py-4 bg-gray-50 rounded-lg">{t('promotions.noHotDeals')}</p>
+                    <div className="text-center py-6">
+                      <span className="material-symbols-outlined text-gray-300 text-3xl mb-1">inventory_2</span>
+                      <p className="text-[12px] text-gray-500 font-medium">{t('promotions.noHotDeals')}</p>
+                    </div>
                 )}
               </div>
             </section>
@@ -585,18 +591,18 @@ const Promotions: React.FC = () => {
             <section className="space-y-4">
               <div 
                 onClick={() => { setActiveTab('shipping'); document.getElementById('promotion-section')?.scrollIntoView({ behavior: 'smooth' }); }} 
-                className="rounded-xl p-6 relative overflow-hidden group cursor-pointer shadow-md border border-teal-500 hover:scale-[1.02] transition-all duration-300"
-                style={{ background: 'linear-gradient(135deg, #0d9488 0%, #115e59 100%)' }}
+                className="rounded-2xl p-5 relative overflow-hidden group cursor-pointer shadow-sm hover:shadow-md transition-all duration-300"
+                style={{ background: 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)' }}
               >
                 <div className="relative z-10">
-                  <h3 className="text-xl font-extrabold mb-1 text-white opacity-100 inline-block drop-shadow-md uppercase">{t('promotions.freeShipTitle')}</h3>
-                  <p className="text-sm text-teal-50 font-medium mb-4 drop-shadow-sm" dangerouslySetInnerHTML={{ __html: t('promotions.freeShipDesc') }}>
-                  </p>
-                  <span className="inline-block bg-white text-teal-700 text-xs font-bold px-4 py-1.5 rounded-full uppercase shadow-sm group-hover:bg-teal-50 transition">
+                  <h3 className="text-[18px] font-black mb-1 text-white tracking-tight leading-none uppercase">{t('promotions.freeShipTitle')}</h3>
+                  <p className="text-[12px] text-teal-50 font-medium mb-4 opacity-90 line-clamp-2" dangerouslySetInnerHTML={{ __html: t('promotions.freeShipDesc') }}></p>
+                  <span className="inline-flex items-center gap-1.5 bg-white text-teal-800 text-[11px] font-black px-3 py-1.5 rounded-lg uppercase shadow-sm group-hover:bg-teal-50 transition-colors">
                     {t('promotions.huntNow')}
+                    <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                   </span>
                 </div>
-                <span className="material-symbols-outlined absolute -right-2 -bottom-4 text-8xl text-white/20 group-hover:scale-110 transition-transform duration-500 rotate-12">moped</span>
+                <span className="material-symbols-outlined absolute -right-3 -bottom-4 text-7xl text-white/10 group-hover:scale-110 transition-transform duration-500 rotate-12">moped</span>
               </div>
             </section>
           </aside>

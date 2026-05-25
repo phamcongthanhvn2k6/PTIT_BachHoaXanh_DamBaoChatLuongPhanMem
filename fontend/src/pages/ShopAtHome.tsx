@@ -334,19 +334,20 @@ export const ShopAtHome: React.FC = () => {
   const flashDealProducts = useMemo(() => {
     const normalized = hotDeals
       .map((deal: any) => {
+        const dealProductIdRaw = String(deal?.product_id || '');
         const matchedProduct = (products || []).find((item: any) => {
           const productId = String(item?.id || item?._id || '');
-          const dealProductId = String(deal?.product_id || '');
           const candidateProductIds = [
-            dealProductId,
+            dealProductIdRaw,
             ...((Array.isArray(deal?.product_ids) ? deal.product_ids : []).map((id: any) => String(id))),
           ].filter(Boolean);
           return productId && candidateProductIds.includes(productId);
         });
 
+        if (!matchedProduct) return null; // Skip orphaned or dummy hot deals
+
         const productAny = matchedProduct as any;
-        const dealProductId = String(deal?.product_id || productAny?.id || productAny?._id || '');
-        if (!dealProductId) return null;
+        const dealProductId = String(productAny?.id || productAny?._id);
 
         const dealBranchId = String(deal?.branch_ids?.[0] || deal?.target_branch_ids?.[0] || '');
         
