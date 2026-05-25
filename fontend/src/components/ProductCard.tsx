@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { NormalizedShopProduct } from '../types/product';
+import { resolveImageUrl, fallbackProductImage } from '../utils/imageUrl';
 
 interface ProductCardProps {
   product: NormalizedShopProduct;
@@ -75,10 +76,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
         </span>
       </button>
 
-      <div className="relative aspect-square overflow-hidden rounded-xl bg-slate-100">
+      <div className="relative w-full aspect-square overflow-hidden rounded-xl bg-slate-100">
         <img
-          src={product.image || 'https://via.placeholder.com/600x600?text=Product'}
+          src={resolveImageUrl(product.image || product.thumbnail)}
           alt={safeName}
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src = fallbackProductImage;
+          }}
           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           loading="lazy"
         />

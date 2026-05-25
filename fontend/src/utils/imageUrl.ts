@@ -25,7 +25,9 @@ const PLACEHOLDER_SVG = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000
 
 export const resolveImageUrl = (src?: string | null): string => {
   const value = String(src || '').trim();
-  if (!value) return PLACEHOLDER_SVG;
+  if (!value || value === 'null' || value === 'undefined' || value === 'N/A' || value === 'none' || value === 'NaN' || value === '[object Object]') {
+    return PLACEHOLDER_SVG;
+  }
   if (value.startsWith('data:')) return value;
   if (value.startsWith('http://') || value.startsWith('https://')) return value;
   if (value.startsWith('//')) return `${window.location.protocol}${value}`;
@@ -37,7 +39,8 @@ export const resolveImageUrl = (src?: string | null): string => {
     return `${getBackendHost()}/${value}`;
   }
 
-  return value;
+  // If it is just a relative filename, assume it's in the uploads directory
+  return `${getBackendHost()}/uploads/${value.replace(/^\/+/, '')}`;
 };
 
 export const fallbackProductImage = PLACEHOLDER_SVG;

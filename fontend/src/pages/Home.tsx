@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../store';
 import { addToCartAsync } from '../slices/cartSlice';
+import { setCurrentBranch } from '../slices/branchSlice';
 import { useAuthRedirect } from '../hooks/useAuthRedirect';
 import { toast } from '../components/Toast/toastEvent';
 import { bannerService } from '../services/bannerService';
@@ -10,18 +11,24 @@ import flashDealService from '../services/flashDealService';
 import { useBranchData } from '../hooks/useBranchData';
 import { filterVisibleFlashDeals, evaluateFlashDealVisibility } from '../utils/flashDeal';
 import { HotDealCountdown } from '../components/HotDealCountdown/HotDealCountdown';
+import { resolveImageUrl, fallbackProductImage } from '../utils/imageUrl';
+
 
 const Home: React.FC = () => {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const { isAuthenticated } = useAppSelector((state) => state.auth);
   const redirectToLogin = useAuthRedirect();
+  const { branches } = useAppSelector((state) => state.branch);
+  const { products, branchProducts } = useAppSelector((state) => state.product);
+
 
   const [banners, setBanners] = useState<any[]>([]);
   const [flashDeals, setFlashDeals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [countdown, setCountdown] = useState<{ hours: number; minutes: number; seconds: number } | null>(null);
   const [flashDealRefreshTick, setFlashDealRefreshTick] = useState(0);
+  const [showAllBranchDeals, setShowAllBranchDeals] = useState(false);
 
   const { currentBranchId, availableProducts, filterBanners } = useBranchData();
 
@@ -58,7 +65,6 @@ const Home: React.FC = () => {
             {
               include_inactive: false,
               is_active: true,
-              ...(currentBranchId ? { branch_id: currentBranchId } : {}),
             },
             { forceRefresh: true, debug: true },
           ),
@@ -69,7 +75,7 @@ const Home: React.FC = () => {
 
         const dealData = (flashDealRes as any)?.data || flashDealRes || [];
         const normalizedDeals = Array.isArray(dealData) ? dealData : [];
-        const validDeals = filterVisibleFlashDeals(normalizedDeals, { branchId: currentBranchId });
+        const validDeals = filterVisibleFlashDeals(normalizedDeals, {});
 
         console.info('[Home][flash-deals][fetch]', {
           branch_id: currentBranchId,
@@ -82,7 +88,7 @@ const Home: React.FC = () => {
             start_date: deal?.start_date,
             end_date: deal?.end_date,
             remaining_quantity: deal?.remaining_quantity,
-            visibility: evaluateFlashDealVisibility(deal, { branchId: currentBranchId }),
+            visibility: evaluateFlashDealVisibility(deal, {}),
           })),
         });
 
@@ -139,47 +145,82 @@ const Home: React.FC = () => {
   const flashDealItems = useMemo(() => {
     return (flashDeals || [])
       .map((deal: any) => {
-        const matchedProduct = (availableProducts || []).find((item: any) => {
-          const branchProductId = String(item?.branch_product_id || item?.branchProduct?.id || item?.branchProduct?._id || '');
-          const productId = String(item?.id || item?._id || item?.product_id || item?.branchProduct?.product_id || '');
-          const byBranchProduct = branchProductId && branchProductId === String(deal?.branch_product_id || '');
+        // Find product details
+        const matchedProduct = (products || []).find((item: any) => {
+          const productId = String(item?.id || item?._id || '');
+          const dealProductId = String(deal?.product_id || '');
           const candidateProductIds = [
-            String(deal?.product_id || ''),
+            dealProductId,
             ...((Array.isArray(deal?.product_ids) ? deal.product_ids : []).map((id: any) => String(id))),
           ].filter(Boolean);
-          const byProduct = productId && candidateProductIds.includes(productId);
-          return byBranchProduct || byProduct;
+          return productId && candidateProductIds.includes(productId);
         });
-        const productAny = matchedProduct as any;
 
+        const productAny = matchedProduct as any;
         const dealProductId = String(deal?.product_id || productAny?.id || productAny?._id || '');
         if (!dealProductId) return null;
 
-        const dealPrice = Number(deal?.deal_price || productAny?.price || 0);
-        const originalPrice = Number(deal?.original_price || productAny?.original_price || productAny?.price || dealPrice || 0);
+        // Find branch product matching this deal or product
+        const dealBranchId = String(deal?.branch_ids?.[0] || deal?.target_branch_ids?.[0] || '');
+        
+        let matchedBp = (branchProducts || []).find((bp: any) => 
+          String(bp.product_id) === dealProductId && 
+          String(bp.branch_id) === String(currentBranchId)
+        );
+
+        if (!matchedBp && dealBranchId) {
+          matchedBp = (branchProducts || []).find((bp: any) => 
+            String(bp.product_id) === dealProductId && 
+            String(bp.branch_id) === dealBranchId
+          );
+        }
+
+        if (!matchedBp) {
+          matchedBp = (branchProducts || []).find((bp: any) => 
+            String(bp.product_id) === dealProductId
+          );
+        }
+
+        const actualBranchId = matchedBp ? String(matchedBp.branch_id) : dealBranchId;
+        const matchedBranch = (branches || []).find((b: any) => String(b.id || b._id) === actualBranchId);
+
+        const dealPrice = Number(deal?.deal_price || matchedBp?.price || productAny?.price || 0);
+        const originalPrice = Number(deal?.original_price || matchedBp?.original_price || productAny?.original_price || dealPrice || 0);
 
         return {
           ...deal,
           title: deal?.title || productAny?.name || t('product.flashDeal'),
-          image_url: deal?.image_url || productAny?.images?.[0] || productAny?.thumbnail || 'https://via.placeholder.com/400',
+          image_url: deal?.image_url || productAny?.images?.[0] || productAny?.thumbnail || '',
           product_id: dealProductId,
           deal_price: dealPrice,
           original_price: originalPrice,
           total_quantity: Number(deal?.total_quantity || deal?.stock_limit || 0),
           remaining_quantity: deal?.remaining_quantity,
+          branch_id: actualBranchId,
+          branch_name: matchedBranch ? matchedBranch.name : '',
+          matchedBranch,
+          stock: matchedBp ? Number(matchedBp.stock) : 0,
         };
       })
       .filter(Boolean)
-      .slice(0, 5);
-  }, [flashDeals, availableProducts, t]);
+      .slice(0, 10);
+  }, [flashDeals, products, branchProducts, branches, currentBranchId, t]);
+
+  const filteredFlashDealItems = useMemo(() => {
+    if (showAllBranchDeals) return flashDealItems;
+    return flashDealItems.filter((deal: any) => {
+      const dealBranchId = String(deal.branch_id || '').trim();
+      return !dealBranchId || dealBranchId === String(currentBranchId).trim();
+    });
+  }, [flashDealItems, showAllBranchDeals, currentBranchId]);
 
   useEffect(() => {
-    if (!flashDealItems.length) {
+    if (!filteredFlashDealItems.length) {
       setCountdown(null);
       return;
     }
 
-    const endTs = flashDealItems[0]?.end_date ? new Date(flashDealItems[0].end_date).getTime() : null;
+    const endTs = filteredFlashDealItems[0]?.end_date ? new Date(filteredFlashDealItems[0].end_date).getTime() : null;
     if (!endTs) {
       setCountdown(null);
       return;
@@ -246,6 +287,12 @@ const Home: React.FC = () => {
     }
   };
 
+  const handleSwitchToAvailableBranch = (branch: any) => {
+    if (!branch) return;
+    dispatch(setCurrentBranch(branch));
+    toast.success(t('branch.switchedTo', { name: branch.name, defaultValue: `Đã chuyển sang chi nhánh: ${branch.name}` }));
+  };
+
   const renderProductGrid = (products: any[], emptyMessage: string) => {
     if (loading) {
       return (
@@ -285,7 +332,7 @@ const Home: React.FC = () => {
             <div className="relative aspect-square overflow-hidden bg-slate-50 dark:bg-slate-900">
               <img
                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                src={item?.images?.[0] || item?.thumbnail || 'https://via.placeholder.com/400'}
+                src={resolveImageUrl(item?.images?.[0] || item?.thumbnail) || fallbackProductImage}
                 alt={item?.name || t('cart.product')}
               />
               <button
@@ -437,7 +484,7 @@ const Home: React.FC = () => {
                   <div className="space-y-3">
                     {section.items.map((item: any) => (
                       <Link key={String(item.branch_product_id || item.id || item._id)} to={`/products/${item.product_id || item.id || item._id}`} className="flex items-center gap-3 rounded-xl border border-slate-100 p-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors">
-                        <img src={item.images?.[0] || item.thumbnail || 'https://via.placeholder.com/120'} alt={item.name} className="w-12 h-12 rounded-lg object-cover" />
+                        <img src={resolveImageUrl(item.images?.[0] || item.thumbnail) || fallbackProductImage} alt={item.name} className="w-12 h-12 rounded-lg object-cover" />
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-slate-800 dark:text-white line-clamp-1">{item.name}</p>
                           <p className="text-xs text-primary font-extrabold">{Number(item.price || 0).toLocaleString('vi-VN')}₫</p>
@@ -453,54 +500,124 @@ const Home: React.FC = () => {
 
         {flashDeals.length > 0 && (
           <section>
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
               <h2 className="text-3xl font-black text-rose-600 uppercase italic tracking-tighter flex items-center gap-2">
                 <span className="material-symbols-outlined !text-4xl">local_fire_department</span>
                 {t('product.flashDeal')}
               </h2>
-              {countdown && (
-                <div className="rounded-xl bg-rose-50 border border-rose-100 px-3 py-2 text-rose-700 font-bold text-sm">
-                  {t('product.endsIn')}: {String(countdown.hours).padStart(2, '0')}:{String(countdown.minutes).padStart(2, '0')}:{String(countdown.seconds).padStart(2, '0')}
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                  <button
+                    onClick={() => setShowAllBranchDeals(false)}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${
+                      !showAllBranchDeals
+                        ? 'bg-rose-600 text-white shadow-md'
+                        : 'text-slate-600 dark:text-slate-300 hover:text-rose-600'
+                    }`}
+                  >
+                    Tại chi nhánh của bạn
+                  </button>
+                  <button
+                    onClick={() => setShowAllBranchDeals(true)}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-black transition-all ${
+                      showAllBranchDeals
+                        ? 'bg-rose-600 text-white shadow-md'
+                        : 'text-slate-600 dark:text-slate-300 hover:text-rose-600'
+                    }`}
+                  >
+                    Toàn hệ thống ({flashDealItems.length})
+                  </button>
                 </div>
-              )}
+                {countdown && (
+                  <div className="rounded-xl bg-rose-50 border border-rose-100 px-3 py-2 text-rose-700 font-bold text-sm">
+                    {t('product.endsIn')}: {String(countdown.hours).padStart(2, '0')}:{String(countdown.minutes).padStart(2, '0')}:{String(countdown.seconds).padStart(2, '0')}
+                  </div>
+                )}
+              </div>
             </div>
-            {flashDealItems.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-                {flashDealItems.map((deal: any, index: number) => (
-                  <Link key={`${String(deal.id || index)}-${index}`} to={`/products/${deal.product_id}`} className="bg-white dark:bg-slate-800 rounded-3xl p-4 shadow-premium border border-rose-100 dark:border-rose-900 overflow-hidden relative group block">
-                    <div className="absolute top-2 right-2 bg-rose-600 text-white font-black text-xs px-2 py-1 rounded-full z-10 shadow-lg shadow-rose-600/30">
-                      -{deal.discount_percent || deal.discount_value || 0}%
-                    </div>
-                    <div className="aspect-square bg-slate-50 dark:bg-slate-900 rounded-2xl overflow-hidden mb-4 relative">
-                      <img src={deal.image_url || 'https://via.placeholder.com/400'} alt={deal.title || t('product.flashDeal')} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                    </div>
-                    <h3 className="font-bold text-slate-800 dark:text-white line-clamp-2 h-10 mb-2">{deal.title || t('product.flashDeal')}</h3>
-                    <div className="flex items-end justify-between mb-2">
-                      <div className="flex flex-col">
-                        <span className="text-rose-600 font-black text-lg">{Number(deal.deal_price || 0).toLocaleString('vi-VN')}₫</span>
-                        <span className="text-slate-400 text-xs line-through">{Number(deal.original_price || 0).toLocaleString('vi-VN')}₫</span>
-                      </div>
-                    </div>
-                    <div className="mb-3">
-                      <HotDealCountdown endDate={deal.end_date} />
-                    </div>
-                    {deal.total_quantity > 0 && deal.remaining_quantity != null && (
-                      <div className="mt-auto w-full bg-slate-100 dark:bg-slate-700 rounded-full h-3 relative overflow-hidden flex items-center justify-center border border-rose-100 dark:border-rose-900">
-                        <div 
-                          className="absolute top-0 left-0 h-full bg-gradient-to-r from-rose-400 to-rose-600 rounded-full transition-all duration-500 ease-in-out" 
-                          style={{ width: `${Math.max(0, Math.min(100, ((deal.total_quantity) - deal.remaining_quantity) / (deal.total_quantity) * 100))}%` }}
-                        ></div>
-                        <span className="relative z-10 text-[9px] font-bold text-white uppercase drop-shadow-md">
-                          Đã bán {Math.max(0, deal.total_quantity - deal.remaining_quantity)}
+            {filteredFlashDealItems.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 lg:gap-6">
+                {filteredFlashDealItems.map((deal: any, index: number) => {
+                  const sold = Math.max(0, (deal.total_quantity || 0) - (deal.remaining_quantity || 0));
+                  const pct = deal.total_quantity > 0 ? Math.min(100, (sold / deal.total_quantity) * 100) : 0;
+                  const isDifferentBranch = deal.branch_id && currentBranchId && String(deal.branch_id) !== String(currentBranchId);
+                  return (
+                    <Link key={`${String(deal.id || index)}-${index}`} to={`/products/${deal.product_id}`} className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-rose-100 dark:border-rose-900/40 overflow-hidden relative group flex flex-col hover:-translate-y-1 transition-all duration-300">
+                      <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+                        <span className="bg-rose-600 text-white font-black text-[10px] px-2.5 py-1 rounded-lg shadow-lg shadow-rose-600/30 w-fit">
+                          -{deal.discount_percent || deal.discount_value || 0}%
                         </span>
+                        {deal.branch_name ? (
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 w-fit ${
+                            isDifferentBranch ? 'bg-amber-500 text-white shadow-sm border border-amber-400' : 'bg-slate-800/80 backdrop-blur-sm text-white'
+                          }`}>
+                            <span className="material-symbols-outlined !text-[10px]">store</span>
+                            {deal.branch_name}
+                          </span>
+                        ) : (
+                          <span className="bg-slate-800/80 backdrop-blur-sm text-white text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 w-fit">
+                            <span className="material-symbols-outlined !text-[10px]">store</span>
+                            Toàn hệ thống
+                          </span>
+                        )}
                       </div>
-                    )}
-                  </Link>
-                ))}
+                      <div className="aspect-square bg-slate-50 dark:bg-slate-900 overflow-hidden relative">
+                        <img src={resolveImageUrl(deal.image_url) || fallbackProductImage} alt={deal.title || t('product.flashDeal')} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                      </div>
+                      <div className="p-3 sm:p-4 flex flex-col flex-1">
+                        <h3 className="font-bold text-sm text-slate-800 dark:text-white line-clamp-2 min-h-[2.5rem] mb-2">{deal.title || t('product.flashDeal')}</h3>
+                        <div className="flex items-baseline gap-2 mb-2">
+                          <span className="text-rose-600 font-black text-base sm:text-lg">{Number(deal.deal_price || 0).toLocaleString('vi-VN')}₫</span>
+                          <span className="text-slate-400 text-[11px] line-through">{Number(deal.original_price || 0).toLocaleString('vi-VN')}₫</span>
+                        </div>
+                        <div className="mb-2">
+                          <HotDealCountdown endDate={deal.end_date} />
+                        </div>
+                        {deal.total_quantity > 0 && (
+                          <div className="mt-auto pt-3">
+                            <div className="relative w-full bg-rose-100 dark:bg-slate-700/50 h-5 rounded-full overflow-hidden flex items-center justify-center">
+                              <div
+                                className="absolute left-0 top-0 h-full bg-gradient-to-r from-orange-500 to-rose-600 rounded-full transition-all duration-700 ease-out"
+                                style={{ width: `${pct}%` }}
+                              />
+                              <span className="relative z-10 text-[9px] font-black text-rose-950 dark:text-white flex items-center gap-1">
+                                <span className="material-symbols-outlined !text-[11px] animate-pulse">local_fire_department</span>
+                                {t('product.soldCount', 'Đã bán')} {sold} / {deal.total_quantity}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                        {isDifferentBranch && deal.matchedBranch && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleSwitchToAvailableBranch(deal.matchedBranch);
+                            }}
+                            className="mt-3 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1"
+                          >
+                            <span className="material-symbols-outlined !text-sm">swap_horiz</span>
+                            Chuyển chi nhánh
+                          </button>
+                        )}
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
             ) : (
-              <div className="rounded-2xl border border-dashed border-rose-200 bg-rose-50/70 px-6 py-8 text-center text-sm font-semibold text-rose-700">
-                {t('common.flashDealNoMatch')}
+              <div className="rounded-3xl border border-dashed border-rose-200 bg-rose-50/70 p-10 text-center flex flex-col items-center justify-center">
+                <span className="material-symbols-outlined text-rose-500 !text-5xl mb-3">store_away</span>
+                <p className="text-base font-bold text-rose-900 mb-2">Không có chương trình giảm giá nhanh tại chi nhánh này hôm nay</p>
+                <p className="text-xs text-rose-700 max-w-md mb-6">Hãy thử chuyển đổi sang chi nhánh khác hoặc xem toàn hệ thống để không bỏ lỡ các ưu đãi cực khủng từ Lotte Mart.</p>
+                <button
+                  type="button"
+                  onClick={() => setShowAllBranchDeals(true)}
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-black px-6 py-2.5 rounded-xl transition-all shadow-md shadow-rose-600/30 text-xs"
+                >
+                  Xem toàn hệ thống ({flashDealItems.length})
+                </button>
               </div>
             )}
           </section>

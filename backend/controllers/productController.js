@@ -818,6 +818,45 @@ export const couponsDetail = async (req, res) => {
 };
 
 const processProductData = (data) => {
+  // ── Normalize image fields ──────────────────────────────────────────
+  const parseImageArray = (val) => {
+    if (!val) return [];
+    if (Array.isArray(val)) {
+      return val.flatMap(item => parseImageArray(item));
+    }
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (!trimmed || trimmed === 'null' || trimmed === 'undefined' || trimmed === '[object Object]') return [];
+      // Try parsing JSON arrays/strings
+      if ((trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        try { return parseImageArray(JSON.parse(trimmed)); } catch { /* fall through */ }
+      }
+      return [trimmed];
+    }
+    return [];
+  };
+
+  // Merge all image sources into a single deduplicated list
+  const allUrls = [
+    ...parseImageArray(data.images),
+    ...parseImageArray(data.gallery),
+    ...parseImageArray(data.thumbnail),
+  ];
+  const uniqueUrls = [...new Set(allUrls)].filter(url => {
+    if (!url || typeof url !== 'string') return false;
+    const lower = url.toLowerCase().trim();
+    return lower.length > 0 && lower !== 'null' && lower !== 'undefined' && lower !== 'nan';
+  });
+
+  if (uniqueUrls.length > 0) {
+    data.images = uniqueUrls;
+    data.gallery = uniqueUrls;
+    data.thumbnail = data.thumbnail && typeof data.thumbnail === 'string' && data.thumbnail.trim() && data.thumbnail.trim() !== 'null'
+      ? data.thumbnail.trim()
+      : uniqueUrls[0];
+  }
+
+  // ── Process expiry date fields ──────────────────────────────────────
   if (data.expiry_date) {
     const expDate = new Date(data.expiry_date);
     const now = new Date();

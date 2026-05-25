@@ -27,12 +27,22 @@ const sanitizeText = (value: any, fallback = ''): string => {
 };
 
 const normalizeImages = (raw: AnyRecord): string[] => {
+  if (!raw) return [];
+  const list: string[] = [];
   if (Array.isArray(raw.images)) {
-    return raw.images.map((img) => resolveImageUrl(String(img || '').trim())).filter(Boolean);
+    list.push(...raw.images);
   }
-  if (typeof raw.image === 'string' && raw.image.trim()) return [resolveImageUrl(raw.image.trim())];
-  if (typeof raw.thumbnail === 'string' && raw.thumbnail.trim()) return [resolveImageUrl(raw.thumbnail.trim())];
-  return [];
+  if (Array.isArray(raw.gallery)) {
+    list.push(...raw.gallery);
+  }
+  if (typeof raw.image === 'string' && raw.image.trim()) {
+    list.push(raw.image.trim());
+  }
+  if (typeof raw.thumbnail === 'string' && raw.thumbnail.trim()) {
+    list.push(raw.thumbnail.trim());
+  }
+  const resolved = list.map((img: any) => resolveImageUrl(String(img))).filter(Boolean);
+  return Array.from(new Set(resolved));
 };
 
 const deriveCategoryShop = (raw: AnyRecord, categoryLookup?: Record<string, string>): string => {

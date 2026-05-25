@@ -12,6 +12,9 @@ import {
   uploadEvidenceImages,
   brandLogoUploadMiddleware,
   uploadBrandLogo,
+  productImageUploadMiddleware,
+  productSingleImageUploadMiddleware,
+  uploadProductImages,
 } from '../controllers/uploadController.js';
 
 const router = Router();
@@ -67,6 +70,24 @@ router.post('/brand-logo', auth, admin, uploadLimiter, (req, res, next) => {
     return next();
   });
 }, uploadBrandLogo);
+
+router.post('/product-images', auth, admin, uploadLimiter, (req, res, next) => {
+  productImageUploadMiddleware(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, message: err.message || 'Upload failed' });
+    }
+    return next();
+  });
+}, uploadProductImages);
+
+router.post('/product-image', auth, admin, uploadLimiter, (req, res, next) => {
+  productSingleImageUploadMiddleware(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, message: err.message || 'Upload failed' });
+    }
+    return next();
+  });
+}, uploadProductImages);
 
 export default router;
 

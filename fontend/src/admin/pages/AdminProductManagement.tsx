@@ -1,6 +1,7 @@
 // src/admin/pages/AdminProductManagement.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { toast } from '../../components/Toast/toastEvent';
 import { useAppSelector } from '../../store';
 import { productService } from '../../services/productService';
@@ -9,6 +10,7 @@ type SortOption = 'newest' | 'stock-low' | 'best-seller' | 'price-high' | 'price
 
 const AdminProductManagement: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const [items, setItems] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -36,6 +38,7 @@ const AdminProductManagement: React.FC = () => {
   // Modal state
   const [editItem, setEditItem] = useState<any | null>(null);
   const [itemToDelete, setItemToDelete] = useState<any | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Quick Filters
   const [quickFilter, setQuickFilter] = useState<'none' | 'low-stock' | 'promo' | 'new' | 'expiring'>('none');
@@ -61,13 +64,49 @@ const AdminProductManagement: React.FC = () => {
       setItems((bpRes || []).filter((b: any) => b.product));
       if (catRes) setCategories(catRes);
      } catch {
-       toast.error('Lỗi khi tải dữ liệu cấu hình kho');
+       toast.error(t('adminProducts.toastProductLoadError'));
     } finally { setLoading(false); }
   };
 
   useEffect(() => {
     loadData();
   }, []);
+
+  const specTemplates = [
+    { name: t('adminProducts.templateFood'), labels: [t('adminProducts.brand'), t('adminProducts.origin'), t('adminProducts.weight'), t('adminProducts.standard'), t('adminProducts.features'), t('adminProducts.unit'), t('adminProducts.storage')] },
+    { name: t('adminProducts.templateBeverage'), labels: [t('adminProducts.brand'), t('adminProducts.volume'), t('adminProducts.origin'), t('adminProducts.unit'), t('adminProducts.expiryDate')] },
+    { name: t('adminProducts.templateHousehold'), labels: [t('adminProducts.brand'), t('adminProducts.weight'), t('adminProducts.material'), t('adminProducts.size'), t('adminProducts.unit')] },
+    { name: t('adminProducts.templateCosmetics'), labels: [t('adminProducts.brand'), t('adminProducts.volume'), t('adminProducts.skinType'), t('adminProducts.origin'), t('adminProducts.expiryDate')] }
+  ];
+
+  const normalizeProductForEdit = (item: any) => {
+    if (!item) return null;
+    const clone = { ...item };
+    
+    // Normalize text fields
+    clone.description = clone.description || clone.short_description || '';
+    clone.usage_guide = clone.usage_guide || '';
+    clone.storage_guide = clone.storage_guide || clone.storage_instructions || '';
+    
+    // Normalize arrays (convert from old comma-separated or keep as array)
+    clone.highlights = Array.isArray(clone.highlights) ? clone.highlights : (clone.highlights ? String(clone.highlights).split('\n').map(s=>s.trim()).filter(Boolean) : []);
+    clone.recipe_suggestions = Array.isArray(clone.recipe_suggestions) ? clone.recipe_suggestions : (clone.recipe_suggestions ? String(clone.recipe_suggestions).split('\n').map(s=>s.trim()).filter(Boolean) : []);
+    clone.images = Array.isArray(clone.images) ? clone.images : (clone.images ? [clone.images] : []);
+    
+    // Normalize specifications (could be object map {} or array of {label, value})
+    if (!clone.specifications) {
+      clone.specifications = [];
+    } else if (Array.isArray(clone.specifications)) {
+      // already an array
+    } else if (typeof clone.specifications === 'object') {
+      // legacy object map: { 'Thương hiệu': 'Lotte', 'Khối lượng': '500g' }
+      clone.specifications = Object.entries(clone.specifications).map(([label, value]) => ({ label, value }));
+    } else {
+      clone.specifications = [];
+    }
+    
+    return clone;
+  };
 
   const itemsPerPage = 8;
 
@@ -105,6 +144,7 @@ const AdminProductManagement: React.FC = () => {
          barcode: master.barcode || '',
          short_description: master.short_description || '',
          thumbnail: master.thumbnail || '',
+         images: Array.isArray(master.images) ? master.images : [],
          weight: master.weight || '',
          unit: master.unit || 'cái',
          storage_instructions: master.storage_instructions || '',
@@ -325,7 +365,7 @@ const AdminProductManagement: React.FC = () => {
     try {
       setIsProcessing(true);
       // Delete the master product (productController.remove will soft delete and deactivate branches)
-      const masterId = itemToDelete.master_id || itemToDelete.product_id;
+      const masterId = itemToDelete.product_id || itemToDelete.product?._id || itemToDelete.product?.id;
       if (!masterId) throw new Error('Không tìm thấy ID sản phẩm gốc');
       
       await productService.deleteProduct(masterId);
@@ -349,7 +389,7 @@ const AdminProductManagement: React.FC = () => {
       let successCount = 0;
       await Promise.all(selectedItemIds.map(async (id) => {
          const item = items.find(i => String(i.id || i._id) === id);
-         const masterId = item?.master_id || item?.product_id;
+         const masterId = item?.product_id || item?.product?._id || item?.product?.id;
          if (masterId) {
              await productService.deleteProduct(masterId);
              successCount++;
@@ -423,7 +463,7 @@ const AdminProductManagement: React.FC = () => {
   };
 
   const handleCreateSKU = async () => {
-    setEditItem({
+    setEditItem(normalizeProductForEdit({
       id: '',
       branch_id: branchFilter === 'ALL' ? '' : branchFilter,
       name: '',
@@ -449,10 +489,11 @@ const AdminProductManagement: React.FC = () => {
       barcode: '',
       short_description: '',
       thumbnail: '',
+      images: [],
       weight: '',
       unit: 'cái',
       storage_instructions: '',
-    });
+    }));
   };
 
   const saveQuickEdit = async (e: React.FormEvent) => {
@@ -514,9 +555,17 @@ const AdminProductManagement: React.FC = () => {
         barcode: editItem.barcode || '',
         short_description: editItem.short_description || '',
         thumbnail: editItem.thumbnail || '',
+        images: Array.isArray(editItem.images) ? editItem.images.filter(Boolean) : [],
+        gallery: Array.isArray(editItem.images) ? editItem.images.filter(Boolean) : [],
         weight: editItem.weight || '',
         unit: editItem.unit || 'cái',
         storage_instructions: editItem.storage_instructions || '',
+        description: editItem.description || '',
+        highlights: Array.isArray(editItem.highlights) ? editItem.highlights : (typeof editItem.highlights === 'string' ? editItem.highlights.split('\n').map((s: string)=>s.trim()).filter(Boolean) : []),
+        usage_guide: editItem.usage_guide || '',
+        storage_guide: editItem.storage_guide || editItem.storage_instructions || '',
+        recipe_suggestions: Array.isArray(editItem.recipe_suggestions) ? editItem.recipe_suggestions : (typeof editItem.recipe_suggestions === 'string' ? editItem.recipe_suggestions.split('\n').map((s: string)=>s.trim()).filter(Boolean) : []),
+        specifications: Array.isArray(editItem.specifications) ? editItem.specifications.filter((s: any) => s.label && s.value) : [],
       };
 
       if (!editItem.id) {
@@ -570,10 +619,10 @@ const AdminProductManagement: React.FC = () => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-4">
           <div>
             <h1 className="text-3xl font-black tracking-tight text-on-surface mb-2">
-              Quản lý Tồn kho & Sản phẩm
+              {t('adminProducts.title')}
             </h1>
             <p className="text-secondary text-sm">
-              Quản lý kho hàng, giá bán, tình trạng hiển thị của toàn bộ {enrichedProducts.length} SKU trên hệ thống.
+              {t('adminProducts.subtitle', { count: enrichedProducts.length })}
             </p>
           </div>
 
@@ -582,20 +631,20 @@ const AdminProductManagement: React.FC = () => {
         <div className="bg-surface-container-lowest rounded-2xl p-6 shadow-sm border border-slate-100 space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-black text-slate-800">Quản lý Danh mục</h2>
-              <p className="text-xs text-slate-500 mt-1">Tạo và cập nhật danh mục để đồng bộ bộ lọc ở Shop.</p>
+              <h2 className="text-lg font-black text-slate-800">{t('adminProducts.manageCategories')}</h2>
+              <p className="text-xs text-slate-500 mt-1">{t('adminProducts.manageCategoriesDesc')}</p>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={handleCreateSKU} disabled={isProcessing} className="inline-flex items-center justify-center gap-1 px-3 py-2 bg-primary text-white font-bold rounded-lg hover:bg-primary/90 transition-all cursor-pointer text-xs">
                 <span className="material-symbols-outlined text-[16px]">add</span>
-                Tạo mới SKU
+                {t('adminProducts.newSku')}
               </button>
               <button
                 type="button"
                 onClick={resetCategoryForm}
                 className="px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
               >
-                Tạo danh mục mới
+                {t('adminProducts.newCategory')}
               </button>
             </div>
           </div>
@@ -606,7 +655,7 @@ const AdminProductManagement: React.FC = () => {
                 type="text"
                 value={categoryForm.name}
                 onChange={(e) => setCategoryForm((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder="Tên danh mục"
+                placeholder={t('adminProducts.categoryName')}
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-primary"
                 required
               />
@@ -616,7 +665,7 @@ const AdminProductManagement: React.FC = () => {
                 type="text"
                 value={categoryForm.icon}
                 onChange={(e) => setCategoryForm((prev) => ({ ...prev, icon: e.target.value }))}
-                placeholder="icon"
+                placeholder={t('adminProducts.categoryIcon')}
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-primary"
               />
             </div>
@@ -626,7 +675,7 @@ const AdminProductManagement: React.FC = () => {
                 onChange={(e) => setCategoryForm((prev) => ({ ...prev, parent_id: e.target.value }))}
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-primary"
               >
-                <option value="">Danh mục cha (không có)</option>
+                <option value="">{t('adminProducts.parentCategory')}</option>
                 {categories
                   .filter((c: any) => String(c.id || c._id) !== String(editingCategoryId || ''))
                   .map((c: any) => (
@@ -642,7 +691,7 @@ const AdminProductManagement: React.FC = () => {
                 min={0}
                 value={categoryForm.sort_order}
                 onChange={(e) => setCategoryForm((prev) => ({ ...prev, sort_order: Number(e.target.value || 0) }))}
-                placeholder="Thứ tự"
+                placeholder={t('adminProducts.sortOrder')}
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-primary"
               />
             </div>
@@ -654,14 +703,14 @@ const AdminProductManagement: React.FC = () => {
                   onChange={(e) => setCategoryForm((prev) => ({ ...prev, is_active: e.target.checked }))}
                   className="rounded border-slate-300 text-primary"
                 />
-                Active
+                {t('adminProducts.active')}
               </label>
               <button
                 type="submit"
                 disabled={categoryBusy}
                 className="px-3 py-2 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 disabled:opacity-60"
               >
-                {editingCategoryId ? 'Lưu danh mục' : 'Thêm danh mục'}
+                {editingCategoryId ? t('adminProducts.saveCategory') : t('adminProducts.addCategory')}
               </button>
             </div>
           </form>
@@ -674,15 +723,15 @@ const AdminProductManagement: React.FC = () => {
                 <div key={catId} className="border border-slate-200 rounded-xl px-3 py-2.5 bg-white flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-bold text-sm text-slate-800 truncate">{cat.name}</p>
-                    <p className="text-[11px] text-slate-500">{parent ? `Cha: ${parent.name}` : 'Danh mục gốc'}</p>
-                    <p className="text-[11px] text-slate-500">Thứ tự: {Number(cat.sort_order || 0)}</p>
+                    <p className="text-[11px] text-slate-500">{parent ? t('adminProducts.categoryParent', { name: parent.name }) : t('adminProducts.categoryRoot')}</p>
+                    <p className="text-[11px] text-slate-500">{t('adminProducts.categoryOrder', { order: Number(cat.sort_order || 0) })}</p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       type="button"
                       onClick={() => startEditCategory(cat)}
                       className="p-1.5 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      title="Chỉnh sửa"
+                      title={t('adminProducts.edit')}
                     >
                       <span className="material-symbols-outlined text-[16px]">edit</span>
                     </button>
@@ -690,7 +739,7 @@ const AdminProductManagement: React.FC = () => {
                       type="button"
                       onClick={() => toggleCategoryStatus(cat)}
                       className={`p-1.5 rounded-md ${cat.is_active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
-                      title={cat.is_active ? 'Ẩn danh mục' : 'Bật danh mục'}
+                      title={cat.is_active ? t('adminProducts.statusInactive') : t('adminProducts.statusActive')}
                     >
                       <span className="material-symbols-outlined text-[16px]">{cat.is_active ? 'visibility' : 'visibility_off'}</span>
                     </button>
@@ -698,7 +747,7 @@ const AdminProductManagement: React.FC = () => {
                       type="button"
                       onClick={() => deleteCategory(cat)}
                       className="p-1.5 rounded-md bg-red-100 text-red-700 hover:bg-red-200"
-                      title="Xóa danh mục"
+                      title={t('adminProducts.delete')}
                     >
                       <span className="material-symbols-outlined text-[16px]">delete</span>
                     </button>
@@ -712,15 +761,15 @@ const AdminProductManagement: React.FC = () => {
           <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center gap-3">
             <button onClick={handleExport} className="inline-flex items-center justify-center gap-2 h-10 px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.98]">
               <span className="material-symbols-outlined">ios_share</span>
-              Xuất Data
+              {t('adminProducts.exportData')}
             </button>
             <button onClick={handleImport} className="inline-flex items-center justify-center gap-2 h-10 px-5 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.98]">
               <span className="material-symbols-outlined">publish</span>
-              Import Data
+              {t('adminProducts.importData')}
             </button>
             <button 
               onClick={async () => {
-                const conf = window.confirm('Hệ thống sẽ tự động tạo promotion xả hàng cho tất cả sản phẩm sắp hết hạn?');
+                const conf = window.confirm(t('adminProducts.toastBulkSaleConfirm'));
                 if (!conf) return;
                 try {
                   setIsProcessing(true);
@@ -731,11 +780,11 @@ const AdminProductManagement: React.FC = () => {
                   });
                   const data = await res.json();
                   if (data.success) {
-                    toast.success(`Đã tạo thành công ${data.count || 0} khuyến mãi!`);
+                    toast.success(t('adminProducts.toastBulkSaleSuccess', { count: data.count || 0 }));
                     await loadData();
                   } else throw new Error(data.message);
                 } catch(err: any) {
-                  toast.error(err.message || 'Lỗi tạo ưu đãi hàng loạt');
+                  toast.error(err.message || t('adminProducts.toastBulkSaleError'));
                 } finally {
                   setIsProcessing(false);
                 }
@@ -743,12 +792,12 @@ const AdminProductManagement: React.FC = () => {
               disabled={isProcessing}
               className="inline-flex items-center justify-center gap-2 h-10 px-5 bg-orange-50 bg-opacity-50 border border-orange-200 text-orange-600 hover:bg-orange-100 rounded-xl text-sm font-bold transition-all cursor-pointer active:scale-[0.98]">
               <span className="material-symbols-outlined">auto_fix</span>
-              Tạo Sale Hàng Loạt
+              {t('adminProducts.bulkSale')}
             </button>
             {selectedItemIds.length > 0 && (
               <button onClick={handleBulkDelete} disabled={isProcessing} className="inline-flex items-center justify-center gap-2 h-10 px-5 bg-red-600 text-white font-bold rounded-xl shadow-lg shadow-red-600/20 hover:shadow-red-600/40 hover:bg-red-700 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-sm">
                 <span className="material-symbols-outlined">delete</span>
-                Xóa {selectedItemIds.length} mục
+                {t('adminProducts.deleteSelected', { count: selectedItemIds.length })}
               </button>
             )}
           </div>
@@ -764,7 +813,7 @@ const AdminProductManagement: React.FC = () => {
               </div>
               <input
                 className="w-full pl-12 pr-4 py-3 bg-surface-container-low border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary/20 transition-all text-sm outline-none placeholder:text-slate-400"
-                placeholder="Tên sản phẩm, SKU hoặc mã..."
+                placeholder={t('adminProducts.searchPlaceholder')}
                 value={searchTerm}
                 onChange={e => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                 type="text"
@@ -776,7 +825,7 @@ const AdminProductManagement: React.FC = () => {
                 onChange={e => { setActiveCategory(e.target.value === 'all' ? 'all' : String(e.target.value)); setCurrentPage(1); }}
                 className="w-full px-4 py-3 bg-surface-container-low border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary/20 transition-all text-sm outline-none cursor-pointer"
               >
-                <option value="all">Tất cả danh mục</option>
+                <option value="all">{t('adminProducts.allCategories')}</option>
                 {categories.map(c => <option key={String(c.id || c._id)} value={String(c.id || c._id)}>{c.name}</option>)}
               </select>
             </div>
@@ -786,10 +835,10 @@ const AdminProductManagement: React.FC = () => {
                 onChange={e => { setActiveStatus(e.target.value); setCurrentPage(1); }}
                 className="w-full px-4 py-3 bg-surface-container-low border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary/20 transition-all text-sm outline-none cursor-pointer"
               >
-                <option value="all">Tất cả trạng thái</option>
-                <option value="active">Đang bán (Active)</option>
-                <option value="inactive">Đã ẩn (Inactive)</option>
-                <option value="out-of-stock">Hết hàng (Stock 0)</option>
+                <option value="all">{t('adminProducts.allStatuses')}</option>
+                <option value="active">{t('adminProducts.statusActive')}</option>
+                <option value="inactive">{t('adminProducts.statusInactive')}</option>
+                <option value="out-of-stock">{t('adminProducts.statusOutOfStock')}</option>
               </select>
             </div>
             <div className="col-span-1 md:col-span-2">
@@ -798,11 +847,11 @@ const AdminProductManagement: React.FC = () => {
                 onChange={e => { setActiveSort(e.target.value as SortOption); setCurrentPage(1); }}
                 className="w-full px-4 py-3 bg-surface-container-low border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary/20 transition-all text-sm outline-none cursor-pointer font-medium"
               >
-                <option value="newest">Ngày tạo (Mới nhất)</option>
-                <option value="stock-low">Tồn kho (Thấp đến cao)</option>
-                <option value="best-seller">Bán chạy nhất</option>
-                <option value="price-low">Giá (Thấp đến cao)</option>
-                <option value="price-high">Giá (Cao đến thấp)</option>
+                <option value="newest">{t('adminProducts.sortNewest')}</option>
+                <option value="stock-low">{t('adminProducts.sortStockLow')}</option>
+                <option value="best-seller">{t('adminProducts.sortBestSeller')}</option>
+                <option value="price-low">{t('adminProducts.sortPriceLow')}</option>
+                <option value="price-high">{t('adminProducts.sortPriceHigh')}</option>
               </select>
             </div>
             <div className="col-span-1 md:col-span-2">
@@ -816,47 +865,47 @@ const AdminProductManagement: React.FC = () => {
                 className="w-full h-full flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl transition-all"
               >
                 <span className="material-symbols-outlined text-sm">refresh</span>
-                Xóa lọc
+                {t('adminSettings.revert')}
               </button>
             </div>
           </div>
 
           <div className="flex items-center gap-4 overflow-x-auto pb-2 scrollbar-hide">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">Filter nhanh:</span>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">{t('adminProducts.sortBy')}:</span>
             <button 
               onClick={() => { setQuickFilter('none'); setCurrentPage(1); }}
               className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${quickFilter === 'none' ? 'bg-primary text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
             >
-              Tất cả
+              {t('adminProducts.quickFilterAll')}
             </button>
             <button 
               onClick={() => { setQuickFilter('low-stock'); setCurrentPage(1); }}
               className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors flex items-center gap-1 ${quickFilter === 'low-stock' ? 'bg-amber-500 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
             >
-              <span className="w-2 h-2 rounded-full bg-amber-500"></span> Sắp hết hàng (≤10)
+              <span className="w-2 h-2 rounded-full bg-amber-500"></span> {t('adminProducts.quickFilterLowStock')}
             </button>
             <button 
               onClick={() => { setQuickFilter('promo'); setCurrentPage(1); }}
               className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors flex items-center gap-1 ${quickFilter === 'promo' ? 'bg-red-500 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
             >
-              Đang Sale
+              {t('adminProducts.quickFilterPromo')}
             </button>
             <button 
               onClick={() => { setQuickFilter('new'); setCurrentPage(1); }}
               className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors flex items-center gap-1 ${quickFilter === 'new' ? 'bg-blue-500 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
             >
-              Hàng mới
+              {t('adminProducts.quickFilterNew')}
             </button>
             <button 
               onClick={() => { setQuickFilter('expiring'); setCurrentPage(1); }}
               className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors flex items-center gap-1 ${quickFilter === 'expiring' ? 'bg-orange-500 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
             >
-              <span className="material-symbols-outlined text-xs">schedule</span> Sắp hết hạn
+              <span className="material-symbols-outlined text-xs">schedule</span> {t('adminProducts.quickFilterExpiring')}
             </button>
             
             <div className="ml-auto flex items-center gap-2 text-xs text-secondary font-medium">
               <span className="material-symbols-outlined text-xs">info</span>
-              <span>{filteredAndSorted.length} kết quả</span>
+              <span>{filteredAndSorted.length} {t('adminProducts.badgeCategory')}</span>
             </div>
           </div>
         </div>
@@ -1042,7 +1091,7 @@ const AdminProductManagement: React.FC = () => {
                     <td className="px-5 py-4 text-center align-middle">
                       <div className="flex flex-col gap-2">
                         <button 
-                          onClick={() => setEditItem({ ...item })}
+                          onClick={() => setEditItem(normalizeProductForEdit(item))}
                           disabled={isProcessing}
                           className="px-4 py-2 border border-slate-200 bg-white shadow-sm hover:shadow-md hover:border-primary/50 text-primary font-bold text-xs rounded-lg transition-all"
                         >
@@ -1224,54 +1273,404 @@ const AdminProductManagement: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 border-t border-slate-100 pt-4 mt-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1 flex items-center justify-between">
-                    Thumbnail
-                    <label className="text-primary hover:underline cursor-pointer normal-case">
-                      Tải lên
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        className="hidden" 
+              {/* ── Product Images Section ──────────────────────────── */}
+              <div className="border-t border-slate-100 pt-4 mt-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Hình ảnh sản phẩm ({(editItem.images || []).length}/5)</label>
+                  <div className="flex items-center gap-2">
+                    <label className="inline-flex items-center gap-1 px-3 py-1.5 bg-primary text-white font-bold text-xs rounded-lg hover:bg-primary/90 transition-all cursor-pointer">
+                      <span className="material-symbols-outlined text-[14px]">upload</span>
+                      Tải ảnh lên
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
                         onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          if (file.size > 2 * 1024 * 1024) { toast.error('Ảnh phải nhỏ hơn 2MB'); return; }
+                          const files = e.target.files;
+                          if (!files || files.length === 0) return;
+                          const currentImages = Array.isArray(editItem.images) ? editItem.images : [];
+                          if (currentImages.length + files.length > 5) {
+                            toast.error('Tối đa 5 ảnh cho mỗi sản phẩm');
+                            return;
+                          }
                           try {
                             setIsProcessing(true);
                             const formData = new FormData();
-                            formData.append('image', file);
+                            for (let i = 0; i < files.length; i++) {
+                              if (files[i].size > 5 * 1024 * 1024) {
+                                toast.error(`Ảnh "${files[i].name}" vượt quá 5MB`);
+                                continue;
+                              }
+                              formData.append('images', files[i]);
+                            }
                             const token = localStorage.getItem('access_token') || sessionStorage.getItem('token');
-                            const res = await fetch('http://localhost:3001/api/uploads/promotion-image', {
-                                method: 'POST', body: formData, headers: token ? { Authorization: `Bearer ${token}` } : {}
+                            const res = await fetch('http://localhost:3001/api/uploads/product-images', {
+                              method: 'POST',
+                              body: formData,
+                              headers: token ? { Authorization: `Bearer ${token}` } : {},
                             });
                             const result = await res.json();
-                            if (result.success && result.data?.url) {
-                               setEditItem((prev: any) => ({...prev, thumbnail: result.data.url}));
-                               toast.success('Tải ảnh thành công');
-                            } else throw new Error(result.message);
-                          } catch(err: any) { toast.error(err.message || 'Lỗi tải ảnh'); }
-                          finally { setIsProcessing(false); }
+                            if (result.success && result.data?.urls) {
+                              const newImages = [...currentImages, ...result.data.urls];
+                              setEditItem((prev: any) => ({
+                                ...prev,
+                                images: newImages,
+                                thumbnail: prev.thumbnail || newImages[0] || '',
+                              }));
+                              toast.success(`Đã tải lên ${result.data.urls.length} ảnh thành công`);
+                            } else {
+                              throw new Error(result.message || 'Upload failed');
+                            }
+                          } catch (err: any) {
+                            toast.error(err.message || 'Lỗi tải ảnh lên');
+                          } finally {
+                            setIsProcessing(false);
+                            e.target.value = '';
+                          }
                         }}
                       />
                     </label>
-                  </label>
-                  <div className="flex gap-2 items-center">
-                    {editItem.thumbnail && <img src={editItem.thumbnail} className="w-10 h-10 rounded border border-slate-200 object-cover bg-slate-100 flex-shrink-0" alt="thumb" />}
-                    <input type="text" placeholder="URL thay thế..." value={editItem.thumbnail || ''} onChange={e => setEditItem({...editItem, thumbnail: e.target.value})} className="flex-1 w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm text-slate-700 min-w-0" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = window.prompt('Nhập URL hình ảnh:');
+                        if (!url || !url.trim()) return;
+                        const currentImages = Array.isArray(editItem.images) ? editItem.images : [];
+                        if (currentImages.length >= 5) { toast.error('Tối đa 5 ảnh'); return; }
+                        const newImages = [...currentImages, url.trim()];
+                        setEditItem({
+                          ...editItem,
+                          images: newImages,
+                          thumbnail: editItem.thumbnail || newImages[0] || '',
+                        });
+                      }}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-lg hover:bg-slate-200 transition-all"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">link</span>
+                      Thêm URL
+                    </button>
                   </div>
                 </div>
+
+                {(editItem.images || []).length > 0 ? (
+                  <div className="grid grid-cols-5 gap-3">
+                    {(editItem.images || []).map((imgUrl: string, idx: number) => (
+                      <div key={idx} className="relative group aspect-square rounded-xl border-2 border-slate-200 overflow-hidden bg-slate-100">
+                        <img
+                          src={imgUrl}
+                          alt={`Ảnh ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                        {/* Thumbnail badge */}
+                        {editItem.thumbnail === imgUrl && (
+                          <span className="absolute top-1.5 left-1.5 bg-primary text-white text-[9px] font-black px-1.5 py-0.5 rounded-md shadow">THUMB</span>
+                        )}
+                        {/* Overlay buttons */}
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                          {editItem.thumbnail !== imgUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setEditItem({ ...editItem, thumbnail: imgUrl })}
+                              className="w-7 h-7 bg-white/90 rounded-full flex items-center justify-center text-primary hover:bg-white transition-colors"
+                              title={t('adminProducts.setThumbnail')}
+                            >
+                              <span className="material-symbols-outlined text-[14px]">star</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newImages = (editItem.images || []).filter((_: string, i: number) => i !== idx);
+                              setEditItem({
+                                ...editItem,
+                                images: newImages,
+                                thumbnail: editItem.thumbnail === imgUrl ? (newImages[0] || '') : editItem.thumbnail,
+                              });
+                            }}
+                            className="w-7 h-7 bg-red-500/90 rounded-full flex items-center justify-center text-white hover:bg-red-600 transition-colors"
+                            title={t('adminProducts.deleteImage')}
+                          >
+                            <span className="material-symbols-outlined text-[14px]">close</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+                    <span className="material-symbols-outlined text-3xl text-slate-300 mb-2 block">add_photo_alternate</span>
+                    <p className="text-xs text-slate-400 font-bold">{t('adminProducts.noImages')}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Technical Details (Collapsible & Dynamic) ──────────────────────────── */}
+              <div className="border-t border-slate-100 pt-4 mt-2 mb-4">
+                <details className="group">
+                  <summary className="flex items-center justify-between font-black text-slate-800 text-sm uppercase tracking-widest cursor-pointer list-none mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary">list_alt</span>
+                      {t('adminProducts.technicalDetails')}
+                    </div>
+                    <span className="material-symbols-outlined group-open:rotate-180 transition-transform">expand_more</span>
+                  </summary>
+
+                  <div className="mb-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="material-symbols-outlined text-sm text-primary">auto_awesome</span>
+                      <span className="text-xs font-bold text-slate-700 uppercase tracking-widest">{t('adminProducts.templates')}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {specTemplates.map((tpl, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            const newSpecs = [...(editItem.specifications || [])];
+                            tpl.labels.forEach(lbl => {
+                              if (!newSpecs.find(s => s.label === lbl)) {
+                                newSpecs.push({ label: lbl, value: '' });
+                              }
+                            });
+                            setEditItem({...editItem, specifications: newSpecs});
+                          }}
+                          className="px-3 py-1.5 bg-white border border-primary/30 text-primary hover:bg-primary hover:text-white rounded-lg text-xs font-bold shadow-sm transition-all"
+                        >
+                          + {tpl.name}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">{t('adminProducts.suggestedLabels')}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {Array.from(new Set(specTemplates.flatMap(t => t.labels))).map((lbl, i) => {
+                        const isAdded = (editItem.specifications || []).some((s: any) => s.label === lbl);
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            disabled={isAdded}
+                            onClick={() => {
+                              const newSpecs = [...(editItem.specifications || []), { label: lbl, value: '' }];
+                              setEditItem({...editItem, specifications: newSpecs});
+                            }}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold transition-all border ${isAdded ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed' : 'bg-white border-slate-300 text-slate-600 hover:border-primary hover:text-primary shadow-sm'}`}
+                          >
+                            {lbl} {isAdded && <span className="material-symbols-outlined text-[10px] ml-1 align-middle">check</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 pb-4">
+                    {(editItem.specifications || []).map((spec: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-3">
+                        <input 
+                          type="text" 
+                          placeholder={t('adminProducts.specLabelPlaceholder')} 
+                          value={spec.label || ''} 
+                          onChange={e => {
+                            const newSpecs = [...(editItem.specifications || [])];
+                            newSpecs[idx] = { ...newSpecs[idx], label: e.target.value };
+                            setEditItem({...editItem, specifications: newSpecs});
+                          }} 
+                          className="w-1/3 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm font-bold" 
+                        />
+                        <input 
+                          type="text" 
+                          placeholder={t('adminProducts.specValuePlaceholder')} 
+                          value={spec.value || ''} 
+                          onChange={e => {
+                            const newSpecs = [...(editItem.specifications || [])];
+                            newSpecs[idx] = { ...newSpecs[idx], value: e.target.value };
+                            setEditItem({...editItem, specifications: newSpecs});
+                          }} 
+                          className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm" 
+                        />
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            const newSpecs = [...(editItem.specifications || [])];
+                            newSpecs.splice(idx, 1);
+                            setEditItem({...editItem, specifications: newSpecs});
+                          }}
+                          className="w-9 h-9 flex items-center justify-center rounded-xl bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                      </div>
+                    ))}
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        const newSpecs = [...(editItem.specifications || []), { label: '', value: '' }];
+                        setEditItem({...editItem, specifications: newSpecs});
+                      }}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">add</span>
+                      {t('adminProducts.customLabel')}
+                    </button>
+                  </div>
+                </details>
+              </div>
+
+              {/* ── Rich Content & Description (Collapsible) ──────────────────────────── */}
+              <div className="border-t border-slate-100 pt-4 mt-6">
+                <details className="group" open>
+                  <summary className="flex items-center justify-between font-black text-slate-800 text-sm uppercase tracking-widest cursor-pointer list-none mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary">description</span>
+                      {t('adminProducts.contentAndDescription')}
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <button 
+                        type="button" 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setShowPreview(!showPreview);
+                        }}
+                        className="text-primary text-xs font-bold bg-primary/10 px-3 py-1.5 rounded-lg hover:bg-primary/20 transition-colors"
+                      >
+                        {showPreview ? t('adminProducts.closePreview') : t('adminProducts.preview')}
+                      </button>
+                      <span className="material-symbols-outlined group-open:rotate-180 transition-transform">expand_more</span>
+                    </div>
+                  </summary>
+
+                  {showPreview && (
+                    <div className="mb-6 p-6 rounded-xl border border-primary/20 bg-primary/5 shadow-inner">
+                      <h4 className="text-sm font-bold text-primary mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined">visibility</span>
+                        Live Preview
+                      </h4>
+                      <div className="bg-white rounded-xl shadow-sm p-6 border border-slate-200">
+                        <article className="prose prose-slate max-w-none text-sm mb-6">
+                          <h3 className="text-lg font-bold mb-3">{editItem.name || 'Tên sản phẩm'}</h3>
+                          <p className="whitespace-pre-wrap text-slate-600 leading-relaxed mb-4">{editItem.description || editItem.short_description || 'Chưa có mô tả.'}</p>
+                          
+                          {Array.isArray(editItem.highlights) ? (
+                            editItem.highlights.length > 0 && (
+                              <ul className="space-y-2 mb-6">
+                                {editItem.highlights.map((line: string, i: number) => (
+                                  <li key={i} className="flex gap-2 text-slate-700">
+                                    <span className="material-symbols-outlined text-primary text-sm mt-0.5">check_circle</span>
+                                    {line}
+                                  </li>
+                                ))}
+                              </ul>
+                            )
+                          ) : (
+                            editItem.highlights && editItem.highlights.split('\n').filter((x: string) => x.trim()).length > 0 && (
+                              <ul className="space-y-2 mb-6">
+                                {editItem.highlights.split('\n').map((line: string, i: number) => line.trim() ? (
+                                  <li key={i} className="flex gap-2 text-slate-700">
+                                    <span className="material-symbols-outlined text-primary text-sm mt-0.5">check_circle</span>
+                                    {line.trim()}
+                                  </li>
+                                ) : null)}
+                              </ul>
+                            )
+                          )}
+                        </article>
+
+                        {(editItem.specifications || []).length > 0 && (
+                          <div className="mb-6 border-t border-slate-100 pt-6">
+                            <h3 className="font-bold text-base mb-4 text-slate-800">{t('adminProducts.technicalDetails')}</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+                              {(editItem.specifications || []).map((spec: any, i: number) => spec.label && spec.value && (
+                                <div key={i} className="flex justify-between border-b border-slate-100 pb-2 text-sm">
+                                  <span className="font-medium text-slate-500">{spec.label}</span>
+                                  <span className="font-bold text-slate-800 text-right">{spec.value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-slate-100 pt-6">
+                          {(editItem.usage_guide || editItem.storage_guide || editItem.storage_instructions) && (
+                            <div className="bg-slate-50 rounded-xl p-4 text-sm border border-slate-100">
+                              {editItem.usage_guide && (
+                                <div className="mb-3">
+                                  <h4 className="font-bold text-slate-800 mb-1 flex items-center gap-1.5"><span className="material-symbols-outlined text-sm">info</span> {t('adminProducts.usageGuide')}</h4>
+                                  <p className="text-slate-600 whitespace-pre-wrap">{editItem.usage_guide}</p>
+                                </div>
+                              )}
+                              {(editItem.storage_guide || editItem.storage_instructions) && (
+                                <div>
+                                  <h4 className="font-bold text-slate-800 mb-1 flex items-center gap-1.5"><span className="material-symbols-outlined text-sm">ac_unit</span> {t('adminProducts.storageGuide')}</h4>
+                                  <p className="text-slate-600 whitespace-pre-wrap">{editItem.storage_guide || editItem.storage_instructions}</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {((Array.isArray(editItem.recipe_suggestions) && editItem.recipe_suggestions.length > 0) || (typeof editItem.recipe_suggestions === 'string' && editItem.recipe_suggestions.trim())) && (
+                            <div className="bg-orange-50 rounded-xl p-4 text-sm border border-orange-100">
+                              <h4 className="font-bold text-orange-800 mb-2 flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-sm">restaurant</span>
+                                {t('adminProducts.recipeSuggestions')}
+                              </h4>
+                              <ul className="list-disc pl-5 text-orange-700 space-y-1">
+                                {Array.isArray(editItem.recipe_suggestions) 
+                                  ? editItem.recipe_suggestions.map((r: string, i: number) => <li key={i}>{r}</li>)
+                                  : editItem.recipe_suggestions.split('\n').filter((x: string) => x.trim()).map((r: string, i: number) => <li key={i}>{r.trim()}</li>)
+                                }
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-4">
+                    <div className="col-span-1 lg:col-span-2">
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{t('adminProducts.productDescription')}</label>
+                      <textarea rows={4} value={editItem.description || ''} onChange={e => setEditItem({...editItem, description: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm resize-none" placeholder="..."></textarea>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{t('adminProducts.highlights')}</label>
+                      <textarea rows={4} value={Array.isArray(editItem.highlights) ? editItem.highlights.join('\n') : (editItem.highlights || '')} onChange={e => setEditItem({...editItem, highlights: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm resize-none" placeholder="- Tươi ngon mỗi ngày&#10;- An toàn sức khỏe"></textarea>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{t('adminProducts.usageGuide')}</label>
+                      <textarea rows={4} value={editItem.usage_guide || ''} onChange={e => setEditItem({...editItem, usage_guide: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm resize-none" placeholder="..."></textarea>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{t('adminProducts.storageGuide')}</label>
+                      <textarea rows={3} value={editItem.storage_guide || editItem.storage_instructions || ''} onChange={e => setEditItem({...editItem, storage_guide: e.target.value, storage_instructions: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm resize-none" placeholder="Bảo quản nơi khô ráo, thoáng mát..."></textarea>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{t('adminProducts.recipeSuggestions')}</label>
+                      <textarea rows={3} value={Array.isArray(editItem.recipe_suggestions) ? editItem.recipe_suggestions.join('\n') : (editItem.recipe_suggestions || '')} onChange={e => setEditItem({...editItem, recipe_suggestions: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm resize-none" placeholder="- Sinh tố trái cây&#10;- Salad trộn"></textarea>
+                    </div>
+                  </div>
+                </details>
+              </div>
+
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 border-t border-slate-100 pt-4 mt-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Trọng lượng</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{t('adminProducts.weight')}</label>
                   <input type="text" value={editItem.weight || ''} onChange={e => setEditItem({...editItem, weight: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Đơn vị</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{t('adminProducts.unit')}</label>
                   <input type="text" value={editItem.unit || ''} onChange={e => setEditItem({...editItem, unit: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Bảo quản</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{t('adminProducts.storage')}</label>
                   <input type="text" value={editItem.storage_instructions || ''} onChange={e => setEditItem({...editItem, storage_instructions: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm" />
                 </div>
               </div>
@@ -1285,19 +1684,19 @@ const AdminProductManagement: React.FC = () => {
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 border-t border-slate-100 pt-4 mt-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Ngày SX</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{t('adminProducts.manufactureDate')}</label>
                   <input type="date" value={editItem.manufacture_date ? editItem.manufacture_date.split('T')[0] : ''} onChange={e => setEditItem({...editItem, manufacture_date: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Hạn Sử Dụng</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{t('adminProducts.expiryDate')}</label>
                   <input type="date" value={editItem.expiry_date ? editItem.expiry_date.split('T')[0] : ''} onChange={e => setEditItem({...editItem, expiry_date: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Báo Hết Hạn Trước (Ngày)</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{t('adminProducts.expiryWarningDays')}</label>
                   <input type="number" min="0" value={editItem.expiry_warning_days ?? 7} onChange={e => setEditItem({...editItem, expiry_warning_days: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Giá Nhập (Import Price)</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{t('adminProducts.importPrice')}</label>
                   <div className="relative">
                     <input type="number" min="0" value={editItem.import_price || 0} onChange={e => setEditItem({...editItem, import_price: e.target.value})} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-2 text-sm text-amber-600 font-bold" />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-600 text-xs font-bold">VNĐ</span>

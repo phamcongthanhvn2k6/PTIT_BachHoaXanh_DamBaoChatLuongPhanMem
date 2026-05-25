@@ -156,7 +156,8 @@ app.use(mongoSanitize());
 app.use(morgan('dev'));
 app.use(passport.initialize());
 app.use(localizationMiddleware);
-app.use('/uploads', express.static(path.resolve(__dirname, '..', 'uploads')));
+import { serveFile } from './controllers/uploadController.js';
+app.get('/uploads/:category/:filename', serveFile);
 
 // Swagger API Documentation
 setupSwagger(app);

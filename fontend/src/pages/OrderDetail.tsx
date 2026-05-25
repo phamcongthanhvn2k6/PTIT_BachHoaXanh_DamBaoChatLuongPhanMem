@@ -9,6 +9,7 @@ import { dataService } from '../services/dataService';
 import { supportService } from '../services/supportService';
 import { resolveImageUrl } from '../utils/imageUrl';
 import { reviewService } from '../services/reviewService';
+import httpClient from '../api/httpClient';
 
 const OrderDetail: React.FC = () => {
   const { t } = useTranslation();
@@ -37,6 +38,8 @@ const OrderDetail: React.FC = () => {
   const [supportIssue, setSupportIssue] = useState('');
   const [supportCategory, setSupportCategory] = useState('general');
   const [submittedReviews, setSubmittedReviews] = useState<Set<string>>(new Set());
+  const [reviewImages, setReviewImages] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
   
   const order = orders.find(o => String(o.id) === orderId);
 
@@ -46,6 +49,26 @@ const OrderDetail: React.FC = () => {
     }
   }, [status, currentUserId, dispatch]);
 
+  useEffect(() => {
+    if (orderId) {
+      reviewService.listAll({ order_id: orderId })
+        .then((res: any) => {
+          if (res && Array.isArray(res.data)) {
+            const submitted = new Set<string>();
+            res.data.forEach((r: any) => {
+              if (r.product_id) {
+                submitted.add(String(r.product_id));
+              }
+            });
+            setSubmittedReviews(submitted);
+          }
+        })
+        .catch((err) => {
+          console.error("Error loading reviews:", err);
+        });
+    }
+  }, [orderId]);
+
   if (status === 'loading') return <div className="text-center p-10 font-bold">{t('orderDetail.loading')}</div>;
   if (!order) return <div className="text-center p-10"><p className="text-slate-500">{t('orderDetail.notFound')}</p></div>;
 
@@ -53,6 +76,44 @@ const OrderDetail: React.FC = () => {
   const isCancellable = CANCELLABLE_STATUSES.includes(order.status);
   const isCompletedOrCancelled = ['COMPLETED', 'DELIVERED', 'CANCELLED'].includes(order.status);
   const isDelivered = ['COMPLETED', 'DELIVERED'].includes(order.status);
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    if (reviewImages.length + files.length > 5) {
+      toast.error("Tối đa 5 hình ảnh");
+      return;
+    }
+    
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+      formData.append('images', files[i]);
+    }
+    
+    setIsUploading(true);
+    try {
+      const res = await httpClient.post('/uploads/review-images', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      if (res.data?.success && Array.isArray(res.data?.data?.urls)) {
+        setReviewImages(prev => [...prev, ...res.data.data.urls]);
+        toast.success("Tải ảnh thành công!");
+      } else if (res.data?.success && Array.isArray(res.data?.data?.files)) {
+        const urls = res.data.data.files.map((f: any) => f.relative_url || f.url);
+        setReviewImages(prev => [...prev, ...urls]);
+        toast.success("Tải ảnh thành công!");
+      } else {
+        toast.error("Tải ảnh thất bại");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Lỗi khi tải ảnh");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const handleSubmitReview = async () => {
     if (!reviewItem || !reviewComment.trim()) {
@@ -65,6 +126,8 @@ const OrderDetail: React.FC = () => {
         rating: reviewRating,
         comment: reviewComment,
         order_id: order.id,
+        product_name: reviewItem.product_name || (reviewItem.product_id === 'delivery' ? t('orderDetail.shippingReviewTitle') : 'Sản phẩm'),
+        images: reviewImages,
       });
       toast.success(t('orderDetail.reviewSuccess'));
       setSubmittedReviews(prev => new Set([...prev, String(reviewItem.product_id || reviewItem.branch_product_id)]));
@@ -72,6 +135,7 @@ const OrderDetail: React.FC = () => {
       setReviewItem(null);
       setReviewComment('');
       setReviewRating(5);
+      setReviewImages([]);
     } catch (err: any) {
       toast.error(err?.data?.message || err?.message || t('orderDetail.reviewError'));
     } finally {
@@ -189,13 +253,15 @@ const OrderDetail: React.FC = () => {
           <span className="material-symbols-outlined text-sm">arrow_back</span>
           {t('orderDetail.backToList')}
         </Link>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              Đơn hàng #{order.id}
-              <span className={`text-xs px-3 py-1 rounded-full text-white ${order.status === 'COMPLETED' || order.status === 'DELIVERED' ? 'bg-green-500' : order.status === 'CANCELLED' ? 'bg-red-500' : 'bg-blue-500'}`}>
-                 {STATUS_LABEL[order.status] || order.status}
-              </span>
-            </h1>
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+                <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-100 flex flex-wrap items-center gap-2">
+                  {t('orders.userFriendlyStatus.' + order.status, STATUS_LABEL[order.status] || order.status)}
+                </h1>
+                <p className="text-xs md:text-sm font-mono text-slate-500 mt-2 break-all">
+                  {t('orders.orderCode', { code: order.id })}
+                </p>
+            </div>
             <div className="flex flex-wrap gap-2">
                 <button onClick={handleDownloadInvoice} disabled={isProcessing} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-slate-200 transition disabled:opacity-50">
                     <span className="material-symbols-outlined text-sm">download</span> PDF
@@ -253,9 +319,9 @@ const OrderDetail: React.FC = () => {
                     {trackingHistory.map((track: any, i: number) => (
                         <div key={i} className="pl-6 relative">
                             <span className={`absolute -left-[9px] top-1 w-4 h-4 rounded-full ${(i === trackingHistory.length - 1 && track.status !== 'CANCELLED') ? 'bg-primary ring-4 ring-primary/20' : track.status === 'CANCELLED' ? 'bg-red-500' : 'bg-slate-300'}`}></span>
-                            <p className="font-bold text-slate-800">{STATUS_LABEL[track.status] || track.status}</p>
+                            <p className="font-bold text-slate-800 break-words">{t('orderStatuses.' + track.status, STATUS_LABEL[track.status] || track.status)}</p>
                             {track.note && track.note !== 'Cập nhật hệ thống' && (
-                              <p className="text-sm text-slate-600 mt-1">{track.note}</p>
+                              <p className="text-sm text-slate-600 mt-1 break-words whitespace-normal">{track.note}</p>
                             )}
                             <p className="text-[11px] text-slate-400 mt-1">{new Date(track.timestamp || track.time).toLocaleString('vi-VN')}</p>
                         </div>
@@ -265,6 +331,46 @@ const OrderDetail: React.FC = () => {
                     <Link to={`/order/track?id=${order.id}`} className="text-primary font-bold text-sm hover:underline">{t('orderDetail.viewJourney')}</Link>
                  </div>
              </div>
+
+             {/* Delivery Review Card */}
+             {isDelivered && (
+               <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
+                 <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                   <span className="material-symbols-outlined text-amber-500">local_shipping</span>
+                   {t('orderDetail.shippingReviewTitle')}
+                 </h3>
+                 {submittedReviews.has('delivery') ? (
+                   <div className="flex items-center gap-2 text-green-600 bg-green-50 p-4 rounded-xl font-bold text-sm">
+                     <span className="material-symbols-outlined">check_circle</span>
+                     Bạn đã đánh giá dịch vụ giao hàng cho đơn này. Cảm ơn bạn!
+                   </div>
+                 ) : (
+                   <div className="bg-slate-50 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                     <div className="flex-1 min-w-0">
+                       <p className="text-sm font-semibold text-slate-700">
+                         Đánh giá tài xế, thời gian giao hàng và chất lượng đóng gói của đơn hàng này.
+                       </p>
+                       <p className="text-xs text-slate-500 mt-1">
+                         Nhận xét của bạn giúp chúng tôi cải thiện dịch vụ tốt hơn.
+                       </p>
+                     </div>
+                     <button
+                       onClick={() => {
+                         setReviewItem({ product_id: 'delivery', product_name: t('orderDetail.shippingReviewTitle') });
+                         setReviewRating(5);
+                         setReviewComment('');
+                         setReviewImages([]);
+                         setShowReviewModal(true);
+                       }}
+                       className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-sm transition shrink-0 flex items-center gap-2"
+                     >
+                       <span className="material-symbols-outlined text-sm">rate_review</span>
+                       {t('orderDetail.shippingReviewBtn')}
+                     </button>
+                   </div>
+                 )}
+               </div>
+             )}
 
              {/* Items */}
              <div className="bg-white p-6 rounded-xl border border-slate-100 shadow-sm">
@@ -306,7 +412,13 @@ const OrderDetail: React.FC = () => {
                            )}
                            {isDelivered && !submittedReviews.has(String(item.product_id || item.branch_product_id)) && (
                              <button
-                               onClick={() => { setReviewItem(item); setShowReviewModal(true); }}
+                               onClick={() => {
+                                 setReviewItem(item);
+                                 setReviewRating(5);
+                                 setReviewComment('');
+                                 setReviewImages([]);
+                                 setShowReviewModal(true);
+                               }}
                                className="inline-flex items-center gap-1 mt-2 px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-xs font-bold hover:bg-amber-100 transition"
                              >
                                <span className="material-symbols-outlined text-[14px]">rate_review</span>
@@ -483,46 +595,64 @@ const OrderDetail: React.FC = () => {
                    </select>
                  </div>
                  <div>
-                   <label className="block text-sm font-bold text-slate-700 mb-1">{t('orderDetail.supportIssueLabel')} <span className="text-red-500">*</span></label>
-                   <textarea 
-                     value={supportIssue} 
-                     onChange={e => setSupportIssue(e.target.value)} 
-                     placeholder={t('orderDetail.supportIssuePlaceholder')} 
-                     className="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-200 outline-none resize-none" 
-                     rows={4} 
-                   />
-                 </div>
-               </div>
-               <div className="flex gap-3 mt-6">
-                   <button onClick={() => { setShowSupportModal(false); setSupportIssue(''); }} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition">{t('common.close')}</button>
-                   <button onClick={handleContactSupport} disabled={isProcessing || !supportIssue.trim()} className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition disabled:opacity-50">
-                       {isProcessing ? t('orderDetail.supportSending') : t('orderDetail.supportSend')}
-                   </button>
-               </div>
-               <div className="mt-4 text-center">
-                 <Link to="/account/support" className="text-xs font-semibold text-primary hover:underline">
-                   {t('orderDetail.supportGoToCenter')}
-                 </Link>
-               </div>
-           </div>
-        </div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1">{t('orderDetail.supportIssueLabel')} <span className="text-red-500">*</span></label>
+                    <textarea 
+                      value={supportIssue} 
+                      onChange={e => setSupportIssue(e.target.value)} 
+                      placeholder={t('orderDetail.supportIssuePlaceholder')} 
+                      className="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-200 outline-none resize-none" 
+                      rows={4} 
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-3 mt-6">
+                    <button onClick={() => { setShowSupportModal(false); setSupportIssue(''); }} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition">{t('common.close')}</button>
+                    <button onClick={handleContactSupport} disabled={isProcessing || !supportIssue.trim()} className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition disabled:opacity-50">
+                        {isProcessing ? t('orderDetail.supportSending') : t('orderDetail.supportSend')}
+                    </button>
+                </div>
+                <div className="mt-4 text-center">
+                  <Link to="/account/support" className="text-xs font-semibold text-primary hover:underline">
+                    {t('orderDetail.supportGoToCenter')}
+                  </Link>
+                </div>
+            </div>
+         </div>
       )}
 
       {/* Review Modal */}
       {showReviewModal && reviewItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+           <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl overflow-y-auto max-h-[90vh]">
                <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mb-4 mx-auto">
                    <span className="material-symbols-outlined text-2xl">rate_review</span>
                </div>
                <h3 className="text-xl font-bold text-center mb-2">{t('orderDetail.reviewModalTitle')}</h3>
-               <p className="text-center text-slate-500 mb-4 text-sm line-clamp-2">{reviewItem.product_name}</p>
+               <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl mb-4">
+                 {reviewItem.product_id === 'delivery' ? (
+                   <div className="w-12 h-12 bg-amber-100 text-amber-600 flex items-center justify-center rounded-lg">
+                     <span className="material-symbols-outlined text-2xl">local_shipping</span>
+                   </div>
+                 ) : (
+                   <div className="w-12 h-12 rounded-lg border border-slate-200 overflow-hidden bg-white shrink-0">
+                     {reviewItem.product_image ? (
+                       <img src={resolveImageUrl(reviewItem.product_image)} alt={reviewItem.product_name} className="w-full h-full object-cover" />
+                     ) : (
+                       <div className="w-full h-full flex items-center justify-center text-slate-300">
+                         <span className="material-symbols-outlined">image</span>
+                       </div>
+                     )}
+                   </div>
+                 )}
+                 <p className="text-slate-700 text-sm font-semibold line-clamp-2">{reviewItem.product_name || (reviewItem.product_id === 'delivery' ? t('orderDetail.shippingReviewTitle') : 'Sản phẩm')}</p>
+               </div>
                
                {/* Star Rating */}
-               <div className="flex justify-center gap-1 mb-4">
+               <div className="flex justify-center gap-1 mb-2">
                  {[1, 2, 3, 4, 5].map(star => (
                    <button
                      key={star}
+                     type="button"
                      onClick={() => setReviewRating(star)}
                      className="transition-transform hover:scale-110"
                    >
@@ -542,8 +672,46 @@ const OrderDetail: React.FC = () => {
                    rows={4} 
                  />
                </div>
+
+               {/* Photo Upload section */}
+               <div className="mb-6">
+                 <label className="block text-sm font-bold text-slate-700 mb-1">
+                   {t('orderDetail.uploadPhoto')}
+                 </label>
+                 <div className="flex flex-wrap gap-2 mt-2">
+                   {reviewImages.map((imgUrl, i) => (
+                     <div key={i} className="relative w-16 h-16 rounded-lg border border-slate-200 overflow-hidden bg-slate-50 group">
+                       <img src={resolveImageUrl(imgUrl)} alt="Upload preview" className="w-full h-full object-cover" />
+                       <button
+                         type="button"
+                         onClick={() => setReviewImages(prev => prev.filter((_, idx) => idx !== i))}
+                         className="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                       >
+                         <span className="material-symbols-outlined text-sm">delete</span>
+                       </button>
+                     </div>
+                   ))}
+                   {reviewImages.length < 5 && (
+                     <label className={`w-16 h-16 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center cursor-pointer hover:border-primary hover:bg-slate-50 transition ${isUploading ? 'pointer-events-none opacity-50' : ''}`}>
+                       <span className="material-symbols-outlined text-slate-400">add_a_photo</span>
+                       <span className="text-[10px] text-slate-400 mt-1">
+                         {isUploading ? t('orderDetail.uploading') : ''}
+                       </span>
+                       <input
+                         type="file"
+                         multiple
+                         accept="image/*"
+                         onChange={handleImageChange}
+                         className="hidden"
+                         disabled={isUploading}
+                       />
+                     </label>
+                   )}
+                 </div>
+               </div>
+
                <div className="flex gap-3">
-                   <button onClick={() => { setShowReviewModal(false); setReviewItem(null); setReviewComment(''); setReviewRating(5); }} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition">{t('common.close')}</button>
+                   <button onClick={() => { setShowReviewModal(false); setReviewItem(null); setReviewComment(''); setReviewRating(5); setReviewImages([]); }} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition">{t('common.close')}</button>
                    <button onClick={handleSubmitReview} disabled={isProcessing || !reviewComment.trim()} className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition disabled:opacity-50">
                        {isProcessing ? t('orderDetail.reviewSending') : t('orderDetail.reviewSubmit')}
                    </button>
@@ -554,4 +722,5 @@ const OrderDetail: React.FC = () => {
     </div>
   );
 };
+
 export default OrderDetail;

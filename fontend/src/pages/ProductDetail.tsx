@@ -1,11 +1,12 @@
 // src/pages/ProductDetail.tsx
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useAppDispatch, useAppSelector } from '../store';
 import { addToCartAsync } from '../slices/cartSlice';
 import { addCompareItem, compareMaxItems, removeCompareItem, selectCompareIds } from '../slices/compareSlice';
+import { setCurrentBranch } from '../slices/branchSlice';
 import { useNavigate } from 'react-router-dom';
 import { useAuthRedirect } from '../hooks/useAuthRedirect';
 import StarRating from '../components/StarRating/StarRating';
@@ -26,11 +27,12 @@ const ProductDetail: React.FC = () => {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAppSelector(state => state.auth);
   const compareIds = useAppSelector(selectCompareIds);
-  const { currentBranch } = useAppSelector(state => state.branch);
+  const { branches, currentBranch } = useAppSelector(state => state.branch);
   const redirectToLogin = useAuthRedirect();
   const viewTrackedKeyRef = React.useRef<string>('');
 
   const [quantity, setQuantity] = useState(1);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<'mo-ta' | 'thong-tin' | 'danh-gia'>('mo-ta');
 
   // Separate state for product core vs branch-specific data
@@ -50,6 +52,82 @@ const ProductDetail: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   // Whether the product exists but has no branch data
   const [branchUnavailable, setBranchUnavailable] = useState(false);
+  const [allBranchProducts, setAllBranchProducts] = useState<any[]>([]);
+
+  const productRealBranches = useMemo(() => {
+    if (!branches || !branches.length || !allBranchProducts.length) return [];
+    return allBranchProducts
+      .map(bp => {
+        const found = branches.find(b => String(b.id || (b as any)._id) === String(bp.branch_id));
+        return found ? {
+          ...found,
+          stock: Number(bp.stock || 0),
+          is_available: bp.is_available,
+          price: Number(bp.price || 0),
+          original_price: Number(bp.original_price || 0)
+        } : null;
+      })
+      .filter(Boolean);
+  }, [allBranchProducts, branches]);
+
+  const availableBranches = useMemo(() => {
+    if (!branches || !branches.length || !allBranchProducts.length) return [];
+    return allBranchProducts
+      .filter(bp => bp.is_available !== false && Number(bp.stock) > 0)
+      .map(bp => {
+        const found = branches.find(b => String(b.id || (b as any)._id) === String(bp.branch_id));
+        return found ? {
+          ...found,
+          price: bp.price,
+          stock: bp.stock,
+          branchProduct: bp
+        } : null;
+      })
+      .filter(Boolean);
+  }, [allBranchProducts, branches]);
+
+  const handleSwitchToAvailableBranch = (branch: any) => {
+    if (!branch) return;
+    dispatch(setCurrentBranch(branch));
+    toast.success(t('branch.switchedTo', { name: branch.name, defaultValue: `Đã chuyển sang chi nhánh: ${branch.name}` }));
+  };
+
+  const handleSwitchAndAddToCart = async (branch: any) => {
+    if (!branch) return;
+    // Switch branch in Redux and LocalStorage
+    dispatch(setCurrentBranch(branch));
+    toast.success(t('branch.switchedTo', { name: branch.name, defaultValue: `Đã chuyển sang chi nhánh: ${branch.name}` }));
+
+    const newBp = allBranchProducts.find(bp => String(bp.branch_id) === String(branch.id || branch._id));
+    if (!newBp) return;
+
+    if (!isAuthenticated) {
+      redirectToLogin({
+        action: 'add_to_cart',
+        branch_product_id: String(newBp.id || newBp._id),
+        price: newBp.price,
+        qty: quantity,
+        product: { ...newBp, product: product as any } as any
+      });
+      return;
+    }
+
+    try {
+      await dispatch(addToCartAsync({
+        branchId: String(branch.id || branch._id),
+        branch_product_id: String(newBp.id || newBp._id),
+        price: newBp.price,
+        unit_price: newBp.price,
+        quantity: quantity,
+        product_name: product?.name || 'Sản phẩm',
+        product_image: resolveImageUrl(product?.images?.[0] || product?.thumbnail || ''),
+        branchProduct: { ...newBp, product: product as any } as any,
+      })).unwrap();
+      toast.success(t('cart.addedToCart', { name: product?.name || 'Sản phẩm' }));
+    } catch (err: any) {
+      toast.error(typeof err === 'string' ? err : (err?.message || t('common.addToCartError')));
+    }
+  };
 
   const getSavedBranchId = () => {
     try {
@@ -96,26 +174,32 @@ const ProductDetail: React.FC = () => {
         // STEP 2: Independently fetch branch-specific data (price/stock)
         // Use currentBranch from Redux store — no hardcode
         const branchId = activeBranchId;
-        let bp: any = null;
-        if (branchId) {
-          try {
-            const bps = await productService.getBranchProducts({
-              product_id: resolvedProduct.id || resolvedProduct._id,
-              branch_id: branchId,
-            });
-            const safeBranchProducts = Array.isArray(bps) ? bps : [];
-            if (safeBranchProducts.length > 0) {
-              bp = safeBranchProducts[0];
-              setBranchProduct(bp);
-            } else {
-              setBranchUnavailable(true);
-            }
-          } catch {
-            // Branch data fetch failed - product still viewable
-            setBranchUnavailable(true);
-          }
+        let allBps: any[] = [];
+        try {
+          const resBps = await productService.getBranchProducts({
+            product_id: resolvedProduct.id || resolvedProduct._id,
+          });
+          allBps = Array.isArray(resBps) ? resBps : [];
+          setAllBranchProducts(allBps);
+        } catch (e) {
+          console.error("Failed to fetch branch products:", e);
+          setAllBranchProducts([]);
+        }
+
+        const activeBp = allBps.find(item => String(item.branch_id) === String(branchId) && item.is_available !== false);
+        if (activeBp) {
+          setBranchProduct(activeBp);
+          setBranchUnavailable(false);
         } else {
-          // No branch selected — mark as unavailable for purchasing
+          // It's unavailable in the current selected branch. Let's find any other branch where it is available!
+          const availableBp = allBps.find(item => item.is_available !== false && Number(item.stock) > 0);
+          if (availableBp) {
+            setBranchProduct(availableBp); // Set branchProduct to the available one so details are visible!
+          } else if (allBps.length > 0) {
+            setBranchProduct(allBps[0]);
+          } else {
+            setBranchProduct(null);
+          }
           setBranchUnavailable(true);
         }
 
@@ -195,7 +279,12 @@ const ProductDetail: React.FC = () => {
       setLoading(false);
     }
     return () => { active = false; };
-  }, [id, activeBranchId]);
+  }, [id, activeBranchId, branches]);
+
+  // Reset selected image when product changes
+  React.useEffect(() => {
+    setSelectedImageIndex(0);
+  }, [id]);
 
   React.useEffect(() => {
     if (!isAuthenticated || !product) {
@@ -521,11 +610,73 @@ const ProductDetail: React.FC = () => {
 
         {/* Branch unavailable banner */}
         {branchUnavailable && (
-          <div className="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex items-center gap-3">
-            <span className="material-symbols-outlined text-amber-500 text-2xl">info</span>
-            <div>
-              <p className="font-bold text-amber-800 dark:text-amber-200">Sản phẩm này hiện chưa kinh doanh tại chi nhánh của bạn</p>
-              <p className="text-sm text-amber-600 dark:text-amber-400">Bạn vẫn có thể xem thông tin chi tiết. Giá và tình trạng tồn kho có thể chưa khả dụng.</p>
+          <div className="mb-8 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-3xl p-6 shadow-md">
+            <div className="flex items-start gap-4">
+              <div className="bg-amber-100 dark:bg-amber-900/50 rounded-2xl p-3 text-amber-600 dark:text-amber-300">
+                <span className="material-symbols-outlined !text-3xl">storefront</span>
+              </div>
+              <div className="flex-1">
+                <h4 className="font-extrabold text-amber-900 dark:text-amber-200 text-lg mb-1">
+                  Sản phẩm chưa kinh doanh tại chi nhánh của bạn
+                </h4>
+                <p className="text-sm text-amber-700 dark:text-amber-400 mb-4 font-semibold">
+                  {currentBranch?.name ? `Chi nhánh hiện tại: ${currentBranch.name}` : 'Bạn chưa chọn chi nhánh.'}
+                </p>
+                {availableBranches.length > 0 ? (
+                  <div className="space-y-4">
+                    <p className="text-sm text-slate-800 dark:text-slate-200 font-extrabold flex items-center gap-1.5">
+                      <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
+                      Sản phẩm có sẵn tại các chi nhánh sau:
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {availableBranches.map((br: any) => (
+                        <div
+                          key={br.id || br._id}
+                          className="bg-white dark:bg-slate-800/80 border border-slate-100 dark:border-slate-700 p-4 rounded-2xl flex flex-col justify-between gap-3 shadow-sm hover:shadow transition-shadow"
+                        >
+                          <div>
+                            <p className="font-black text-slate-900 dark:text-white text-sm flex items-center gap-1">
+                              <span className="material-symbols-outlined text-primary text-base">location_on</span>
+                              {br.name}
+                            </p>
+                            <div className="mt-2 flex items-baseline gap-2">
+                              <span className="text-primary font-black text-base">
+                                {Number(br.price || 0).toLocaleString('vi-VN')}₫
+                              </span>
+                              <span className="text-slate-400 text-xs font-bold">
+                                (Còn {br.stock} sản phẩm)
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSwitchToAvailableBranch(br)}
+                              className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-800 dark:text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-sm">swap_horiz</span>
+                              Chuyển chi nhánh
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleSwitchAndAddToCart(br)}
+                              className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-black text-xs rounded-xl transition-all shadow-md shadow-amber-500/20 flex items-center justify-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-sm">shopping_cart</span>
+                              Mua ngay
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900 p-4 rounded-2xl flex items-center gap-2.5 text-red-700 dark:text-red-300">
+                    <span className="material-symbols-outlined">warning</span>
+                    <span className="text-sm font-bold">Sản phẩm hiện đã hết hàng ở toàn bộ hệ thống chi nhánh.</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -534,49 +685,158 @@ const ProductDetail: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-16">
           {/* Gallery */}
           <div className="space-y-4">
-            <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden group relative cursor-zoom-in">
-              <img
-                alt={product.name}
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                src={resolveImageUrl(product.images?.[0] || product.thumbnail || '') || fallbackProductImage}
-              />
-              <div className="absolute top-4 left-4 flex flex-col gap-2">
-                {branchProduct?.is_new && (
-                  <span className="bg-primary text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
-                    {t('product.badgeNew')}
-                  </span>
-                )}
-                {branchProduct?.is_best_seller && (
-                  <span className="bg-orange-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
-                    {t('product.badgeBestSeller')}
-                  </span>
-                )}
-                {product.is_featured && (
-                  <span className="bg-violet-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
-                    Nổi bật
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="grid grid-cols-4 gap-4">
-              {product.images?.slice(0, 4).map((img: any, idx: number) => (
-                <div
-                  key={idx}
-                  className={`aspect-square rounded-lg border-2 ${
-                    idx === 0 ? 'border-primary' : 'border-slate-200 dark:border-slate-700'
-                  } overflow-hidden cursor-pointer bg-slate-100 dark:bg-slate-800`}
-                >
-                  <img className="w-full h-full object-cover" src={resolveImageUrl(img) || fallbackProductImage} alt={product.name} />
-                </div>
-              ))}
-            </div>
+            {(() => {
+              const parseImagesSafely = (prod: any): string[] => {
+                if (!prod) return [];
+                const urls: string[] = [];
+                const addUrl = (url: any) => {
+                  if (!url || typeof url !== 'string') return;
+                  const trimmed = url.trim();
+                  if (!trimmed) return;
+                  if (['null', 'undefined', 'nan', '[object object]'].includes(trimmed.toLowerCase())) return;
+                  if (!urls.includes(trimmed)) {
+                    urls.push(trimmed);
+                  }
+                };
+
+                const processValue = (val: any) => {
+                  if (!val) return;
+                  if (Array.isArray(val)) {
+                    val.forEach(item => processValue(item));
+                  } else if (typeof val === 'string') {
+                    const trimmed = val.trim();
+                    if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+                      try {
+                        const parsed = JSON.parse(trimmed);
+                        processValue(parsed);
+                      } catch {
+                        addUrl(trimmed);
+                      }
+                    } else {
+                      addUrl(trimmed);
+                    }
+                  }
+                };
+
+                if (prod.images) processValue(prod.images);
+                if (prod.gallery) processValue(prod.gallery);
+                if (prod.image) processValue(prod.image);
+                if (prod.thumbnail) processValue(prod.thumbnail);
+
+                return urls;
+              };
+
+              const allImages = parseImagesSafely(product)
+                .map((img: any) => resolveImageUrl(String(img || '')))
+                .filter(Boolean);
+              
+              const mainImage = allImages[selectedImageIndex] || allImages[0] || fallbackProductImage;
+              
+              const nextImage = () => {
+                if (allImages.length <= 1) return;
+                setSelectedImageIndex((prev) => (prev + 1) % allImages.length);
+              };
+              
+              const prevImage = () => {
+                if (allImages.length <= 1) return;
+                setSelectedImageIndex((prev) => (prev - 1 + allImages.length) % allImages.length);
+              };
+
+              return (
+                <>
+                  <div className="aspect-square rounded-2xl bg-slate-100 dark:bg-slate-800 overflow-hidden group relative shadow-md">
+                    <img
+                      alt={product.name}
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = fallbackProductImage;
+                      }}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      src={mainImage}
+                    />
+                    {allImages.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            prevImage();
+                          }}
+                          className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/70 backdrop-blur-sm text-white w-10 h-10 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center justify-center cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined !text-2xl">chevron_left</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            nextImage();
+                          }}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/70 backdrop-blur-sm text-white w-10 h-10 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center justify-center cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined !text-2xl">chevron_right</span>
+                        </button>
+                      </>
+                    )}
+                    <div className="absolute top-4 left-4 flex flex-col gap-2">
+                      {branchProduct?.is_new && (
+                        <span className="bg-primary text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
+                          {t('product.badgeNew')}
+                        </span>
+                      )}
+                      {branchProduct?.is_best_seller && (
+                        <span className="bg-orange-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
+                          {t('product.badgeBestSeller')}
+                        </span>
+                      )}
+                      {product.is_featured && (
+                        <span className="bg-violet-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
+                          Nổi bật
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {allImages.length > 1 && (
+                    <div className="grid grid-cols-5 gap-3">
+                      {allImages.map((img: any, idx: number) => (
+                        <button
+                          type="button"
+                          key={idx}
+                          onClick={() => setSelectedImageIndex(idx)}
+                          className={`aspect-square rounded-xl border-2 ${
+                            idx === selectedImageIndex ? 'border-primary ring-2 ring-primary/20' : 'border-slate-200 dark:border-slate-700 hover:border-primary/50'
+                          } overflow-hidden cursor-pointer bg-slate-100 dark:bg-slate-800 transition-all duration-200`}
+                        >
+                          <img
+                            className="w-full h-full object-cover"
+                            src={img}
+                            alt={`${product.name} - ${idx + 1}`}
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = fallbackProductImage;
+                            }}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
 
           {/* Info */}
           <div className="flex flex-col">
-            <p className="text-slate-400 font-bold tracking-widest text-xs mb-2 uppercase">
-              {product.brand || 'LOTTE SELECTION'}
-            </p>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <span className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-extrabold px-2.5 py-1 rounded">
+                {product.brand || 'LOTTE SELECTION'}
+              </span>
+              <span className="text-slate-300">|</span>
+              <span className="text-xs text-slate-500 font-bold flex items-center gap-1">
+                <span className="material-symbols-outlined text-[16px] text-primary">store</span>
+                Chi nhánh sở hữu: <span className="text-slate-800 dark:text-slate-200">{productRealBranches.map((b: any) => b.name).join(', ') || 'Tất cả chi nhánh'}</span>
+              </span>
+            </div>
             <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-slate-100 mb-4 leading-tight">
               {product.name}
             </h1>
@@ -610,6 +870,24 @@ const ProductDetail: React.FC = () => {
               <div className="flex justify-between">
                 <span className="text-slate-500">Ngành hàng / NCC:</span>
                 <span className="font-medium text-slate-900 dark:text-slate-100">{branchProduct?.supplier_name || product.supplier_name || 'N/A'}</span>
+              </div>
+              <div className="col-span-2 flex flex-col gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800/40">
+                <span className="text-slate-500 font-semibold">Chi nhánh kinh doanh sản phẩm này:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {productRealBranches.map((br: any) => (
+                    <span
+                      key={br.id || br._id}
+                      className={`px-2.5 py-1 text-xs font-bold rounded-lg border ${
+                        String(br.id || br._id) === String(activeBranchId)
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-300 dark:border-emerald-900'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800/40 dark:text-slate-400 dark:border-slate-700'
+                      }`}
+                    >
+                      {br.name} {br.stock > 0 ? `(${t('common.inStock', 'Còn hàng')}: ${br.stock})` : `(${t('common.outOfStock', 'Hết hàng')})`}
+                    </span>
+                  ))}
+                  {productRealBranches.length === 0 && <span className="text-slate-400 font-medium">N/A</span>}
+                </div>
               </div>
               <div className="col-span-2 flex justify-between bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg">
                 <span className="text-slate-700 font-bold flex items-center gap-2">
@@ -1075,7 +1353,7 @@ const ProductDetail: React.FC = () => {
                   <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 mb-3 overflow-hidden relative">
                     <img
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                      src={p.images?.[0] || p.thumbnail || 'https://via.placeholder.com/300'}
+                      src={resolveImageUrl(p.images?.[0] || p.thumbnail) || fallbackProductImage}
                       alt={p.name}
                     />
                   </div>
@@ -1103,7 +1381,7 @@ const ProductDetail: React.FC = () => {
                   <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 mb-3 overflow-hidden relative">
                     <img
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                      src={p.images?.[0] || p.thumbnail || 'https://via.placeholder.com/300'}
+                      src={resolveImageUrl(p.images?.[0] || p.thumbnail) || fallbackProductImage}
                       alt={p.name}
                     />
                   </div>

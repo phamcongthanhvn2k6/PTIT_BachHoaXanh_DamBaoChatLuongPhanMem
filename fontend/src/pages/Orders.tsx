@@ -92,20 +92,22 @@ const Orders: React.FC = () => {
                 <div className="flex flex-col gap-4">
                   {displayedOrders.map((order: any) => (
                       <div key={order.id} className={`bg-white dark:bg-background-dark/50 rounded-xl p-5 shadow-sm border border-primary/5 flex flex-col md:flex-row gap-6 items-start ${order.status === 'CANCELLED' || order.status === 'RETURNED' ? 'opacity-75' : ''}`}>
-                      <div className={`w-full md:w-32 aspect-square rounded-lg bg-primary/5 flex items-center justify-center overflow-hidden ${(order.status === 'CANCELLED' || order.status === 'RETURNED') ? 'grayscale' : ''}`}>
+                      <div className={`w-24 h-24 md:w-32 md:h-32 shrink-0 rounded-lg bg-primary/5 flex items-center justify-center overflow-hidden ${(order.status === 'CANCELLED' || order.status === 'RETURNED') ? 'grayscale' : ''}`}>
                         <img alt="Order item" className="w-full h-full object-cover" src={resolveImageUrl(order.items?.[0]?.product_image)} />
                       </div>
                       <div className="flex-1 w-full">
                         <div className="flex justify-between items-start mb-2">
                           <div>
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium mb-2 ${['COMPLETED', 'DELIVERED'].includes(order.status) ? 'bg-green-100 text-green-800' : ['CANCELLED', 'RETURNED'].includes(order.status) ? 'bg-slate-100 text-slate-800' : 'bg-blue-100 text-blue-800'}`}>
-                                {t(`orders.status.${order.status}`)}
-                            </span>
-                            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">{t('orders.orderId', { id: order.id })}</h3>
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                              {t(`orders.userFriendlyStatus.${order.status}`, order.status)}
+                            </h3>
+                            <p className="text-xs font-mono text-slate-400 mt-1">
+                              {t('orders.orderCode', { code: order.id })}
+                            </p>
                           </div>
                           <p className="text-lg font-bold text-primary">{(order.total_amount || 0).toLocaleString('vi-VN')}đ</p>
                         </div>
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 text-sm text-slate-500 mb-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 text-sm text-slate-500 mb-6 mt-3">
                           <div className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">calendar_today</span>{new Date(order.created_at).toLocaleDateString('vi-VN')}</div>
                           <div className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">inventory_2</span>{t('orders.itemsCount', { count: (order.items || []).reduce((s: number, i: any) => s + i.quantity, 0) })}</div>
                           <div className="flex items-center gap-1 text-primary"><span className="material-symbols-outlined text-sm">storefront</span>{getBranchName(order.branch_id, order.branch_name)}</div>

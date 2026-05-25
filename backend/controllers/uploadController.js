@@ -1,41 +1,16 @@
 import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
+import mongoose from 'mongoose';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const promotionUploadRoot = path.resolve(__dirname, '..', '..', 'uploads', 'promotions');
-const reviewUploadRoot = path.resolve(__dirname, '..', '..', 'uploads', 'reviews');
-const supportUploadRoot = path.resolve(__dirname, '..', '..', 'uploads', 'support');
-const evidenceUploadRoot = path.resolve(__dirname, '..', '..', 'uploads', 'evidence');
-const brandUploadRoot = path.resolve(__dirname, '..', '..', 'uploads', 'brand');
-
-const ensureUploadRoot = (dir) => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-};
-
-ensureUploadRoot(promotionUploadRoot);
-ensureUploadRoot(reviewUploadRoot);
-ensureUploadRoot(supportUploadRoot);
-ensureUploadRoot(evidenceUploadRoot);
-ensureUploadRoot(brandUploadRoot);
 
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/x-icon', 'image/vnd.microsoft.icon']);
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 
-const buildStorage = ({ dir, prefix }) => multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, dir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg';
-    const safeExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.ico'].includes(ext) ? ext : '.jpg';
-    const stamp = Date.now();
-    const random = Math.random().toString(36).slice(2, 8);
-    cb(null, `${prefix}_${stamp}_${random}${safeExt}`);
-  },
-});
+const storage = multer.memoryStorage();
 
 const fileFilter = (_req, file, cb) => {
   if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
@@ -45,34 +20,75 @@ const fileFilter = (_req, file, cb) => {
 };
 
 export const promotionImageUploadMiddleware = multer({
-  storage: buildStorage({ dir: promotionUploadRoot, prefix: 'promotion' }),
+  storage,
   fileFilter,
   limits: { fileSize: MAX_IMAGE_SIZE_BYTES },
 }).single('image');
 
 export const reviewImageUploadMiddleware = multer({
-  storage: buildStorage({ dir: reviewUploadRoot, prefix: 'review' }),
+  storage,
   fileFilter,
   limits: { fileSize: MAX_IMAGE_SIZE_BYTES },
 }).array('images', 5);
 
 export const supportImageUploadMiddleware = multer({
-  storage: buildStorage({ dir: supportUploadRoot, prefix: 'support' }),
+  storage,
   fileFilter,
   limits: { fileSize: MAX_IMAGE_SIZE_BYTES },
 }).array('images', 5);
 
 export const evidenceImageUploadMiddleware = multer({
-  storage: buildStorage({ dir: evidenceUploadRoot, prefix: 'evidence' }),
+  storage,
   fileFilter,
   limits: { fileSize: MAX_IMAGE_SIZE_BYTES },
 }).array('images', 5);
 
 export const brandLogoUploadMiddleware = multer({
-  storage: buildStorage({ dir: brandUploadRoot, prefix: 'brand_logo' }),
+  storage,
   fileFilter,
   limits: { fileSize: 2 * 1024 * 1024 },
 }).single('logo');
+
+export const productImageUploadMiddleware = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: MAX_IMAGE_SIZE_BYTES },
+}).array('images', 5);
+
+export const productSingleImageUploadMiddleware = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: MAX_IMAGE_SIZE_BYTES },
+}).single('image');
+
+const uploadToGridFS = (file, category) => {
+  return new Promise((resolve, reject) => {
+    if (!mongoose.connection.db) {
+      return reject(new Error('Database connection not established'));
+    }
+    const db = mongoose.connection.db;
+    const bucket = new mongoose.mongo.GridFSBucket(db, { bucketName: 'uploads' });
+    
+    const ext = path.extname(file.originalname || '').toLowerCase() || '.jpg';
+    const safeExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.ico'].includes(ext) ? ext : '.jpg';
+    const stamp = Date.now();
+    const random = Math.random().toString(36).slice(2, 8);
+    const filename = `${category}_${stamp}_${random}${safeExt}`;
+    
+    const uploadStream = bucket.openUploadStream(filename, {
+      contentType: file.mimetype,
+      metadata: { category }
+    });
+    
+    uploadStream.end(file.buffer);
+    
+    uploadStream.on('finish', () => {
+      resolve(filename);
+    });
+    
+    uploadStream.on('error', reject);
+  });
+};
 
 export const uploadPromotionImage = async (req, res) => {
   try {
@@ -80,15 +96,16 @@ export const uploadPromotionImage = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Image file is required' });
     }
 
+    const filename = await uploadToGridFS(req.file, 'promotion');
     const host = `${req.protocol}://${req.get('host')}`;
-    const relativePath = `/uploads/promotions/${req.file.filename}`;
+    const relativePath = `/uploads/promotions/${filename}`;
 
     return res.status(201).json({
       success: true,
       data: {
         url: `${host}${relativePath}`,
         relative_url: relativePath,
-        filename: req.file.filename,
+        filename,
         size: req.file.size,
         mimetype: req.file.mimetype,
       },
@@ -107,16 +124,17 @@ export const uploadReviewImages = async (req, res) => {
     }
 
     const host = `${req.protocol}://${req.get('host')}`;
-    const mapped = files.map((file) => {
-      const relativePath = `/uploads/reviews/${file.filename}`;
+    const mapped = await Promise.all(files.map(async (file) => {
+      const filename = await uploadToGridFS(file, 'review');
+      const relativePath = `/uploads/reviews/${filename}`;
       return {
         url: `${host}${relativePath}`,
         relative_url: relativePath,
-        filename: file.filename,
+        filename,
         size: file.size,
         mimetype: file.mimetype,
       };
-    });
+    }));
 
     return res.status(201).json({
       success: true,
@@ -139,16 +157,17 @@ export const uploadSupportImages = async (req, res) => {
     }
 
     const host = `${req.protocol}://${req.get('host')}`;
-    const mapped = files.map((file) => {
-      const relativePath = `/uploads/support/${file.filename}`;
+    const mapped = await Promise.all(files.map(async (file) => {
+      const filename = await uploadToGridFS(file, 'support');
+      const relativePath = `/uploads/support/${filename}`;
       return {
         url: `${host}${relativePath}`,
         relative_url: relativePath,
-        filename: file.filename,
+        filename,
         size: file.size,
         mimetype: file.mimetype,
       };
-    });
+    }));
 
     return res.status(201).json({
       success: true,
@@ -171,16 +190,17 @@ export const uploadEvidenceImages = async (req, res) => {
     }
 
     const host = `${req.protocol}://${req.get('host')}`;
-    const mapped = files.map((file) => {
-      const relativePath = `/uploads/evidence/${file.filename}`;
+    const mapped = await Promise.all(files.map(async (file) => {
+      const filename = await uploadToGridFS(file, 'evidence');
+      const relativePath = `/uploads/evidence/${filename}`;
       return {
         url: `${host}${relativePath}`,
         relative_url: relativePath,
-        filename: file.filename,
+        filename,
         size: file.size,
         mimetype: file.mimetype,
       };
-    });
+    }));
 
     return res.status(201).json({
       success: true,
@@ -200,14 +220,17 @@ export const uploadBrandLogo = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'Logo image file is required' });
     }
+    
+    const filename = await uploadToGridFS(req.file, 'brand_logo');
     const host = `${req.protocol}://${req.get('host')}`;
-    const relativePath = `/uploads/brand/${req.file.filename}`;
+    const relativePath = `/uploads/brand/${filename}`;
+    
     return res.status(201).json({
       success: true,
       data: {
         url: `${host}${relativePath}`,
         relative_url: relativePath,
-        filename: req.file.filename,
+        filename,
         size: req.file.size,
         mimetype: req.file.mimetype,
       },
@@ -215,5 +238,69 @@ export const uploadBrandLogo = async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const uploadProductImages = async (req, res) => {
+  try {
+    const files = Array.isArray(req.files) ? req.files : (req.file ? [req.file] : []);
+    if (files.length === 0) {
+      return res.status(400).json({ success: false, message: 'At least one image file is required' });
+    }
+
+    const host = `${req.protocol}://${req.get('host')}`;
+    const mapped = await Promise.all(files.map(async (file) => {
+      const filename = await uploadToGridFS(file, 'product');
+      const relativePath = `/uploads/products/${filename}`;
+      return {
+        url: `${host}${relativePath}`,
+        relative_url: relativePath,
+        filename,
+        size: file.size,
+        mimetype: file.mimetype,
+      };
+    }));
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        urls: mapped.map((item) => item.url),
+        files: mapped,
+      },
+      message: 'Product images uploaded successfully',
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const serveFile = async (req, res) => {
+  try {
+    const { category, filename } = req.params;
+    
+    if (mongoose.connection.db) {
+      const db = mongoose.connection.db;
+      const bucket = new mongoose.mongo.GridFSBucket(db, { bucketName: 'uploads' });
+      const files = await bucket.find({ filename }).toArray();
+      
+      if (files.length > 0) {
+        const file = files[0];
+        res.set('Content-Type', file.contentType);
+        res.set('Cache-Control', 'public, max-age=31536000');
+        const downloadStream = bucket.openDownloadStream(file._id);
+        return downloadStream.pipe(res);
+      }
+    }
+    
+    // Fallback to local disk for backward compatibility
+    const localPath = path.resolve(__dirname, '..', '..', 'uploads', category, filename);
+    if (fs.existsSync(localPath)) {
+      res.set('Cache-Control', 'public, max-age=31536000');
+      return res.sendFile(localPath);
+    }
+    
+    return res.status(404).send('File not found');
+  } catch (err) {
+    return res.status(500).send('Error serving file');
   }
 };

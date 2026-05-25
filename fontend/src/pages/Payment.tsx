@@ -106,6 +106,11 @@ const Payment: React.FC = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleCopyText = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success(`${label} ${t('payment.copied')}`);
+  };
+
   const handleConfirmPayment = async () => {
     if (!location.state) {
       toast.error('Thiếu thông tin đơn hàng. Vui lòng quay lại bước thanh toán.');
@@ -155,6 +160,13 @@ const Payment: React.FC = () => {
 
     if (validCartItems.length === 0) {
       toast.error('Giỏ hàng không hợp lệ. Vui lòng kiểm tra lại sản phẩm trước khi thanh toán.');
+      return;
+    }
+
+    // Verify saved method rule for bank transfers
+    if (selectedMethodId === 'qr_transfer' && savedMethods.length === 0) {
+      toast.error(t('payment.noSavedMethodsMessage'));
+      navigate('/account/payments');
       return;
     }
 
@@ -265,18 +277,15 @@ const Payment: React.FC = () => {
       }
 
       console.log('[Payment] Order payload:', { source: checkoutSource, itemsCount: orderPayload.items.length, total: orderPayload.total_amount });
-      console.log('[ORDER PAYLOAD]', orderPayload);
 
       console.log("[Payment] Creating order...");
       createdOrder = await orderService.createOrder(orderPayload);
       
-      // Robustly extract orderId
       const extractedId = createdOrder?.id || (createdOrder as any)?._id;
       const orderId = extractedId && String(extractedId) !== 'undefined' ? String(extractedId) : '';
-      console.log("[Payment] Order created — orderId:", orderId, 'raw:', createdOrder);
+      console.log("[Payment] Order created — orderId:", orderId);
       
       if (!orderId || orderId === 'undefined' || orderId === 'null') {
-        console.error('[Payment] FATAL: Order created but no valid ID returned!', createdOrder);
         toast.error('Lỗi tạo đơn hàng: không nhận được mã đơn hàng hợp lệ. Vui lòng thử lại.');
         setIsProcessing(false);
         setPaymentStatus('failed');
@@ -289,7 +298,6 @@ const Payment: React.FC = () => {
       // Create payment transaction
       let txnData: any = null;
       try {
-        console.log('[Payment] Creating payment transaction for orderId:', orderId);
         txnData = await paymentService.processPayment({
           orderId,
           provider,
@@ -298,7 +306,6 @@ const Payment: React.FC = () => {
           userId: Number(currentUser?.id) || 1,
           currency: 'VND'
         });
-        console.log("[Payment] Transaction created:", { txnId: txnData?._id || txnData?.id, transaction_id: txnData?.transaction_id, order_id: txnData?.order_id });
       } catch(err: any) {
         console.error("[Payment] Payment API failed:", err);
         toast.error('Lỗi xử lý thanh toán. Đơn hàng đã tạo nhưng chưa thanh toán.');
@@ -307,8 +314,28 @@ const Payment: React.FC = () => {
         return;
       }
 
-      if (selectedMethodId !== 'cod') {
-        // Show QR payment screen — store order with guaranteed id
+      if (selectedMethodId === 'cod') {
+        const paidOrder: Order = {
+          ...createdOrder,
+          order_address: createdOrder?.order_address || orderPayload.order_address,
+          branch_id: createdOrder?.branch_id || selectedBranchId,
+          branch_name: (createdOrder as any)?.branch_name || branchName,
+          payment_method: selectedMethodId,
+          payment_status: 'PENDING',
+          status: 'CONFIRMED',
+          payment: {
+            method: provider,
+            transaction_id: txnData?.transaction_id || txnData?._id || txnData?.id || '',
+            status: 'PENDING'
+          },
+          updated_at: new Date().toISOString()
+        } as unknown as Order;
+
+        await handleSuccessRedirect(paidOrder, txnData, selectedBranchId);
+        return;
+      }
+
+      if (selectedMethodId === 'qr_transfer') {
         const orderWithId = { ...createdOrder, id: orderId };
         setPendingPayment({ transaction: txnData, order: orderWithId });
         setPaymentStatus('pending');
@@ -316,32 +343,40 @@ const Payment: React.FC = () => {
         return;
       }
 
-      // COD payment - redirect to success directly
-      const paidOrder: Order = {
-        ...createdOrder,
-        order_address: createdOrder?.order_address || orderPayload.order_address,
-        branch_id: createdOrder?.branch_id || selectedBranchId,
-        branch_name: (createdOrder as any)?.branch_name || branchName,
-        payment_method: selectedMethodId,
-        payment_status: 'PENDING',
-        status: 'CONFIRMED',
-        payment: {
-          method: provider,
-          transaction_id: txnData?.transaction_id || txnData?._id || txnData?.id || '',
-          status: 'PENDING'
-        },
-        updated_at: new Date().toISOString()
-      } as unknown as Order;
+      // Direct saved card/wallet flow simulation
+      const txId = txnData?._id || txnData?.id || txnData?.transaction_id;
+      setTimeout(async () => {
+        try {
+          const confirmResult = await paymentService.confirmPayment(txId);
+          const paidOrder: Order = {
+            ...createdOrder,
+            payment_method: selectedMethodId,
+            payment_status: 'PAID',
+            status: 'CONFIRMED',
+            points_earned: confirmResult?.points_earned || 0,
+            payment: {
+              method: provider,
+              transaction_id: txnData?.transaction_id || txId,
+              status: 'PAID'
+            },
+            updated_at: new Date().toISOString()
+          } as unknown as Order;
 
-      await handleSuccessRedirect(paidOrder, txnData, selectedBranchId);
+          await handleSuccessRedirect(paidOrder, txnData, selectedBranchId);
+        } catch (confirmErr: any) {
+          console.error("Direct confirm failed:", confirmErr);
+          toast.error("Giao dịch thẻ bị từ chối hoặc không đủ số dư. Vui lòng thử lại.");
+          setPaymentStatus('failed');
+          setIsProcessing(false);
+        }
+      }, 2000);
 
     } catch (err: any) {
       console.error("[ORDER ERROR FULL]", err.response?.data || err);
       const backendMsg = err.response?.data?.message;
       toast.error(backendMsg || err.message || 'Lỗi xử lý thanh toán. Vui lòng thử lại sau.');
       setPaymentStatus('failed');
-    } finally {
-       setIsProcessing(false);
+      setIsProcessing(false);
     }
   };
 
@@ -356,10 +391,7 @@ const Payment: React.FC = () => {
 
     dispatch(createOrder(paidOrder));
     dispatch(clearCart());
-
-    // Refresh user profile to get updated loyalty points + membership tier
     dispatch(verifySession() as any);
-    // Refresh loyalty transaction history
     dispatch(loadLoyaltyTransactions() as any);
 
     setPaymentStatus('paid');
@@ -381,7 +413,6 @@ const Payment: React.FC = () => {
     setPaymentStatus('processing');
 
     try {
-      // Extract transaction ID robustly, avoiding "undefined" string literal
       const rawTxId = pendingPayment.transaction?._id || pendingPayment.transaction?.id || pendingPayment.transaction?.transaction_id;
       const txId = rawTxId && String(rawTxId) !== 'undefined' ? String(rawTxId) : '';
       
@@ -391,25 +422,16 @@ const Payment: React.FC = () => {
       console.log('[Payment] handleUserConfirmPayment — txId:', txId, 'orderId:', orderId);
 
       if (!txId || txId === 'undefined' || txId === 'null') {
-        console.error('[Payment] Cannot confirm: transaction ID is missing or invalid!', pendingPayment.transaction);
         toast.error('Không tìm thấy mã giao dịch hợp lệ. Vui lòng thử lại.');
         setIsConfirming(false);
         setPaymentStatus('pending');
         return;
       }
 
-      if (!orderId || orderId === 'undefined' || orderId === 'null') {
-        console.error('[Payment] Cannot confirm: order ID is missing or invalid!', pendingPayment.order);
-        toast.error('Mất thông tin mã đơn hàng hợp lệ. Vui lòng tải lại trang.');
-        setIsConfirming(false);
-        setPaymentStatus('failed');
-        return;
-      }
+      // Simulate a realistic verification delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-      console.log("[Payment] Confirming payment for transaction:", txId);
       const confirmResult = await paymentService.confirmPayment(txId);
-      console.log("[Payment] Confirm result:", confirmResult);
-
       const provider = pendingPayment.transaction?.provider || 'BANK_TRANSFER';
       const paidOrder: Order = {
         ...pendingPayment.order,
@@ -428,8 +450,7 @@ const Payment: React.FC = () => {
       await handleSuccessRedirect(paidOrder, pendingPayment.transaction, pendingPayment.order?.branch_id || currentBranchId);
     } catch(err: any) {
       console.error("Confirm failed:", err);
-      const errorMsg = err?.response?.data?.message || 'Không thể xác nhận thanh toán. Vui lòng thử lại.';
-      toast.error(errorMsg);
+      toast.error(err?.response?.data?.message || 'Không thể xác nhận thanh toán. Vui lòng thử lại.');
       setPaymentStatus('pending');
     } finally {
       setIsConfirming(false);
@@ -478,6 +499,30 @@ const Payment: React.FC = () => {
 
         <div className="p-6 md:p-8 flex flex-col items-center text-center">
 
+          {/* Stepper tracking payment sequence */}
+          <div className="w-full flex items-center justify-between mb-8 px-4">
+            <div className="flex flex-col items-center">
+              <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-sm">
+                <span className="material-symbols-outlined text-sm">check</span>
+              </div>
+              <span className="text-[10px] font-bold text-slate-500 mt-1">{t('payment.stepCreate')}</span>
+            </div>
+            <div className="flex-1 h-0.5 bg-emerald-500 mx-2"></div>
+            <div className="flex flex-col items-center">
+              <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm animate-pulse">
+                2
+              </div>
+              <span className="text-[10px] font-bold text-primary mt-1">{t('payment.stepTransfer')}</span>
+            </div>
+            <div className="flex-1 h-0.5 bg-slate-200 dark:bg-slate-700 mx-2"></div>
+            <div className="flex flex-col items-center">
+              <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 flex items-center justify-center font-bold text-sm">
+                3
+              </div>
+              <span className="text-[10px] font-bold text-slate-400 mt-1">{t('payment.stepVerify')}</span>
+            </div>
+          </div>
+
           {/* Title */}
           <div className="mb-6">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4">
@@ -509,30 +554,56 @@ const Payment: React.FC = () => {
 
           {/* Payment Info Card */}
           <div className="w-full bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-700 text-left mb-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <span className="material-symbols-outlined text-primary text-lg">account_balance</span>
-              <span className="font-bold text-sm text-slate-700 dark:text-slate-200 uppercase tracking-wider">{t('payment.transferInfo')}</span>
+            <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100 dark:border-slate-700">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-lg">account_balance</span>
+                <span className="font-bold text-sm text-slate-700 dark:text-slate-200 uppercase tracking-wider">{t('payment.transferInfo')}</span>
+              </div>
+              <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-black text-[10px] uppercase rounded tracking-wider">
+                {t('payment.transferStatusPending')}
+              </span>
             </div>
 
             <div className="space-y-3">
-              <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-700">
+              <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-slate-700">
                 <span className="text-slate-500 text-sm">{t('payment.bank')}</span>
                 <span className="font-bold text-sm">{qrData?.bank || qrData?.accountName || 'MB Bank'}</span>
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-700">
+              <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-slate-700">
                 <span className="text-slate-500 text-sm">{t('payment.accountHolder')}</span>
                 <span className="font-bold text-sm">{qrData?.accountName || 'CONG TY TNHH LOTTE MART VN'}</span>
               </div>
-              <div className="flex justify-between items-center py-2 border-b border-slate-100 dark:border-slate-700">
+              
+              <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-slate-700">
                 <span className="text-slate-500 text-sm">{t('payment.accountNumber')}</span>
-                <span className="font-bold text-sm text-primary tracking-wider">{qrData?.accountNumber || '0851000386868'}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-sm text-primary tracking-wider">{qrData?.accountNumber || '0851000386868'}</span>
+                  <button 
+                    onClick={() => handleCopyText(qrData?.accountNumber || '0851000386868', t('payment.accountNumber'))}
+                    className="p-1 text-slate-400 hover:text-primary transition flex items-center"
+                    title={t('payment.copy')}
+                  >
+                    <span className="material-symbols-outlined text-base">content_copy</span>
+                  </button>
+                </div>
               </div>
-              <div className="flex justify-between items-start py-2 border-b border-slate-100 dark:border-slate-700">
+              
+              <div className="flex justify-between items-start py-1 border-b border-slate-100 dark:border-slate-700">
                 <span className="text-slate-500 text-sm shrink-0">{t('payment.transferContent')}</span>
-                <span className="font-bold font-mono text-xs bg-slate-100 dark:bg-slate-700 px-2.5 py-1 rounded-lg tracking-widest text-right ml-4 break-all">
-                  {qrData?.description || txnId}
-                </span>
+                <div className="flex items-center gap-2 ml-4">
+                  <span className="font-bold font-mono text-xs bg-slate-100 dark:bg-slate-700 px-2.5 py-1 rounded-lg tracking-widest text-right break-all">
+                    {qrData?.description || txnId}
+                  </span>
+                  <button 
+                    onClick={() => handleCopyText(qrData?.description || txnId, t('payment.transferContent'))}
+                    className="p-1 text-slate-400 hover:text-primary transition flex items-center shrink-0"
+                    title={t('payment.copy')}
+                  >
+                    <span className="material-symbols-outlined text-base">content_copy</span>
+                  </button>
+                </div>
               </div>
+              
               <div className="flex justify-between items-center pt-2">
                 <span className="text-slate-500 text-sm font-semibold">{t('payment.amount')}</span>
                 <span className="font-black text-xl text-primary">{formatMoney(amount)}đ</span>
@@ -546,7 +617,7 @@ const Payment: React.FC = () => {
               <span className="material-symbols-outlined text-blue-500 animate-spin">autorenew</span>
               <div className="text-left">
                 <p className="text-blue-800 dark:text-blue-300 font-bold text-sm">{t('payment.confirming')}</p>
-                <p className="text-blue-600 dark:text-blue-400 text-xs">Vui lòng chờ trong giây lát</p>
+                <p className="text-blue-600 dark:text-blue-400 text-xs">Hệ thống đang đối soát dữ liệu ngân hàng</p>
               </div>
             </div>
           )}
@@ -578,7 +649,7 @@ const Payment: React.FC = () => {
           <div className="mt-6 flex items-start gap-2 text-left w-full">
             <span className="material-symbols-outlined text-emerald-500 text-lg mt-0.5">verified_user</span>
             <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              Giao dịch được bảo mật bởi hệ thống thanh toán của LOTTE Mart. Nội dung chuyển khoản phải chính xác để hệ thống tự động xác nhận.
+              {t('payment.secureDesc')}
             </p>
           </div>
         </div>
@@ -597,12 +668,23 @@ const Payment: React.FC = () => {
           <button onClick={() => navigate(-1)} className="flex items-center justify-center rounded-full h-10 w-10 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-colors -ml-2">
             <span className="material-symbols-outlined">arrow_back</span>
           </button>
-          <h2 className="text-xl font-bold tracking-tight">Thanh toán</h2>
+          <h2 className="text-xl font-bold tracking-tight">{t('payment.title')}</h2>
         </div>
         <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-           <span className="material-symbols-outlined text-sm">lock</span> Bảo mật
+           <span className="material-symbols-outlined text-sm">lock</span> {t('payment.security')}
         </div>
       </header>
+
+      {/* Direct Card Processing Modal Overlay */}
+      {isProcessing && selectedMethodId !== 'cod' && selectedMethodId !== 'qr_transfer' && !pendingPayment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm p-8 text-center shadow-2xl flex flex-col items-center border border-slate-100 dark:border-slate-800">
+            <span className="material-symbols-outlined text-5xl text-primary animate-spin mb-4">progress_activity</span>
+            <h3 className="text-lg font-bold mb-2">Đang liên kết thanh toán...</h3>
+            <p className="text-sm text-slate-500">Hệ thống đang tiến hành thanh toán trực tiếp qua phương thức đã lưu của bạn. Vui lòng không đóng cửa sổ này.</p>
+          </div>
+        </div>
+      )}
 
       <div className="p-6">
 
@@ -643,7 +725,7 @@ const Payment: React.FC = () => {
         <div className="flex items-center justify-between mb-4">
            <h3 className="text-slate-900 dark:text-slate-100 text-base font-black uppercase tracking-tight">{t('payment.chooseSource')}</h3>
            <button onClick={() => navigate('/account/payments')} className="text-primary text-xs font-bold bg-primary/10 px-3 py-1.5 rounded-lg hover:bg-primary/20 transition flex items-center gap-1">
-              Thêm nguồn <span className="material-symbols-outlined text-[14px]">add_circle</span>
+              {t('payment.addSource')} <span className="material-symbols-outlined text-[14px]">add_circle</span>
            </button>
         </div>
 
@@ -667,19 +749,37 @@ const Payment: React.FC = () => {
              </label>
           ))}
 
-          {/* QR Transfer Option */}
-          <label className={`relative flex items-center justify-between p-4 rounded-xl border-2 ${selectedMethodId === 'qr_transfer' ? 'border-primary bg-primary/5 shadow-sm ring-2 ring-primary/20' : 'border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 hover:border-slate-300'} cursor-pointer transition-all group`}>
-             <div className="flex items-center gap-4">
-               <div className="w-12 h-8 bg-blue-50 dark:bg-blue-900/30 rounded flex items-center justify-center text-blue-600 group-hover:bg-blue-100 transition">
-                 <span className="material-symbols-outlined text-xl">qr_code_2</span>
+          {/* QR Transfer Option - only available if at least 1 saved payment method exists */}
+          {savedMethods.length > 0 ? (
+            <label className={`relative flex items-center justify-between p-4 rounded-xl border-2 ${selectedMethodId === 'qr_transfer' ? 'border-primary bg-primary/5 shadow-sm ring-2 ring-primary/20' : 'border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 hover:border-slate-300'} cursor-pointer transition-all group`}>
+               <div className="flex items-center gap-4">
+                 <div className="w-12 h-8 bg-blue-50 dark:bg-blue-900/30 rounded flex items-center justify-center text-blue-600 group-hover:bg-blue-100 transition">
+                   <span className="material-symbols-outlined text-xl">qr_code_2</span>
+                 </div>
+                 <div>
+                   <p className="text-slate-900 dark:text-slate-100 text-sm font-bold">{t('payment.bankTransfer')}</p>
+                   <p className="text-slate-500 text-xs mt-0.5">{t('payment.qrApp')}</p>
+                 </div>
                </div>
-               <div>
-                 <p className="text-slate-900 dark:text-slate-100 text-sm font-bold">{t('payment.bankTransfer')}</p>
-                 <p className="text-slate-500 text-xs mt-0.5">{t('payment.qrApp')}</p>
-               </div>
-             </div>
-             <input checked={selectedMethodId === 'qr_transfer'} onChange={() => setSelectedMethodId('qr_transfer')} className="w-5 h-5 text-primary border-2 border-slate-300 focus:ring-primary rounded-full" name="payment_method" type="radio" />
-          </label>
+               <input checked={selectedMethodId === 'qr_transfer'} onChange={() => setSelectedMethodId('qr_transfer')} className="w-5 h-5 text-primary border-2 border-slate-300 focus:ring-primary rounded-full" name="payment_method" type="radio" />
+            </label>
+          ) : (
+            <div className="p-4 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/20 flex flex-col gap-2">
+              <div className="flex items-center gap-3 text-slate-500">
+                <span className="material-symbols-outlined text-xl text-slate-400">qr_code_2</span>
+                <div>
+                  <p className="text-sm font-bold text-slate-400">{t('payment.bankTransfer')}</p>
+                  <p className="text-xs text-red-500 font-bold">{t('payment.savedMethodRequired')}</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-800">
+                <span className="text-xs text-slate-500">{t('payment.noSavedMethodsMessage')}</span>
+                <button onClick={() => navigate('/account/payments')} className="text-xs text-primary font-bold hover:underline flex items-center gap-0.5">
+                  {t('payment.addNow')} <span className="material-symbols-outlined text-xs">arrow_forward</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* COD Option */}
           <label className={`relative flex items-center justify-between p-4 rounded-xl border-2 ${selectedMethodId === 'cod' ? 'border-primary bg-primary/5 shadow-sm ring-2 ring-primary/20' : 'border-slate-200 bg-white dark:bg-slate-800 dark:border-slate-700 hover:border-slate-300'} cursor-pointer transition-all group`}>
@@ -701,7 +801,7 @@ const Payment: React.FC = () => {
            <span className="material-symbols-outlined text-emerald-500">gpp_good</span>
            <div className="text-xs text-emerald-800 dark:text-emerald-400">
               <strong className="block mb-0.5">{t('payment.absoluteSecurity')}</strong>
-              Thông tin thẻ của bạn được trực tiếp xử lý bởi Cổng thanh toán quốc tế và KHÔNG lưu trữ trên hệ thống của LOTTE Mart.
+              {t('payment.cardDesc')}
            </div>
         </div>
 

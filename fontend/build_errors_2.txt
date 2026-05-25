@@ -1,3 +1,0 @@
-src/components/PromotionDetail/PromotionDetailModal.tsx(18,10): error TS6133: 'branchProducts' is declared but its value is never read.
-src/components/PromotionDetail/PromotionDetailModal.tsx(29,96): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
-src/components/PromotionGrid/PromotionGrid.tsx(4,1): error TS6133: 'usePromotions' is declared but its value is never read.

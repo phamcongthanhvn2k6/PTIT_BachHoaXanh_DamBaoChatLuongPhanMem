@@ -3,9 +3,10 @@ import { paginateMeta } from '../utils/helpers.js';
 
 export const list = async (req, res) => {
   try {
-    const { page = 1, limit = 20, product_id, status } = req.query;
+    const { page = 1, limit = 20, product_id, status, order_id } = req.query;
     const filter = {};
     if (product_id) filter.product_id = product_id;
+    if (order_id) filter.order_id = order_id;
     
     // Admin can query any user, regular users always see their own (unless browsing product reviews)
     if (req.user?.role_id !== 3) {

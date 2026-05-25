@@ -23,7 +23,9 @@ const USE_MOCK_FALLBACK = import.meta.env.VITE_USE_MOCK_FALLBACK === 'true';
 let mockData: any = null;
 if (USE_MOCK_FALLBACK) {
   try {
-    mockData = (await import('../../mockData.json')).default;
+    // Use a variable to prevent Vite/Rollup from statically resolving the path
+    const mockPath = '../../mockData.json';
+    mockData = (await import(/* @vite-ignore */ mockPath)).default;
   } catch {
     console.warn('[httpClient] VITE_USE_MOCK_FALLBACK=true but mockData.json not found. Mock fallback disabled.');
   }

@@ -310,6 +310,8 @@ export const ShopAtHome: React.FC = () => {
   const normalizedShopProducts = useMemo(() => {
     return validBranchProducts.map((bp: any) => {
       const sourceProduct = productMap.get(String(bp.product_id));
+      const sourceImages = Array.isArray(sourceProduct?.images) ? sourceProduct.images : [];
+      const mainImg = sourceImages[0] || sourceProduct?.thumbnail || bp?.image || bp?.thumbnail || '';
       return normalizeShopProduct({
         ...bp,
         branchProduct: bp,
@@ -317,7 +319,9 @@ export const ShopAtHome: React.FC = () => {
         name: sourceProduct?.name || bp?.name,
         category_name: bp?.category_name || sourceProduct?.category_name,
         category: sourceProduct?.category,
-        images: sourceProduct?.images,
+        images: sourceImages,
+        image: mainImg,
+        thumbnail: sourceProduct?.thumbnail || mainImg || '',
       }, categoryLookup);
     });
   }, [validBranchProducts, productMap, categoryLookup]);
@@ -329,14 +333,67 @@ export const ShopAtHome: React.FC = () => {
 
   const flashDealProducts = useMemo(() => {
     const normalized = hotDeals
-      .map(normalizeFlashDealForRender)
-      .sort((a, b) => Number(b.discount_percent || b.discount_value || 0) - Number(a.discount_percent || a.discount_value || 0))
       .map((deal: any) => {
-        const dealPrice = Number(deal.deal_price || 0);
-        const basePrice = Number(deal?.price || deal?.product?.price || 0);
-        const fallbackOriginal = Number(deal.original_price || deal?.product?.original_price || basePrice || 0);
-        const finalPrice = dealPrice > 0 ? dealPrice : basePrice;
-        const originalPrice = Number(fallbackOriginal || finalPrice || 0);
+        const matchedProduct = (products || []).find((item: any) => {
+          const productId = String(item?.id || item?._id || '');
+          const dealProductId = String(deal?.product_id || '');
+          const candidateProductIds = [
+            dealProductId,
+            ...((Array.isArray(deal?.product_ids) ? deal.product_ids : []).map((id: any) => String(id))),
+          ].filter(Boolean);
+          return productId && candidateProductIds.includes(productId);
+        });
+
+        const productAny = matchedProduct as any;
+        const dealProductId = String(deal?.product_id || productAny?.id || productAny?._id || '');
+        if (!dealProductId) return null;
+
+        const dealBranchId = String(deal?.branch_ids?.[0] || deal?.target_branch_ids?.[0] || '');
+        
+        let matchedBp = (branchProducts || []).find((bp: any) => 
+          String(bp.product_id) === dealProductId && 
+          String(bp.branch_id) === String(currentBranchId)
+        );
+
+        if (!matchedBp && dealBranchId) {
+          matchedBp = (branchProducts || []).find((bp: any) => 
+            String(bp.product_id) === dealProductId && 
+            String(bp.branch_id) === dealBranchId
+          );
+        }
+
+        if (!matchedBp) {
+          matchedBp = (branchProducts || []).find((bp: any) => 
+            String(bp.product_id) === dealProductId
+          );
+        }
+
+        const dealPrice = Number(deal?.deal_price || matchedBp?.price || productAny?.price || 0);
+        const originalPrice = Number(deal?.original_price || matchedBp?.original_price || productAny?.original_price || dealPrice || 0);
+        
+        const dealImages = Array.isArray(productAny?.images) ? productAny.images : [];
+        const dealImage = deal?.image || deal?.image_url || productAny?.thumbnail || dealImages[0] || '';
+
+        return {
+          ...deal,
+          _id: deal?._id || deal?.id,
+          id: deal?.id || deal?._id,
+          product_id: dealProductId,
+          branch_product_id: matchedBp ? String(matchedBp.id || matchedBp._id) : '',
+          name: productAny?.name || deal?.title || 'Flash Deal',
+          image: dealImage,
+          thumbnail: productAny?.thumbnail || dealImage,
+          price: dealPrice,
+          original_price: originalPrice,
+          stock: matchedBp ? Number(matchedBp.stock) : Number(deal?.remaining_quantity ?? deal?.stock ?? 10),
+          categoryShop: productAny?.category_name || productAny?.category?.name || 'Gia dụng',
+          rating: productAny?.rating || productAny?.average_rating || 4.8,
+        };
+      })
+      .filter(Boolean)
+      .map((deal: any) => {
+        const finalPrice = deal.price;
+        const originalPrice = deal.original_price;
 
         let discountPercent = Number(deal.discount_percent || 0);
         if (discountPercent <= 0 && Number(deal.discount_value || 0) > 0 && originalPrice > 0) {
@@ -348,29 +405,20 @@ export const ShopAtHome: React.FC = () => {
 
         return {
           ...deal,
-          _id: deal._id || deal.id,
-          id: deal.id || deal._id,
-          price: finalPrice,
-          original_price: originalPrice,
           discount_percent: discountPercent,
-          flash_deal_id: String(deal.id || deal._id || ''),
-          remaining_quantity: deal.remaining_quantity,
-          stock: Number(deal.remaining_quantity ?? deal.stock ?? 9999),
-          isOutOfStock: Number(deal.remaining_quantity ?? deal.stock ?? 1) <= 0,
-          flashDeal: deal,
+          isOutOfStock: Number(deal.stock || 0) <= 0,
           badges: ['hot'],
         };
-      })
-      .filter((item: any) => item && Number(item.stock || 0) > 0 && (item.product_id || item.branch_product_id));
+      });
 
     const dedup = new Map<string, any>();
     normalized.forEach((item: any) => {
-      const key = String(item._id || item.id || item.branch_product_id || item.product_id || '');
+      const key = String(item.product_id || '');
       if (key && !dedup.has(key)) dedup.set(key, item);
     });
 
     return Array.from(dedup.values()).slice(0, 5);
-  }, [hotDeals]);
+  }, [hotDeals, products, branchProducts, currentBranchId]);
 
   const newReleaseProducts = useMemo(() => {
     let filtered = normalizedShopProducts.filter((item: any) => item.is_new === true || item.badges?.includes('new') || item?.source?.is_new === true);
@@ -670,9 +718,9 @@ export const ShopAtHome: React.FC = () => {
             {t('product.noProducts')}
           </div>
         ) : (
-          <div className="flex overflow-x-auto gap-3 sm:gap-5 pb-4 snap-x snap-mandatory scrollbar-hide">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-5 pb-4">
             {newReleaseProducts.map((item: any) => (
-              <div key={item._id || item.id} className="min-w-[160px] md:min-w-[200px] max-w-[240px] flex-shrink-0 snap-start">
+              <div key={item._id || item.id} className="w-full h-full">
                 <ProductCard
                   product={item}
                 isWished={wishlist.includes(String(item.branch_product_id || item.id))}

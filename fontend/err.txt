@@ -1,5 +1,0 @@
-src/pages/Checkout.tsx(18,30): error TS2345: Argument of type 'number' is not assignable to parameter of type 'undefined'.
-src/pages/Notifications.tsx(7,10): error TS2559: Type '{ children: Element; }' has no properties in common with type 'IntrinsicAttributes'.
-src/pages/Payment.tsx(52,9): error TS2353: Object literal may only specify known properties, and 'timeline' does not exist in type '{ courier?: string | undefined; tracking_number?: string | undefined; history?: { status: string; note?: string | undefined; timestamp: string; location?: string | undefined; }[] | undefined; }'.
-src/pages/Settings.tsx(7,10): error TS2559: Type '{ children: Element[]; }' has no properties in common with type 'IntrinsicAttributes'.
-src/pages/Support.tsx(9,10): error TS2559: Type '{ children: Element[]; }' has no properties in common with type 'IntrinsicAttributes'.
