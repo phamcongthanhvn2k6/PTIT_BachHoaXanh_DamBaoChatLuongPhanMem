@@ -245,6 +245,7 @@ function App() {
         <Route path="/home" element={<Home />} />
         <Route path="/products" element={<Products />} />
         <Route path="/products/:id" element={<ProductDetail />} />
+        <Route path="/:locale/product/:id" element={<ProductDetail />} />
         <Route path="/compare" element={<ComparePage />} />
         <Route path="/shop-at-home" element={<ShopAtHome />} />
         <Route path="/hot-deals/product/:id" element={<ProductDetail />} />

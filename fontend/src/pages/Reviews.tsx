@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { dataService } from '../services/dataService';
 import { toast } from '../components/Toast/toastEvent';
 import { resolveImageUrl } from '../utils/imageUrl';
+import { getProductUrl } from '../utils/productUrl';
 
 const Reviews: React.FC = () => {
   const { t } = useTranslation();
@@ -51,7 +52,7 @@ const Reviews: React.FC = () => {
               <div key={review.id || review._id} className="p-5 bg-white dark:bg-slate-900 border border-primary/10 rounded-xl shadow-sm">
                 <div className="flex gap-4">
                   {/* Product thumbnail */}
-                  <Link to={`/products/${productId || ''}`} className="w-16 h-16 rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
+                  <Link to={getProductUrl({ id: productId, name: productName })} className="w-16 h-16 rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
                     {productImage ? (
                       <img
                         src={resolveImageUrl(productImage)}
@@ -67,7 +68,7 @@ const Reviews: React.FC = () => {
 
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start mb-2 gap-4">
-                      <Link to={`/products/${productId || ''}`} className="font-bold text-slate-800 dark:text-slate-100 truncate max-w-xs hover:text-primary transition-colors">
+                      <Link to={getProductUrl({ id: productId, name: productName })} className="font-bold text-slate-800 dark:text-slate-100 truncate max-w-xs hover:text-primary transition-colors">
                         {productName}
                       </Link>
                       <div className="flex text-yellow-400 shrink-0">

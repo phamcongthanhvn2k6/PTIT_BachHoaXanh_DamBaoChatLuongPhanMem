@@ -17,11 +17,25 @@ import { dataService } from '../services/dataService';
 import { saveViewHistory } from '../services/viewHistoryService';
 import i18n from '../i18n';
 import { resolveImageUrl, fallbackProductImage } from '../utils/imageUrl';
+import { extractProductId, getProductUrl, getLocaleFromPrefix, getPrefixFromLocale } from '../utils/productUrl';
 
 const ProductDetail: React.FC = () => {
-  const { t } = useTranslation();
-  const { id } = useParams<{ id: string }>();
-  const productId = id || '0';
+  const { t, i18n } = useTranslation();
+  const { id: rawSlugOrId, locale: rawLocale } = useParams<{ id: string; locale?: string }>();
+  // Extract actual product ID from the SEO-friendly slug
+  const productId = extractProductId(rawSlugOrId || '') || '0';
+  const id = rawSlugOrId;
+
+  // Sync language with URL locale prefix if present and different
+  React.useEffect(() => {
+    if (rawLocale) {
+      const urlLocale = getLocaleFromPrefix(rawLocale);
+      if (urlLocale && urlLocale !== i18n.language) {
+        i18n.changeLanguage(urlLocale);
+        localStorage.setItem('lotte_language', urlLocale);
+      }
+    }
+  }, [rawLocale, i18n]);
 
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -152,8 +166,8 @@ const ProductDetail: React.FC = () => {
       setError(null);
       setBranchUnavailable(false);
       try {
-        // STEP 1: Fetch the product core data directly by ID
-        const productData = await productService.getProductById(id!);
+        // STEP 1: Fetch the product core data directly by ID (extracted from slug)
+        const productData = await productService.getProductById(productId);
 
         if (!active) return;
 
@@ -170,6 +184,12 @@ const ProductDetail: React.FC = () => {
         };
 
         setProduct(resolvedProduct);
+
+        // SEO Redirect: Ensure current route matches the canonical `/{localePrefix}/product/{slug}` format.
+        const canonicalUrl = getProductUrl(resolvedProduct);
+        if (window.location.pathname !== canonicalUrl) {
+          navigate(canonicalUrl, { replace: true });
+        }
 
         // STEP 2: Independently fetch branch-specific data (price/stock)
         // Use currentBranch from Redux store — no hardcode
@@ -272,19 +292,19 @@ const ProductDetail: React.FC = () => {
         if (active) setLoading(false);
       }
     };
-    if (id) {
+    if (productId && productId !== '0') {
       fetchDetail();
     } else {
       setError('Thiếu mã sản phẩm.');
       setLoading(false);
     }
     return () => { active = false; };
-  }, [id, activeBranchId, branches]);
+  }, [productId, activeBranchId, branches]);
 
   // Reset selected image when product changes
   React.useEffect(() => {
     setSelectedImageIndex(0);
-  }, [id]);
+  }, [productId]);
 
   React.useEffect(() => {
     if (!isAuthenticated || !product) {
@@ -1349,7 +1369,7 @@ const ProductDetail: React.FC = () => {
           {relatedProducts.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
               {relatedProducts.map((p: any) => (
-                <Link key={p.id || p._id} to={`/products/${p.id || p._id}`} className="group">
+                <Link key={p.id || p._id} to={getProductUrl(p)} className="group">
                   <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 mb-3 overflow-hidden relative">
                     <img
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform"
@@ -1377,7 +1397,7 @@ const ProductDetail: React.FC = () => {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
               {boughtTogetherProducts.map((p: any) => (
-                <Link key={p.id || p._id} to={`/products/${p.id || p._id}`} className="group">
+                <Link key={p.id || p._id} to={getProductUrl(p)} className="group">
                   <div className="aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 mb-3 overflow-hidden relative">
                     <img
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform"

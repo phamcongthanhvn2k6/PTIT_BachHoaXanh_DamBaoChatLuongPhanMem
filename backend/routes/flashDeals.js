@@ -7,11 +7,13 @@ import {
   updateFlashDeal,
   removeFlashDeal,
   toggleFlashDeal,
+  cleanupFlashDeals,
 } from '../controllers/flashDealController.js';
 
 const router = Router();
 
 router.get('/', optionalAuth, listFlashDeals);
+router.post('/cleanup/run', auth, admin, cleanupFlashDeals);
 router.get('/:id', optionalAuth, detailFlashDeal);
 router.post('/', auth, admin, createFlashDeal);
 router.put('/:id', auth, admin, updateFlashDeal);

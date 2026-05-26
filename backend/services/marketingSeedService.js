@@ -6,11 +6,8 @@ import Product from '../models/Product.js';
 export const ensureMarketingSeed = async () => {
   try {
     const bannersCount = await Banner.countDocuments();
-    let productId = 'dummy_product_id';
-    
-    // Find a real product if possible for hot deals
-    const product = await Product.findOne({});
-    if (product) productId = product._id;
+    const products = await Product.find({ is_active: true }).limit(10).lean();
+    const productIds = products.map((p) => String(p._id)).filter(Boolean);
 
     if (bannersCount === 0) {
       console.log('Seeding initial banners...');
@@ -42,12 +39,16 @@ export const ensureMarketingSeed = async () => {
     const hotDealsCount = await HotDeal.countDocuments();
     if (hotDealsCount === 0) {
       console.log('Seeding initial hot deals...');
+      const fallbackProductId = productIds[0] || 'dummy_product_id';
+      const firstProductId = productIds[0] || fallbackProductId;
+      const secondProductId = productIds[1] || fallbackProductId;
       await HotDeal.insertMany([
-        { title: 'Táo Rockit Mỹ', product_id: productId, type: 'percent', discount_percent: 30, discount_value: 30, original_price: 150000, deal_price: 105000, stock_limit: 100, remaining_quantity: 100, total_quantity: 100, sold_count: 0, is_active: true, image_url: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6faa6?q=80&w=1974' },
-        { title: 'Cá Hồi Na-uy', product_id: productId, type: 'fixed_amount', discount_percent: 15, discount_value: 15000, original_price: 300000, deal_price: 285000, stock_limit: 200, remaining_quantity: 150, total_quantity: 200, sold_count: 50, is_active: true, image_url: 'https://images.unsplash.com/photo-1599084993091-1cb5c0721cc6?q=80&w=2070' }
+        { title: 'Táo Rockit Mỹ', product_id: firstProductId, type: 'percent', discount_percent: 30, discount_value: 30, original_price: 150000, deal_price: 105000, stock_limit: 100, remaining_quantity: 100, total_quantity: 100, sold_count: 0, is_active: true, image_url: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6faa6?q=80&w=1974' },
+        { title: 'Cá Hồi Na-uy', product_id: secondProductId, type: 'fixed_amount', discount_percent: 15, discount_value: 15000, original_price: 300000, deal_price: 285000, stock_limit: 200, remaining_quantity: 150, total_quantity: 200, sold_count: 50, is_active: true, image_url: 'https://images.unsplash.com/photo-1599084993091-1cb5c0721cc6?q=80&w=2070' }
       ]);
     }
   } catch (err) {
     console.error('Marketing seed error:', err.message);
   }
 };
+

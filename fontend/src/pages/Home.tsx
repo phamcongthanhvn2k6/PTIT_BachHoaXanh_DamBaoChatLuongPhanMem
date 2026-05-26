@@ -12,6 +12,8 @@ import { useBranchData } from '../hooks/useBranchData';
 import { filterVisibleFlashDeals, evaluateFlashDealVisibility } from '../utils/flashDeal';
 import { HotDealCountdown } from '../components/HotDealCountdown/HotDealCountdown';
 import { resolveImageUrl, fallbackProductImage } from '../utils/imageUrl';
+import { resolveFlashDealProductContext } from '../utils/flashDealProductResolver';
+import { getProductUrl } from '../utils/productUrl';
 
 
 const Home: React.FC = () => {
@@ -145,41 +147,21 @@ const Home: React.FC = () => {
   const flashDealItems = useMemo(() => {
     return (flashDeals || [])
       .map((deal: any) => {
-        const dealProductIdRaw = String(deal?.product_id || '');
-        // Find product details
-        const matchedProduct = (products || []).find((item: any) => {
-          const productId = String(item?.id || item?._id || '');
-          const candidateProductIds = [
-            dealProductIdRaw,
-            ...((Array.isArray(deal?.product_ids) ? deal.product_ids : []).map((id: any) => String(id))),
-          ].filter(Boolean);
-          return productId && candidateProductIds.includes(productId);
-        });
-
-        if (!matchedProduct) return null; // Skip orphaned or dummy hot deals
-
-        const productAny = matchedProduct as any;
-        const dealProductId = String(productAny?.id || productAny?._id);
+        const {
+          resolvedProductId,
+          product,
+          matchedBranchProduct: resolvedBranchProduct,
+        } = resolveFlashDealProductContext(deal, products || [], branchProducts || [], String(currentBranchId || ''));
+        if (!resolvedProductId) return null;
+        const productAny = product as any;
 
         // Find branch product matching this deal or product
         const dealBranchId = String(deal?.branch_ids?.[0] || deal?.target_branch_ids?.[0] || '');
-        
-        let matchedBp = (branchProducts || []).find((bp: any) => 
-          String(bp.product_id) === dealProductId && 
-          String(bp.branch_id) === String(currentBranchId)
-        );
-
+        let matchedBp = resolvedBranchProduct;
         if (!matchedBp && dealBranchId) {
-          matchedBp = (branchProducts || []).find((bp: any) => 
-            String(bp.product_id) === dealProductId && 
-            String(bp.branch_id) === dealBranchId
-          );
-        }
-
-        if (!matchedBp) {
-          matchedBp = (branchProducts || []).find((bp: any) => 
-            String(bp.product_id) === dealProductId
-          );
+          matchedBp = (branchProducts || []).find((bp: any) =>
+            String(bp.product_id) === resolvedProductId && String(bp.branch_id) === dealBranchId
+          ) || null;
         }
 
         const actualBranchId = matchedBp ? String(matchedBp.branch_id) : dealBranchId;
@@ -192,7 +174,7 @@ const Home: React.FC = () => {
           ...deal,
           title: deal?.title || productAny?.name || t('product.flashDeal'),
           image_url: deal?.image_url || productAny?.images?.[0] || productAny?.thumbnail || '',
-          product_id: dealProductId,
+          product_id: resolvedProductId,
           deal_price: dealPrice,
           original_price: originalPrice,
           total_quantity: Number(deal?.total_quantity || deal?.stock_limit || 0),
@@ -314,7 +296,7 @@ const Home: React.FC = () => {
         {products.map((item, index) => (
           <Link
             key={`${String(item?.id || item?._id || index)}-${index}`}
-            to={`/products/${item?.product_id || item?.id || item?._id}`}
+            to={getProductUrl(item)}
             className="product-card bg-white dark:bg-slate-800 rounded-3xl shadow-premium overflow-hidden group relative cursor-pointer hover:shadow-premium-hover transition-shadow duration-300"
           >
             <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
@@ -484,7 +466,7 @@ const Home: React.FC = () => {
                   </div>
                   <div className="space-y-3">
                     {section.items.map((item: any) => (
-                      <Link key={String(item.branch_product_id || item.id || item._id)} to={`/products/${item.product_id || item.id || item._id}`} className="flex items-center gap-3 rounded-xl border border-slate-100 p-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors">
+                      <Link key={String(item.branch_product_id || item.id || item._id)} to={getProductUrl(item)} className="flex items-center gap-3 rounded-xl border border-slate-100 p-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors">
                         <img src={resolveImageUrl(item.images?.[0] || item.thumbnail) || fallbackProductImage} alt={item.name} className="w-12 h-12 rounded-lg object-cover" />
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-slate-800 dark:text-white line-clamp-1">{item.name}</p>
@@ -543,7 +525,7 @@ const Home: React.FC = () => {
                   const pct = deal.total_quantity > 0 ? Math.min(100, (sold / deal.total_quantity) * 100) : 0;
                   const isDifferentBranch = deal.branch_id && currentBranchId && String(deal.branch_id) !== String(currentBranchId);
                   return (
-                    <Link key={`${String(deal.id || index)}-${index}`} to={`/products/${deal.product_id}`} className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-rose-100 dark:border-rose-900/40 overflow-hidden relative group flex flex-col hover:-translate-y-1 transition-all duration-300">
+                    <Link key={`${String(deal.id || index)}-${index}`} to={getProductUrl(deal)} className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-rose-100 dark:border-rose-900/40 overflow-hidden relative group flex flex-col hover:-translate-y-1 transition-all duration-300">
                       <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
                         <span className="bg-rose-600 text-white font-black text-[10px] px-2.5 py-1 rounded-lg shadow-lg shadow-rose-600/30 w-fit">
                           -{deal.discount_percent || deal.discount_value || 0}%

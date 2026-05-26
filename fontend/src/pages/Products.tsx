@@ -9,6 +9,7 @@ import { useAuthRedirect } from '../hooks/useAuthRedirect';
 import { toast } from '../components/Toast/toastEvent';
 import { productService } from '../services/productService';
 import { normalizeCategories, normalizeProductLike } from '../utils/productNormalization';
+import { getProductUrl } from '../utils/productUrl';
 
 const Products: React.FC = () => {
   const { t } = useTranslation();
@@ -347,7 +348,7 @@ const Products: React.FC = () => {
                 const compareDisabled = !isCompared && compareIds.length >= compareMaxItems;
 
                 // Link đến trang chi tiết sản phẩm (dùng product_id để khớp với products master)
-                const productLink = `/products/${item.product_id || item.id}`;
+                const productLink = getProductUrl(item);
 
                 return (
                   <Link

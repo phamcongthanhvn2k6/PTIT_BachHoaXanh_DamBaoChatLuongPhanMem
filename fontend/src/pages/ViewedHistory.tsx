@@ -6,6 +6,7 @@ import { addToCartAsync } from '../slices/cartSlice';
 import { toast } from '../components/Toast/toastEvent';
 import viewHistoryService, { getViewHistory } from '../services/viewHistoryService';
 import type { ViewHistoryItem } from '../types/viewHistory';
+import { getProductUrl } from '../utils/productUrl';
 
 const ViewedHistory: React.FC = () => {
   const { t } = useTranslation();
@@ -176,7 +177,7 @@ const ViewedHistory: React.FC = () => {
             const busy = Boolean(busyIds[rowId]);
             return (
               <div key={String((item as any)._id || item.product_id || rowId)} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 p-4 flex flex-col sm:flex-row gap-4 sm:items-center">
-                <Link to={`/products/${item.product_id || ''}`} className="w-20 h-20 rounded-lg bg-slate-100 overflow-hidden shrink-0">
+                <Link to={getProductUrl({ id: item.product_id, name: item.product_name })} className="w-20 h-20 rounded-lg bg-slate-100 overflow-hidden shrink-0">
                   <img
                     src={item.product_image || 'https://via.placeholder.com/300x300?text=Product'}
                     alt={item.product_name || 'product'}
@@ -185,7 +186,7 @@ const ViewedHistory: React.FC = () => {
                 </Link>
 
                 <div className="flex-1 min-w-0">
-                  <Link to={`/products/${item.product_id || ''}`} className="font-bold line-clamp-1 hover:text-primary">
+                  <Link to={getProductUrl({ id: item.product_id, name: item.product_name })} className="font-bold line-clamp-1 hover:text-primary">
                     {item.product_name || t('common.product')}
                   </Link>
                   <p className="text-sm text-slate-500 mt-1">

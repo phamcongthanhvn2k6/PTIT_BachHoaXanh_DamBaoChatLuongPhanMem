@@ -1,4 +1,5 @@
 import { Banner, HotDeal, FeaturedCollection, DeliverySlot } from '../models/Misc.js';
+import { validateHotDealProductReference } from '../services/hotDealIntegrityService.js';
 
 const isTruthy = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
@@ -86,11 +87,17 @@ export const listHotDeals = async (req, res) => {
   catch (err) { return res.status(500).json({ success: false, message: err.message }); }
 };
 export const createHotDeal = async (req, res) => {
-  try { return res.status(201).json({ success: true, data: await HotDeal.create(req.body) }); }
+  try {
+    const payload = await validateHotDealProductReference({ ...req.body }, { hideOutOfStock: false, enforceProductExistence: true });
+    return res.status(201).json({ success: true, data: await HotDeal.create(payload) });
+  }
   catch (err) { return res.status(500).json({ success: false, message: err.message }); }
 };
 export const updateHotDeal = async (req, res) => {
-  try { return res.json({ success: true, data: await HotDeal.findByIdAndUpdate(req.params.id, req.body, { new: true }) }); }
+  try {
+    const payload = await validateHotDealProductReference({ ...req.body }, { hideOutOfStock: false, enforceProductExistence: true });
+    return res.json({ success: true, data: await HotDeal.findByIdAndUpdate(req.params.id, payload, { new: true }) });
+  }
   catch (err) { return res.status(500).json({ success: false, message: err.message }); }
 };
 export const deleteHotDeal = async (req, res) => {

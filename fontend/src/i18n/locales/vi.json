@@ -600,7 +600,13 @@
       "promotionAutoApply": "🎯 Chương trình KM (tự động áp dụng)",
       "couponWithCode": "🎫 Mã giảm giá (cần nhập code)",
       "campaignTypeHint": "Chương trình KM tự động áp dụng khi đủ điều kiện. Mã giảm giá yêu cầu người dùng nhập code.",
-      "actions": "Hành động"
+      "actions": "Hành động",
+      "promoFallback": "Khuyến mãi",
+      "discountPriceLabel": "Giá giảm",
+      "notAvailable": "Không có",
+      "linkLabel": "Liên kết",
+      "positionHome": "Trang chủ",
+      "autoContrast": "Tự động tương phản"
     },
     "recentActivity": "Hoạt động gần đây",
     "systemEvent": "Sự kiện hệ thống",

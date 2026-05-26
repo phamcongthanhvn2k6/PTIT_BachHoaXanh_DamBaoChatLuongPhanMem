@@ -6,6 +6,7 @@ import { useAuthRedirect } from '../hooks/useAuthRedirect';
 import { toast } from '../components/Toast/toastEvent';
 import { useBranchData } from '../hooks/useBranchData';
 import { useTranslation } from 'react-i18next';
+import { getProductUrl } from '../utils/productUrl';
 
 // ─── Recipe data (Vietnamese grocery recipes) ────
 const RECIPES = [
@@ -87,7 +88,7 @@ const SmartShopping: React.FC = () => {
 
   const ProductCard = ({ item, showWatch=false }: { item:any, showWatch?:boolean }) => (
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden group hover:shadow-xl transition-shadow border border-slate-100 dark:border-slate-700">
-      <Link to={`/products/${item?.product_id||item?.id||item?._id}`} className="block">
+      <Link to={getProductUrl(item)} className="block">
         <div className="aspect-square bg-slate-50 overflow-hidden relative">
           <img src={item?.images?.[0]||item?.thumbnail||'https://via.placeholder.com/300'} alt={item?.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"/>
           {item?.is_best_seller&&<span className="absolute top-2 left-2 bg-rose-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full">{t('smartShopping.hot')}</span>}

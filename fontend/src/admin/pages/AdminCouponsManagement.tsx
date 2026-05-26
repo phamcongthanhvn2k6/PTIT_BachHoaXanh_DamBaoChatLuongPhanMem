@@ -557,6 +557,7 @@ const AdminCouponsManagement: React.FC = () => {
   const imageInputRef = useRef<HTMLInputElement | null>(null);
 
   const [productOptions, setProductOptions] = useState<SelectOption[]>([]);
+  const [productLookup, setProductLookup] = useState<Record<string, any>>({});
   const [categoryOptions, setCategoryOptions] = useState<SelectOption[]>([]);
   const [branchOptions, setBranchOptions] = useState<SelectOption[]>([]);
   const [optionLoading, setOptionLoading] = useState(false);
@@ -605,6 +606,13 @@ const AdminCouponsManagement: React.FC = () => {
             meta: p.sku || p.category_name || '',
           }))
           .filter((o: SelectOption) => o.id),
+      );
+      setProductLookup(
+        products.reduce((acc: Record<string, any>, p: any) => {
+          const key = String(p.id || p._id || '');
+          if (key) acc[key] = p;
+          return acc;
+        }, {}),
       );
 
       setCategoryOptions(
@@ -1768,7 +1776,7 @@ const AdminCouponsManagement: React.FC = () => {
               onChange={(e) => setBasicField('position', e.target.value)}
               className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
             >
-              <option value="home">home</option>
+              <option value="home">{t('admin.promotions.positionHome', 'Trang ch?')}</option>
               <option value="promo">promo</option>
               <option value="category">category</option>
             </select>
@@ -1834,7 +1842,7 @@ const AdminCouponsManagement: React.FC = () => {
                        }
                      }
                      setBasicField('text_color', isLight ? '#000000' : '#ffffff');
-                   }} className="px-2 py-1 bg-slate-200 text-xs font-semibold rounded hover:bg-slate-300">Auto Contrast</button>
+                   }} className="px-2 py-1 bg-slate-200 text-xs font-semibold rounded hover:bg-slate-300">{t('admin.promotions.autoContrast', 'T? ??ng t??ng ph?n')}</button>
                  </div>
                </div>
 
@@ -1871,7 +1879,7 @@ const AdminCouponsManagement: React.FC = () => {
                 <div className="absolute inset-0 flex flex-col justify-center px-6" style={{ background: basicForm.overlay_color }}>
                    <div style={{ color: basicForm.text_color, textShadow: basicForm.text_shadow ? '0 2px 6px rgba(0,0,0,0.6)' : 'none' }}>
                       <h3 className="text-xl font-bold">{basicForm.title || 'Tiêu đề Banner'}</h3>
-                      <p className="text-sm mt-1 opacity-90">{t('admin.promotions.bannerSubtitlePreview', 'Banner Subtitle Preview')}</p>
+                      <p className="text-sm mt-1 opacity-90">{t('admin.promotions.bannerSubtitlePreview', 'Xem tr??c ph? ?? banner')}</p>
                    </div>
                 </div>
              </div>
@@ -1887,7 +1895,7 @@ const AdminCouponsManagement: React.FC = () => {
                 const selectedId = e.target.value;
                 setBasicField('product_id', selectedId);
                 // Auto-fill price if we can find the product
-                const selectedProd = products.find(p => String(p.id || p._id) === selectedId);
+                const selectedProd = productLookup[selectedId];
                 if (selectedProd) {
                   setBasicField('original_price', selectedProd.price || selectedProd.original_price || 0);
                   if (basicForm.title === '' || basicForm.title === 'Deal') {
@@ -1986,7 +1994,7 @@ const AdminCouponsManagement: React.FC = () => {
           {[
             { id: 'promotions', label: t('admin.promotions.tabPromotions', 'Khuyến mãi / Coupons') },
             { id: 'banners', label: t('admin.promotions.tabBanners', 'Banners') },
-            { id: 'hot_deals', label: t('admin.promotions.tabHotDeals', 'Hot Deals') }
+            { id: 'hot_deals', label: t('admin.promotions.tabHotDeals', 'Gi?m gi? nhanh') }
           ].map((tab) => (
             <button
               key={tab.id}
@@ -2089,7 +2097,7 @@ const AdminCouponsManagement: React.FC = () => {
                               imageUrl={imageUrl}
                               voucherType={(item as any).voucher_type}
                               type={item.type}
-                              alt={item.title || item.code || 'Promotion'}
+                              alt={item.title || item.code || t('admin.promotions.promoFallback', 'Khuy?n m?i')}
                               className="w-16 h-10 rounded shadow-sm border border-slate-200"
                               aspectRatio=""
                             />
@@ -2105,12 +2113,12 @@ const AdminCouponsManagement: React.FC = () => {
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
                           <span className="text-xs font-bold text-on-surface uppercase">
-                            {item.type || item.position || (item.original_price ? 'Discount Price' : 'N/A')}
+                            {item.type || item.position || (item.original_price ? t('admin.promotions.discountPriceLabel', 'Gi? gi?m') : t('admin.promotions.notAvailable', 'Kh?ng c?'))}
                           </span>
                           <span className="text-sm text-secondary font-medium mt-0.5">
                             {(item.discount_value || item.value) ? `${item.discount_value || item.value} ${(item.type === 'percentage' || item.type === 'percent') ? '%' : 'VND'}` : ''}
                             {item.deal_price ? `${Number(item.deal_price).toLocaleString()}đ (Từ ${Number(item.original_price || 0).toLocaleString()}đ)` : ''}
-                            {item.link ? `Link: ${item.link}` : ''}
+                            {item.link ? `${t('admin.promotions.linkLabel', 'Liên kết')}: ${item.link}` : ''}
                           </span>
                           {total > 0 && (
                             <span className="text-xs text-secondary mt-1">{t('admin.promotions.remainingLabel', 'Còn lại')}: {Number(remaining || 0).toLocaleString('vi-VN')} / {Number(total).toLocaleString('vi-VN')}</span>
@@ -2234,7 +2242,7 @@ const AdminCouponsManagement: React.FC = () => {
                 imageUrl={detailItem.image || detailItem.image_url || (detailItem as any).banner_image || ''}
                 voucherType={(detailItem as any).voucher_type}
                 type={detailItem.type}
-                alt={detailItem.title || 'Promotion'}
+                alt={detailItem.title || t('admin.promotions.promoFallback', 'Khuyến mãi')}
                 className="w-full rounded-2xl shadow-sm border border-slate-100"
                 aspectRatio="aspect-video"
               />
@@ -2327,3 +2335,4 @@ const AdminCouponsManagement: React.FC = () => {
 };
 
 export default AdminCouponsManagement;
+

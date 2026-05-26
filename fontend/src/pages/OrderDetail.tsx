@@ -10,6 +10,7 @@ import { supportService } from '../services/supportService';
 import { resolveImageUrl } from '../utils/imageUrl';
 import { reviewService } from '../services/reviewService';
 import httpClient from '../api/httpClient';
+import { getProductUrl } from '../utils/productUrl';
 
 const OrderDetail: React.FC = () => {
   const { t } = useTranslation();
@@ -390,7 +391,7 @@ const OrderDetail: React.FC = () => {
                                </div>
                              </div>
                              <div className="flex-1 min-w-0">
-                           <Link to={`/products/${item.product_id || item.branch_product_id}`} className="font-bold text-slate-900 hover:text-primary truncate block">{item.product_name || (item as any).name || 'Sản phẩm'}</Link>
+                           <Link to={getProductUrl({ id: item.product_id || item.branch_product_id, name: item.product_name || (item as any).name })} className="font-bold text-slate-900 hover:text-primary truncate block">{item.product_name || (item as any).name || 'Sản phẩm'}</Link>
                            <div className="flex flex-col gap-0.5 mt-1.5 mb-2">
                              <p className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded w-max">
                                SKU: {(item as any).sku || 'N/A'}

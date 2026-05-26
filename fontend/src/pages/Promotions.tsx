@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { HotDealCountdown } from '../components/HotDealCountdown/HotDealCountdown';
 import { InlineVoucherBadge } from '../components/PromotionImageFallback/PromotionImageFallback';
 import PromotionImageDisplay from '../components/PromotionImageFallback/PromotionImageFallback';
+import { getProductUrl } from '../utils/productUrl';
 
 const Promotions: React.FC = () => {
   const { t } = useTranslation();
@@ -552,7 +553,7 @@ const Promotions: React.FC = () => {
               </div>
               <div className="space-y-1">
                 {hotDeals.filter(d => d.is_active).slice(0, 4).map((deal: any, idx: number) => (
-                    <div key={deal.id || idx} onClick={() => navigate(`/products/${deal.product_id || 1}`)} className="flex items-center space-x-3 p-2 -mx-2 hover:bg-gray-50 dark:hover:bg-slate-800/50 rounded-xl transition cursor-pointer group">
+                    <div key={deal.id || idx} onClick={() => navigate(getProductUrl({ id: deal.product_id, name: deal.title || deal.product_name || 'san-pham' }))} className="flex items-center space-x-3 p-2 -mx-2 hover:bg-gray-50 dark:hover:bg-slate-800/50 rounded-xl transition cursor-pointer group">
                       <div className="w-14 h-14 shrink-0 bg-gray-100 dark:bg-slate-800 rounded-lg overflow-hidden relative border border-gray-100/50">
                           <img
                              alt={deal.title || 'deal'}

@@ -9,6 +9,7 @@ import { toast } from '../components/Toast/toastEvent';
 import { useBranchData } from '../hooks/useBranchData';
 import { productService } from '../services/productService';
 import { resolveImageUrl } from '../utils/imageUrl';
+import { getProductUrl } from '../utils/productUrl';
 const SearchResults: React.FC = () => {
   const { t } = useTranslation();
   const location = useLocation();
@@ -408,7 +409,7 @@ const SearchResults: React.FC = () => {
                 return (
                   <Link
                     key={item.id || item._id}
-                    to={`/products/${item.id || item._id}`}
+                    to={getProductUrl(item)}
                     className={`product-card group bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 border border-slate-100 dark:border-slate-700 cursor-pointer ${
                       viewMode === 'list' ? 'flex flex-row gap-6' : ''
                     } ${isOutOfStock ? 'grayscale-[0.3]' : ''}`}

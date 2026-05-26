@@ -6,6 +6,7 @@ import { addToCartAsync } from '../slices/cartSlice';
 import { dataService } from '../services/dataService';
 import { toast } from '../components/Toast/toastEvent';
 import { resolveImageUrl } from '../utils/imageUrl';
+import { getProductUrl } from '../utils/productUrl';
 
 const Wishlist: React.FC = () => {
   const { t } = useTranslation();
@@ -120,7 +121,7 @@ const Wishlist: React.FC = () => {
             const busy = Boolean(processingIds[rowId]);
             return (
               <div key={rowId} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 p-4 flex gap-4">
-                <Link to={`/products/${item.product_id || ''}`} className="w-24 h-24 rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
+                <Link to={getProductUrl({ id: item.product_id, name: item.product_name })} className="w-24 h-24 rounded-lg bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
                   {item.product_image ? (
                     <img
                       src={resolveImageUrl(item.product_image)}
@@ -135,7 +136,7 @@ const Wishlist: React.FC = () => {
                 </Link>
 
                 <div className="flex-1 min-w-0">
-                  <Link to={`/products/${item.product_id || ''}`} className="font-bold text-slate-900 dark:text-slate-100 line-clamp-2 hover:text-primary">
+                  <Link to={getProductUrl({ id: item.product_id, name: item.product_name })} className="font-bold text-slate-900 dark:text-slate-100 line-clamp-2 hover:text-primary">
                     {item.product_name || t('common.product')}
                   </Link>
                   <p className="mt-2 text-primary font-extrabold">

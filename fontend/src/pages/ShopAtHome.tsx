@@ -10,6 +10,8 @@ import flashDealService from '../services/flashDealService';
 import ProductCard from '../components/ProductCard';
 import { deriveCategoryLookup, normalizeProduct as normalizeShopProduct } from '../utils/normalizeProduct';
 import { dataService } from '../services/dataService';
+import { resolveFlashDealProductContext } from '../utils/flashDealProductResolver';
+import { getProductUrl } from '../utils/productUrl';
 
 const BYPASS_FLASH_DEAL_FILTER = false;
 
@@ -211,7 +213,7 @@ export const ShopAtHome: React.FC = () => {
   const handleViewProduct = (item: any) => {
     const productId = String(item?.product_id || item?.product?.id || item?.product?._id || item?.id || '');
     if (!productId) return;
-    navigate(`/products/${productId}`);
+    navigate(getProductUrl(item));
   };
 
   // Cart actions
@@ -334,39 +336,21 @@ export const ShopAtHome: React.FC = () => {
   const flashDealProducts = useMemo(() => {
     const normalized = hotDeals
       .map((deal: any) => {
-        const dealProductIdRaw = String(deal?.product_id || '');
-        const matchedProduct = (products || []).find((item: any) => {
-          const productId = String(item?.id || item?._id || '');
-          const candidateProductIds = [
-            dealProductIdRaw,
-            ...((Array.isArray(deal?.product_ids) ? deal.product_ids : []).map((id: any) => String(id))),
-          ].filter(Boolean);
-          return productId && candidateProductIds.includes(productId);
-        });
-
-        if (!matchedProduct) return null; // Skip orphaned or dummy hot deals
-
-        const productAny = matchedProduct as any;
-        const dealProductId = String(productAny?.id || productAny?._id);
+        const {
+          resolvedProductId,
+          product,
+          matchedBranchProduct: resolvedBranchProduct,
+        } = resolveFlashDealProductContext(deal, products || [], branchProducts || [], String(currentBranchId || ''));
+        if (!resolvedProductId) return null;
+        const productAny = product as any;
+        if (productAny?.is_active === false) return null;
 
         const dealBranchId = String(deal?.branch_ids?.[0] || deal?.target_branch_ids?.[0] || '');
-        
-        let matchedBp = (branchProducts || []).find((bp: any) => 
-          String(bp.product_id) === dealProductId && 
-          String(bp.branch_id) === String(currentBranchId)
-        );
-
+        let matchedBp = resolvedBranchProduct;
         if (!matchedBp && dealBranchId) {
-          matchedBp = (branchProducts || []).find((bp: any) => 
-            String(bp.product_id) === dealProductId && 
-            String(bp.branch_id) === dealBranchId
-          );
-        }
-
-        if (!matchedBp) {
-          matchedBp = (branchProducts || []).find((bp: any) => 
-            String(bp.product_id) === dealProductId
-          );
+          matchedBp = (branchProducts || []).find((bp: any) =>
+            String(bp.product_id) === resolvedProductId && String(bp.branch_id) === dealBranchId
+          ) || null;
         }
 
         const dealPrice = Number(deal?.deal_price || matchedBp?.price || productAny?.price || 0);
@@ -379,7 +363,7 @@ export const ShopAtHome: React.FC = () => {
           ...deal,
           _id: deal?._id || deal?.id,
           id: deal?.id || deal?._id,
-          product_id: dealProductId,
+          product_id: resolvedProductId,
           branch_product_id: matchedBp ? String(matchedBp.id || matchedBp._id) : '',
           name: productAny?.name || deal?.title || 'Flash Deal',
           image: dealImage,
@@ -392,6 +376,7 @@ export const ShopAtHome: React.FC = () => {
         };
       })
       .filter(Boolean)
+      .filter((deal: any) => Number(deal?.stock || 0) > 0)
       .map((deal: any) => {
         const finalPrice = deal.price;
         const originalPrice = deal.original_price;

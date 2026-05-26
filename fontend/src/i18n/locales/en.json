@@ -600,7 +600,13 @@
       "promotionAutoApply": "🎯 Promotion (auto-applied)",
       "couponWithCode": "🎫 Coupon (requires code)",
       "campaignTypeHint": "Promotions auto-apply when conditions are met. Coupons require the user to enter a code.",
-      "actions": "Actions"
+      "actions": "Actions",
+      "promoFallback": "Promotion",
+      "discountPriceLabel": "Discount price",
+      "notAvailable": "N/A",
+      "linkLabel": "Link",
+      "positionHome": "Home",
+      "autoContrast": "Auto contrast"
     },
     "recentActivity": "Recent Activity",
     "systemEvent": "System event",

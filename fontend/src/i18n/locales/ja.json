@@ -461,7 +461,13 @@
       "promotionAutoApply": "🎯 プロモーション（自動適用）",
       "couponWithCode": "🎫 クーポン（コード入力）",
       "campaignTypeHint": "プロモーションは条件を満たすと自動的に適用されます。クーポンはユーザーがコードを入力する必要があります。",
-      "actions": "操作"
+      "actions": "操作",
+      "promoFallback": "プロモーション",
+      "discountPriceLabel": "割引価格",
+      "notAvailable": "なし",
+      "linkLabel": "リンク",
+      "positionHome": "ホーム",
+      "autoContrast": "自動コントラスト"
     },
     "recentActivity": "最近のアクティビティ",
     "systemEvent": "システムイベント",

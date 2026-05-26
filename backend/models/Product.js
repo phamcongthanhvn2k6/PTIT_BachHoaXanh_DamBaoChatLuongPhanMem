@@ -1,8 +1,10 @@
 import mongoose from 'mongoose';
+import { slugify, buildProductSlug, generateShortCode } from '../utils/slugify.js';
 
 const productSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
-  slug: { type: String, default: '' },
+  slug: { type: String, default: '', index: true },
+  short_code: { type: String, default: '', unique: true, sparse: true, index: true },
   description: { type: String, default: '' },
   short_description: { type: String, default: '' },
   eco_label: { type: mongoose.Schema.Types.Mixed, default: null },
@@ -77,6 +79,29 @@ productSchema.pre('countDocuments', function () {
     this.where({ is_deleted: { $ne: true } });
   }
 });
+
+// Auto-generate SEO slug from product name
+productSchema.pre('save', function (next) {
+  if (!this.short_code) {
+    this.short_code = generateShortCode(this._id);
+  }
+  if (this.isModified('name') || !this.slug || this.isModified('short_code')) {
+    this.slug = buildProductSlug(this.name, this._id, this.short_code);
+  }
+  next();
+});
+
+// Also regenerate slug on findOneAndUpdate if name is being changed
+productSchema.pre('findOneAndUpdate', function () {
+  const update = this.getUpdate();
+  if (update && update.name) {
+    // We can't access _id from the query hook directly, so we generate
+    // a partial slug from the name. The full slug will be set on the
+    // post hook if needed, or via the controller.
+    update.slug = slugify(update.name);
+  }
+});
+
 
 // Cache invalidation
 productSchema.post('save', async function () {

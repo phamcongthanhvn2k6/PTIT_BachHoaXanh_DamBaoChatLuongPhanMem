@@ -1,5 +1,5 @@
 import FlashDeal from '../models/FlashDeal.js';
-import { Product } from '../models/Product.js';
+import { cleanupOrphanHotDeals, validateHotDealProductReference } from '../services/hotDealIntegrityService.js';
 
 const TRUTHY = ['1', 'true', 'yes', 'on'];
 const ALLOWED_TYPES = ['percent', 'fixed_amount', 'flash_deal'];
@@ -288,7 +288,10 @@ export const detailFlashDeal = async (req, res) => {
 
 export const createFlashDeal = async (req, res) => {
   try {
-    const payload = normalizePayload(req.body, false);
+    const payload = await validateHotDealProductReference(normalizePayload(req.body, false), {
+      hideOutOfStock: false,
+      enforceProductExistence: true,
+    });
     const created = await FlashDeal.create(payload);
     return res.status(201).json({ success: true, data: normalizeDeal(created), message: 'Flash deal created' });
   } catch (err) {
@@ -298,7 +301,10 @@ export const createFlashDeal = async (req, res) => {
 
 export const updateFlashDeal = async (req, res) => {
   try {
-    const payload = normalizePayload(req.body, true);
+    const payload = await validateHotDealProductReference(normalizePayload(req.body, true), {
+      hideOutOfStock: false,
+      enforceProductExistence: true,
+    });
     const updated = await FlashDeal.findByIdAndUpdate(req.params.id, payload, { new: true });
     if (!updated) return res.status(404).json({ success: false, message: 'Flash deal not found' });
     return res.json({ success: true, data: normalizeDeal(updated), message: 'Flash deal updated' });
@@ -357,6 +363,16 @@ export const toggleFlashDeal = async (req, res) => {
     });
 
     return res.json({ success: true, data: after, visibility, message: 'Flash deal toggled' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const cleanupFlashDeals = async (req, res) => {
+  try {
+    const hideOutOfStock = toBoolean(req.query?.hide_out_of_stock, false);
+    const result = await cleanupOrphanHotDeals({ hideOutOfStock });
+    return res.json({ success: true, data: result, message: 'Hot deal cleanup completed' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

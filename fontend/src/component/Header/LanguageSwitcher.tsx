@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getPrefixFromLocale } from '../../utils/productUrl';
 
 const LanguageSwitcher: React.FC<{ variant?: 'dark' | 'light' }> = ({ variant = 'dark' }) => {
   const { i18n, t } = useTranslation();
@@ -12,6 +13,7 @@ const LanguageSwitcher: React.FC<{ variant?: 'dark' | 'light' }> = ({ variant = 
     { code: 'vi', label: t('common.langVietnamese', 'Tiếng Việt'), flag: '🇻🇳', short: 'VI' },
     { code: 'en', label: t('common.langEnglish', 'English'), flag: '🇺🇸', short: 'EN' },
     { code: 'ja', label: t('common.langJapanese', '日本語'), flag: '🇯🇵', short: 'JA' },
+    { code: 'kr', label: t('common.langKorean', '한국어'), flag: '🇰🇷', short: 'KO' },
   ];
 
   const current = languages.find((l) => l.code === i18n.language) || languages[0];
@@ -32,7 +34,15 @@ const LanguageSwitcher: React.FC<{ variant?: 'dark' | 'light' }> = ({ variant = 
 
     if (prevLang !== code) {
       window.dispatchEvent(new CustomEvent('lotte_language_changed', { detail: { lang: code, prev: prevLang } }));
-      window.location.reload();
+      
+      const match = window.location.pathname.match(/^\/[a-z]+-nsg\/product\/(.+)$/);
+      if (match) {
+        const productSlug = match[1];
+        const newPrefix = getPrefixFromLocale(code);
+        window.location.href = `/${newPrefix}/product/${productSlug}`;
+      } else {
+        window.location.reload();
+      }
     }
   };
 

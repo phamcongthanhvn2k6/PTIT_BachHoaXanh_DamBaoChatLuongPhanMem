@@ -9,6 +9,7 @@ import BranchSelector from "./BranchSelector";
 // import { clearCart } from "../../slices/cartSlice";
 import { dataService } from "../../services/dataService";
 import { setDefaultLanguageFromSettings } from "../../i18n";
+import { getProductUrl } from "../../utils/productUrl";
 
 const Header: React.FC = () => {
   const { t } = useTranslation();
@@ -284,7 +285,7 @@ const Header: React.FC = () => {
                   {suggestions.map((item, idx) => (
                     <Link
                       key={item.id || item._id || idx}
-                      to={`/products/${item.id || item._id}`}
+                      to={getProductUrl(item)}
                       onClick={() => {
                         setShowSuggestions(false);
                         setSearch("");
