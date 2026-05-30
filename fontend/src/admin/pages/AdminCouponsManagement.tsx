@@ -688,9 +688,6 @@ const AdminCouponsManagement: React.FC = () => {
   useEffect(() => {
     if (location.state && location.state.draftPromotion) {
       const draft = location.state.draftPromotion;
-      // ──────────────────────────────────────────────────────────
-      // AUTO-FILL ALL 5 WIZARD STEPS from inventory expiry alert
-      // ──────────────────────────────────────────────────────────
       setActiveTab('promotions');
       setEditingItem(null);
       setFormErrors({});
@@ -699,21 +696,15 @@ const AdminCouponsManagement: React.FC = () => {
       setSearchCategory('');
       setSearchBranch('');
 
-      // Parse arrays from draft context
       const draftProductIds = Array.isArray(draft.target_product_ids) ? draft.target_product_ids.map(String) : [];
       const draftCategoryIds = Array.isArray(draft.target_category_ids) ? draft.target_category_ids.map(String) : [];
       const draftBranchIds = Array.isArray(draft.target_branch_ids) ? draft.target_branch_ids.map(String) : [];
 
-      // Stock-based quantity (never empty for expiry-triggered campaigns)
       const stock = Number(draft.total_quantity || draft.stock || 0);
       const stockStr = stock > 0 ? String(stock) : '';
 
       setPromotionForm({
         ...defaultPromotionForm(),
-
-        // ═══════════════════════════════════════════
-        // STEP 1 — Thông tin chiến dịch
-        // ═══════════════════════════════════════════
         recordType: 'promotion',
         title: draft.title || '',
         description: draft.description || '',
@@ -725,10 +716,6 @@ const AdminCouponsManagement: React.FC = () => {
         is_active: false,
         is_auto_generated: draft.is_auto_generated || false,
         voucher_type: draft.voucher_type || 'product',
-
-        // ═══════════════════════════════════════════
-        // STEP 2 — Quy tắc giảm giá
-        // ═══════════════════════════════════════════
         type: draft.type || 'percent',
         discount_value: String(draft.discount_value || '50'),
         min_order_amount: '0',
@@ -738,10 +725,6 @@ const AdminCouponsManagement: React.FC = () => {
         stackable: false,
         points_multiplier: '1',
         gift_product_id: '',
-
-        // ═══════════════════════════════════════════
-        // STEP 3 — Phạm vi áp dụng
-        // ═══════════════════════════════════════════
         scope: draft.scope || 'product',
         target_product_ids: draftProductIds,
         target_category_ids: draftCategoryIds,
@@ -751,10 +734,6 @@ const AdminCouponsManagement: React.FC = () => {
         manualTargetIds: draftProductIds.join(', '),
         manualExcludedProductIds: '',
         manualExcludedCategoryIds: '',
-
-        // ═══════════════════════════════════════════
-        // STEP 4 — Giới hạn & coupon/claim
-        // ═══════════════════════════════════════════
         total_quantity: stockStr,
         usage_per_user: String(draft.per_user_limit || '1'),
         usage_limit: stockStr,
@@ -768,8 +747,62 @@ const AdminCouponsManagement: React.FC = () => {
       });
 
       setShowFormModal(true);
-      
-      // Clear location state to prevent reopening on refresh
+      navigate(location.pathname, { replace: true });
+    } else if (location.state && location.state.draftHotDeal) {
+      const draft = location.state.draftHotDeal;
+      setActiveTab('hot_deals');
+      setEditingItem(null);
+      setFormErrors({});
+      setSelectedImageFile(null);
+      setSearchProduct('');
+      setSearchCategory('');
+      setSearchBranch('');
+
+      if (draft.branch_product_id && draft.product_id) {
+        setBranchProducts([
+          {
+            id: draft.branch_product_id,
+            _id: draft.branch_product_id,
+            product_id: draft.product_id,
+            branch_id: draft.branch_id,
+            price: Number(draft.original_price),
+            original_price: Number(draft.original_price),
+            stock: Number(draft.total_quantity),
+            is_available: true,
+            product: {
+              id: draft.product_id,
+              _id: draft.product_id,
+              name: draft._product_name || 'Đang tải...',
+              image: draft.imageUrl || '',
+              image_url: draft.imageUrl || '',
+              price: Number(draft.original_price),
+            }
+          }
+        ]);
+      }
+
+      setBasicForm({
+        title: draft.title || '',
+        imageUrl: draft.imageUrl || '',
+        imagePreview: draft.imageUrl || '',
+        link: '',
+        position: '',
+        product_id: draft.product_id || '',
+        branch_product_id: draft.branch_product_id || '',
+        branch_id: draft.branch_id || '',
+        total_quantity: draft.total_quantity || '',
+        remaining_quantity: draft.remaining_quantity || '',
+        original_price: draft.original_price || '',
+        deal_price: draft.deal_price || '',
+        start_date: toDateTimeLocal(draft.start_date || new Date().toISOString()),
+        end_date: toDateTimeLocal(draft.end_date),
+        is_active: draft.is_active !== false,
+        text_color: '#ffffff',
+        overlay_color: 'rgba(0,0,0,0.3)',
+        text_shadow: true,
+      });
+
+      setShowFormModal(true);
       navigate(location.pathname, { replace: true });
     }
   }, [location.state, navigate]);

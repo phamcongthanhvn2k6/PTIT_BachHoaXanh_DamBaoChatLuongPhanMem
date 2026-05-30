@@ -1882,6 +1882,7 @@
     "outOfStockShort": "HẾT KHO",
     "setCoverImage": "Đặt làm ảnh đại diện",
     "deleteImage": "Xóa ảnh này",
+    "clearanceSalePrefix": "⚠️ Xả hàng sắp hết hạn:",
     "clearanceTitle": "⚠️ Xả hàng sắp hết hạn: {{name}}",
     "clearanceDesc": "Xả hàng sắp hết hạn {{name}}. SKU: {{sku}}. Nhập từ: {{supplier}}. Lô: {{batch}}. HSD: {{expiry}}. Còn {{days}} ngày. Tồn hiện tại: {{stock}}.",
     "clearanceBadge": "Giải phóng hàng sắp hết hạn",

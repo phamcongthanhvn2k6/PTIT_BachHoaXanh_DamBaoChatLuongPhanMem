@@ -1882,6 +1882,7 @@
     "outOfStockShort": "OOS",
     "setCoverImage": "Set as cover image",
     "deleteImage": "Delete this image",
+    "clearanceSalePrefix": "⚠️ Clearance expiring sale:",
     "clearanceTitle": "⚠️ Clearance expiring sale: {{name}}",
     "clearanceDesc": "Clearance sale for expiring product {{name}}. SKU: {{sku}}. Supplier: {{supplier}}. Batch: {{batch}}. Expiry: {{expiry}}. {{days}} days remaining. Stock: {{stock}}.",
     "clearanceBadge": "Expiring clearance",

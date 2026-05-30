@@ -405,31 +405,48 @@ const AdminProductManagement: React.FC = () => {
     }
   };
 
-  const handleCreateDraftPromotion = (item: any) => {
+  const handleCreateDraftHotDeal = (item: any) => {
     const daysLeft = item.days_until_expiry ?? null;
     // Smart discount: closer to expiry → deeper discount
-    let discountValue = '50';
-    if (daysLeft !== null && daysLeft <= 3) discountValue = '70';
-    else if (daysLeft !== null && daysLeft <= 7) discountValue = '50';
-    else if (daysLeft !== null && daysLeft <= 14) discountValue = '30';
+    let discountPercent = 50;
+    if (daysLeft !== null && daysLeft <= 3) discountPercent = 70;
+    else if (daysLeft !== null && daysLeft <= 7) discountPercent = 50;
+    else if (daysLeft !== null && daysLeft <= 14) discountPercent = 30;
 
+    const originalPrice = Number(item.price || item.original_price || item.product?.price || 0);
+    const dealPrice = Math.round(originalPrice * (1 - discountPercent / 100));
+    const stock = Number(item.stock || 0);
+    const imageUrl = item.images?.[0] || item.thumbnail || item.product?.images?.[0] || item.product?.thumbnail || '';
+
+    // Resolve IDs
+    const branchProductId = String(item.id || item._id || '');
+    const productId = String(item.master_id || item.product_id || item.product?._id || item.product?.id || '');
+    const branchId = String(item.branch_id || (branchFilter !== 'ALL' ? branchFilter : '') || '');
+
+    // Payload maps 1:1 to BasicAssetFormState in the Hot Deal modal
     const payload = {
-      item_type: 'promotion',
-      title: `⚠️ Xả hàng sắp hết hạn: ${item.name}`,
-      description: `Xả hàng sắp hết hạn ${item.name}. SKU: ${item.sku || 'N/A'}. Nhập từ: ${item.supplier_name || 'N/A'}. Lô: ${item.batch_code || 'N/A'}. HSD: ${item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('vi-VN') : 'N/A'}. Còn ${daysLeft ?? '?'} ngày. Tồn hiện tại: ${item.stock || 0}.`,
-      image: item.images?.[0] || item.product?.images?.[0] || 'https://via.placeholder.com/800x400.png?text=Clearance+Sale',
-      type: 'percent',
-      value: discountValue,
-      scope: 'product',
-      target_product_ids: [String(item.master_id || item.product_id)],
-      target_branch_ids: branchFilter !== 'ALL' ? [String(branchFilter)] : [],
+      title: `${t('adminProducts.clearanceSalePrefix')} ${item.name}`,
+      imageUrl,
+      branch_id: branchId,
+      branch_product_id: branchProductId,
+      product_id: productId,
+      original_price: String(originalPrice),
+      deal_price: String(dealPrice),
+      total_quantity: String(stock),
+      remaining_quantity: String(stock),
       start_date: new Date().toISOString(),
       end_date: item.expiry_date || '',
-      total_quantity: String(item.stock || ''),
-      usage_per_user: '1',
-      badge_text: 'Giải phóng hàng sắp hết hạn',
+      is_active: false, // Draft — admin reviews before activating
+      // Extra context for the receiver
+      _discount_percent: discountPercent,
+      _days_until_expiry: daysLeft,
+      _product_name: item.name || '',
+      _stock: stock,
+      _sku: item.sku || '',
+      _batch_code: item.batch_code || '',
+      _expiry_date_display: item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('vi-VN') : '',
     };
-    navigate('/admin/coupons', { state: { draftPromotion: payload } });
+    navigate('/admin/coupons', { state: { draftHotDeal: payload } });
   };
 
   const handleExport = () => {
@@ -1061,7 +1078,7 @@ const AdminProductManagement: React.FC = () => {
                             </span>
                             {(item.expiry_status === 'critical' || item.expiry_status === 'expired') && (
                               <button
-                                onClick={() => handleCreateDraftPromotion(item)}
+                                onClick={() => handleCreateDraftHotDeal(item)}
                                 className="mt-1 inline-flex items-center gap-1 px-2 py-1 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
                                 title="Tạo khuyến mãi xả hàng từ cảnh báo hết hạn"
                               >
@@ -1099,7 +1116,7 @@ const AdminProductManagement: React.FC = () => {
                         </button>
                         {(item.expiry_status === 'critical' || item.expiry_status === 'warning') && (
                           <button 
-                            onClick={() => handleCreateDraftPromotion(item)}
+                            onClick={() => handleCreateDraftHotDeal(item)}
                             className="px-4 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 hover:border-red-300 font-bold text-[11px] rounded-lg transition-all flex items-center justify-center gap-1 w-full whitespace-nowrap"
                             title="Tạo khuyến mãi xả hàng nháp"
                           >
