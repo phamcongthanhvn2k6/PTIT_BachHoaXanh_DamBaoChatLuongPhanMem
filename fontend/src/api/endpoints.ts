@@ -70,6 +70,7 @@ export const endpoints = {
     promotions: (id: string | number) => `/products/${id}/promotions`,
     coupons: (id: string | number) => `/products/${id}/coupons`,
     policies: '/products/policies',
+    summary: (id: string | number) => `/products/${id}/summary`,
   },
 
   compare: {

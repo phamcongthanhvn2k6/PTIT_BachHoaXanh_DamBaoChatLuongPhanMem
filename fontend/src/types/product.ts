@@ -81,4 +81,8 @@ export interface NormalizedShopProduct {
 	product?: Record<string, any> | null;
 	branchProduct?: Record<string, any> | null;
 	source?: Record<string, any>;
+	effective_price?: number;
+	pricing_source?: string;
+	active_hot_deal?: Record<string, any> | null;
+	active_promotion?: Record<string, any> | null;
 }

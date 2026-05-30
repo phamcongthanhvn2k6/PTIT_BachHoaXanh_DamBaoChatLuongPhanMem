@@ -8,10 +8,17 @@ const MAX_PRODUCTS = 4;
 
 const normalizeLocale = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
-  return normalized.startsWith('en') ? 'en' : 'vi';
+  if (normalized.startsWith('en')) return 'en';
+  if (normalized.startsWith('ja')) return 'ja';
+  return 'vi';
 };
 
-const localeText = (locale, vi, en) => (normalizeLocale(locale) === 'en' ? en : vi);
+const localeText = (locale, vi, en, ja) => {
+  const norm = normalizeLocale(locale);
+  if (norm === 'en') return en;
+  if (norm === 'ja') return ja || en;
+  return vi;
+};
 
 const toPlainText = (value) => String(value || '')
   .replace(/<[^>]+>/g, ' ')
@@ -95,13 +102,29 @@ const normalizeIncomingOnlyProduct = (item) => {
 
 export const summaryStatus = async (_req, res) => {
   const ready = isCompareAISummaryReady();
-  console.info(`[compare-summary] status requested | geminiReady=${ready}`);
+  
+  let reason = 'ok';
+  if (!ready) {
+    const key = process.env.OPENROUTER_API_KEY;
+    const model = process.env.OPENROUTER_MODEL || 'deepseek/deepseek-v4-flash:free';
+    
+    if (!key || String(key).trim().length === 0 || key === 'undefined' || key === 'null' || key === 'placeholder') {
+      reason = 'missing_key';
+    } else if (!model || String(model).trim().length === 0 || model === 'undefined' || model === 'null') {
+      reason = 'invalid_model';
+    } else {
+      reason = 'unknown_reason';
+    }
+  }
+
+  console.info(`[compare-summary] status requested | openRouterReady=${ready} | reason=${reason} | model=${process.env.OPENROUTER_MODEL || 'deepseek/deepseek-v4-flash:free'}`);
 
   return res.json({
     success: true,
     aiReady: ready,
-    provider: 'gemini',
-    model: process.env.GEMINI_MODEL || 'gemini-flash-latest',
+    reason,
+    provider: 'openrouter',
+    model: process.env.OPENROUTER_MODEL || 'deepseek/deepseek-v4-flash:free',
   });
 };
 
@@ -248,7 +271,12 @@ export const summary = async (req, res) => {
       return res.status(503).json({
         success: false,
         aiReady: false,
-        message: localeText(locale, 'AI chua san sang. Vui long cau hinh GEMINI_COMPARE_API_KEY o backend.', 'AI is not ready. Please configure GEMINI_COMPARE_API_KEY in backend.'),
+        message: localeText(
+          locale,
+          'AI chưa sẵn sàng. Vui lòng cấu hình OPENROUTER_API_KEY ở backend.',
+          'AI is not ready. Please configure OPENROUTER_API_KEY in backend.',
+          'AIの準備ができていません。バックエンドでOPENROUTER_API_KEYを設定してください。'
+        ),
       });
     }
 
@@ -257,8 +285,9 @@ export const summary = async (req, res) => {
         success: false,
         message: localeText(
           locale,
-          'Gemini API da het han muc hoac bi gioi han tam thoi. Vui long kiem tra quota/billing roi thu lai.',
-          'Gemini API quota is exhausted or temporarily rate-limited. Please check quota/billing and try again.',
+          'OpenRouter API đã hết hạn mức hoặc bị giới hạn tạm thời. Vui lòng kiểm tra quota/billing rồi thử lại.',
+          'OpenRouter API quota is exhausted or temporarily rate-limited. Please check quota/billing and try again.',
+          'OpenRouter APIのクォータが使い果たされているか、一時的にレート制限されています。クォータまたは請求を確認して再試行してください。'
         ),
       });
     }
@@ -266,20 +295,35 @@ export const summary = async (req, res) => {
     if (err?.code === 'AI_MODEL_NOT_FOUND') {
       return res.status(503).json({
         success: false,
-        message: localeText(locale, 'Model Gemini hien tai khong kha dung. Hay doi GEMINI_MODEL trong backend/.env.', 'Current Gemini model is unavailable. Please update GEMINI_MODEL in backend/.env.'),
+        message: localeText(
+          locale,
+          'Model OpenRouter hiện tại không khả dụng. Hãy đổi OPENROUTER_MODEL trong backend/.env.',
+          'Current OpenRouter model is unavailable. Please update OPENROUTER_MODEL in backend/.env.',
+          '現在のOpenRouterモデルは利用できません。backend/.envのOPENROUTER_MODELを更新してください。'
+        ),
       });
     }
 
-    if (err?.code === 'AI_AUTH_FAILED' || err?.code === 'AI_REQUEST_FAILED' || err?.code === 'AI_TIMEOUT') {
+    if (err?.code === 'AI_AUTH_FAILED' || err?.code === 'AI_TIMEOUT' || err?.code === 'AI_REQUEST_FAILED') {
       return res.status(503).json({
         success: false,
-        message: err?.message || localeText(locale, 'Khong the tao tom tat AI luc nay. Vui long thu lai.', 'Unable to generate AI summary right now. Please try again.'),
+        message: err?.message || localeText(
+          locale,
+          'Không thể tạo tóm tắt AI lúc này. Vui lòng thử lại.',
+          'Unable to generate AI summary right now. Please try again.',
+          '現在AI要約を生成できません。後でもう一度お試しください。'
+        ),
       });
     }
 
     return res.status(500).json({
       success: false,
-      message: err?.message || localeText(locale, 'Khong the tao tom tat AI luc nay. Vui long thu lai.', 'Unable to generate AI summary right now. Please try again.'),
+      message: err?.message || localeText(
+        locale,
+        'Không thể tạo tóm tắt AI lúc này. Vui lòng thử lại.',
+        'Unable to generate AI summary right now. Please try again.',
+        '現在AI要約を生成できません。後でもう一度お試しください。'
+      ),
     });
   }
 };

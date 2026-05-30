@@ -8,6 +8,10 @@ import mongoose from 'mongoose';
 import { paginateMeta } from '../utils/helpers.js';
 import { syncHotDealsForProductId } from '../services/hotDealIntegrityService.js';
 import { slugify, buildProductSlug, extractIdFromSlug, generateShortCode } from '../utils/slugify.js';
+import { resolveEffectivePrice, resolveProductPricing } from '../services/pricingResolverService.js';
+import { HotDeal } from '../models/Misc.js';
+import { buildProductAISummary, isProductAISummaryReady } from '../services/aiSummaryService.js';
+
 
 const parseBranchId = (id) => {
   if (!id) return null;
@@ -219,7 +223,16 @@ export const list = async (req, res) => {
         { usage_limit: null },
         { $expr: { $lt: ["$usage_count", "$usage_limit"] } }
       ]
-    }).sort({ priority: -1 });
+    }).sort({ priority: -1 }).lean();
+
+    const activeHotDeals = await HotDeal.find({
+      is_active: true,
+      status: 'active',
+      $and: [
+        { $or: [{ start_date: null }, { start_date: { $lte: minDate } }] },
+        { $or: [{ end_date: null }, { end_date: { $gte: minDate } }] }
+      ]
+    }).lean();
 
     const isTargetMatched = (scopeArray, idToMatch) => {
       if (!scopeArray || scopeArray.length === 0) return false;
@@ -228,8 +241,23 @@ export const list = async (req, res) => {
     };
 
     // Map `id` from `_id` and cleanup
-    const mappedData = data.map(item => {
+    const mappedData = await Promise.all(data.map(async (item) => {
       item.id = item._id;
+
+      // Resolve effective dynamic pricing
+      const resolvedPricing = await resolveProductPricing(item, null, branchId, {
+        now: minDate,
+        preloadedHotDeals: activeHotDeals,
+        preloadedPromotions: activePromotions
+      });
+      item.price = resolvedPricing.effective_price;
+      item.original_price = resolvedPricing.original_price;
+      item.discount_percent = resolvedPricing.discount_percent;
+      item.effective_price = resolvedPricing.effective_price;
+      item.pricing_source = resolvedPricing.pricing_source;
+      item.active_hot_deal = resolvedPricing.active_hot_deal;
+      item.active_promotion = resolvedPricing.active_promotion;
+      item.pricing = resolvedPricing;
 
       const applicablePromotions = activePromotions.filter(promo => {
         if (isTargetMatched(promo.excluded_product_ids, item._id)) return false;
@@ -249,9 +277,14 @@ export const list = async (req, res) => {
         }));
       }
 
+      // If the dynamic price resolved is a hot deal, attach hot deal countdown metadata
+      if (resolvedPricing.pricing_source === 'HOT_DEAL' && resolvedPricing.active_hot_deal) {
+        item.hot_deal = resolvedPricing.active_hot_deal;
+      }
+
       delete item.branch_info; // hide lookup artifacts
       return item;
-    });
+    }));
 
     return res.json({
       success: true,
@@ -307,14 +340,28 @@ export const search = async (req, res) => {
       const page = Math.max(1, parseInt(req.query.page || 1));
       const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || 20)));
 
+      const branchId = req.query.branchId || req.query.branch_id || null;
       Product.countDocuments(regexQuery).then(total => {
         Product.find(regexQuery)
           .sort({ created_at: -1 })
           .skip((page - 1) * limit)
           .limit(limit)
           .lean()
-          .then(data => {
-            const mapped = data.map(item => ({ ...item, id: item._id }));
+          .then(async (data) => {
+            const now = new Date();
+            const mapped = await Promise.all(data.map(async (item) => {
+              const obj = { ...item, id: item._id };
+              const pricing = await resolveProductPricing(obj, null, branchId, { now });
+              obj.price = pricing.effective_price;
+              obj.original_price = pricing.original_price;
+              obj.discount_percent = pricing.discount_percent;
+              obj.effective_price = pricing.effective_price;
+              obj.pricing_source = pricing.pricing_source;
+              obj.active_hot_deal = pricing.active_hot_deal;
+              obj.active_promotion = pricing.active_promotion;
+              obj.pricing = pricing;
+              return obj;
+            }));
             return originalJson({
               success: true,
               data: mapped,
@@ -408,12 +455,13 @@ export const compare = async (req, res) => {
       { title: 'Hàng chính hãng', description: 'Cam kết sản phẩm chính hãng' },
     ];
 
-    const data = requestedIds
-      .map((pid) => {
+    const data = await Promise.all(requestedIds
+      .map(async (pid) => {
         const product = productMap.get(String(pid));
         if (!product) return null;
 
         const branchProduct = branchProductMap.get(String(product._id));
+        const pricing = await resolveProductPricing(product, branchProduct, branchIdRaw, { now });
 
         const applicablePromotions = activePromotions.filter((promo) => {
           if (isTargetMatched(promo.excluded_product_ids, product._id)) return false;
@@ -454,9 +502,14 @@ export const compare = async (req, res) => {
           name: product.name || 'Sản phẩm',
           image: (Array.isArray(product.images) && product.images[0]) || product.thumbnail || '',
           images: Array.isArray(product.images) ? product.images : [],
-          price: branchProduct?.price ?? product.price ?? null,
-          original_price: branchProduct?.original_price ?? product.original_price ?? null,
-          discount_percent: branchProduct?.discount_percent ?? product.discount_percent ?? null,
+          price: pricing.effective_price,
+          original_price: pricing.original_price,
+          discount_percent: pricing.discount_percent,
+          effective_price: pricing.effective_price,
+          pricing_source: pricing.pricing_source,
+          active_hot_deal: pricing.active_hot_deal,
+          active_promotion: pricing.active_promotion,
+          pricing,
           brand: product.brand || '',
           category_name: branchProduct?.category_name || product.category_name || '',
           origin: product.origin || '',
@@ -488,10 +541,10 @@ export const compare = async (req, res) => {
           policies: policiesData,
           shipping_fee_note: 'Miễn phí giao hàng cho đơn từ 300.000đ',
         };
-      })
-      .filter(Boolean);
+      }));
 
-    return res.json({ success: true, data });
+    const filtered = data.filter(Boolean);
+    return res.json({ success: true, data: filtered });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -528,6 +581,35 @@ export const detail = async (req, res) => {
     const obj = product.toObject();
     obj.id = obj._id;
 
+    const branchId = req.query.branchId || req.query.branch_id || null;
+    let bp = null;
+    if (branchId) {
+      bp = await BranchProduct.findOne({ product_id: product._id, branch_id: parseBranchId(branchId) }).lean();
+      if (bp) {
+        obj.branch_product_id = bp._id;
+        obj.price = bp.price;
+        obj.original_price = bp.original_price;
+        obj.discount_percent = bp.discount_percent;
+        obj.stock = bp.stock;
+        obj.branch_active = bp.is_available;
+      }
+    }
+
+    const resolvedPricing = await resolveProductPricing(product, bp, branchId, { now: new Date() });
+    obj.price = resolvedPricing.effective_price;
+    obj.original_price = resolvedPricing.original_price;
+    obj.discount_percent = resolvedPricing.discount_percent;
+    obj.effective_price = resolvedPricing.effective_price;
+    obj.pricing_source = resolvedPricing.pricing_source;
+    obj.active_hot_deal = resolvedPricing.active_hot_deal;
+    obj.active_promotion = resolvedPricing.active_promotion;
+    obj.pricing = resolvedPricing;
+
+    // Attach Hot Deal details if resolved pricing source is a Hot Deal
+    if (resolvedPricing.pricing_source === 'HOT_DEAL' && resolvedPricing.active_hot_deal) {
+      obj.hot_deal = resolvedPricing.active_hot_deal;
+    }
+
     return res.json({ success: true, data: obj });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -538,6 +620,7 @@ export const detail = async (req, res) => {
 export const related = async (req, res) => {
   try {
     const idParam = req.params.id;
+    const branchId = req.query.branchId || req.query.branch_id || null;
     const product = await findProductByRouteParam(idParam);
 
     if (!product) return res.json({ success: true, data: [] });
@@ -546,14 +629,22 @@ export const related = async (req, res) => {
       category_id: product.category_id,
       _id: { $ne: product._id },
       is_active: true
-    }).limit(8);
+    }).limit(8).lean();
 
-    // Normalize ids
-    const mapped = data.map(p => {
-      const obj = p.toObject();
-      obj.id = obj._id;
+    const now = new Date();
+    const mapped = await Promise.all(data.map(async (p) => {
+      const obj = { ...p, id: p._id };
+      const pricing = await resolveProductPricing(p, null, branchId, { now });
+      obj.price = pricing.effective_price;
+      obj.original_price = pricing.original_price;
+      obj.discount_percent = pricing.discount_percent;
+      obj.effective_price = pricing.effective_price;
+      obj.pricing_source = pricing.pricing_source;
+      obj.active_hot_deal = pricing.active_hot_deal;
+      obj.active_promotion = pricing.active_promotion;
+      obj.pricing = pricing;
       return obj;
-    });
+    }));
 
     return res.json({ success: true, data: mapped });
   } catch (err) {
@@ -651,6 +742,7 @@ export const replyQuestion = async (req, res) => {
 export const smartRecommendations = async (req, res) => {
   try {
     const { category_id, min_price, max_price, limit = 10 } = req.query;
+    const branchId = req.query.branchId || req.query.branch_id || null;
     const filter = { is_deleted: { $ne: true }, is_active: true };
 
     if (category_id) {
@@ -664,14 +756,24 @@ export const smartRecommendations = async (req, res) => {
     }
 
     const data = await Product.find(filter)
-      .sort({ rating: -1, sold_count: -1 }) // Smartest products first
-      .limit(Number(limit));
+      .sort({ rating: -1, sold_count: -1 })
+      .limit(Number(limit))
+      .lean();
 
-    const mapped = data.map(p => {
-      const obj = p.toObject();
-      obj.id = obj._id;
+    const now = new Date();
+    const mapped = await Promise.all(data.map(async (p) => {
+      const obj = { ...p, id: p._id };
+      const pricing = await resolveProductPricing(p, null, branchId, { now });
+      obj.price = pricing.effective_price;
+      obj.original_price = pricing.original_price;
+      obj.discount_percent = pricing.discount_percent;
+      obj.effective_price = pricing.effective_price;
+      obj.pricing_source = pricing.pricing_source;
+      obj.active_hot_deal = pricing.active_hot_deal;
+      obj.active_promotion = pricing.active_promotion;
+      obj.pricing = pricing;
       return obj;
-    });
+    }));
 
     return res.json({ success: true, data: mapped });
   } catch (err) {
@@ -695,7 +797,22 @@ export const recommendations = async (req, res) => {
       .limit(8)
       .lean();
 
-    const related = relatedRaw.map((p) => ({ ...p, id: String(p._id) }));
+    const branchId = req.query.branchId || req.query.branch_id || null;
+    const now = new Date();
+
+    const related = await Promise.all(relatedRaw.map(async (p) => {
+      const obj = { ...p, id: String(p._id) };
+      const pricing = await resolveProductPricing(p, null, branchId, { now });
+      obj.price = pricing.effective_price;
+      obj.original_price = pricing.original_price;
+      obj.discount_percent = pricing.discount_percent;
+      obj.effective_price = pricing.effective_price;
+      obj.pricing_source = pricing.pricing_source;
+      obj.active_hot_deal = pricing.active_hot_deal;
+      obj.active_promotion = pricing.active_promotion;
+      obj.pricing = pricing;
+      return obj;
+    }));
 
     const orders = await Order.find({
       status: { $in: ['CONFIRMED', 'PROCESSING', 'SHIPPING', 'DELIVERED', 'RETURNED'] },
@@ -729,25 +846,33 @@ export const recommendations = async (req, res) => {
       : [];
 
     const coBuyMap = new Map(coBuyProductsRaw.map((p) => [String(p._id), p]));
-    const boughtTogether = topCoBuyIds
-      .map((pid) => {
+    const boughtTogether = await Promise.all(topCoBuyIds
+      .map(async (pid) => {
         const productDoc = coBuyMap.get(pid);
         if (!productDoc) return null;
         const score = scoreMap.get(pid);
+        const pricing = await resolveProductPricing(productDoc, null, branchId, { now });
         return {
           ...productDoc,
           id: String(productDoc._id),
           score: score?.score || 0,
           quantity: score?.quantity || 0,
+          price: pricing.effective_price,
+          original_price: pricing.original_price,
+          discount_percent: pricing.discount_percent,
+          effective_price: pricing.effective_price,
+          pricing_source: pricing.pricing_source,
+          active_hot_deal: pricing.active_hot_deal,
+          active_promotion: pricing.active_promotion,
+          pricing,
         };
-      })
-      .filter(Boolean);
+      }));
 
     return res.json({
       success: true,
       data: {
         related,
-        bought_together: boughtTogether,
+        bought_together: boughtTogether.filter(Boolean),
       },
     });
   } catch (err) {
@@ -1059,4 +1184,72 @@ export const remove = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+
+// GET /api/products/:id/summary
+export const summary = async (req, res) => {
+  try {
+    const idParam = req.params.id;
+    const locale = req.query.locale || 'vi';
+
+    const product = await findProductByRouteParam(idParam);
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    const aiReady = isProductAISummaryReady();
+    if (!aiReady) {
+      return res.json({
+        success: true,
+        aiReady: false,
+        data: {
+          overview: locale === 'en'
+            ? 'AI Product Summary is currently unavailable (missing configuration).'
+            : (locale === 'ja'
+              ? 'AI製品概要は現在利用できません（設定がありません）。'
+              : 'Tóm tắt sản phẩm AI hiện không khả dụng (thiếu cấu hình).'),
+          strengths: [],
+          cautions: [],
+          recommendation: locale === 'en'
+            ? 'Please contact system administrator to configure OpenRouter API credentials.'
+            : (locale === 'ja'
+              ? 'OpenRouter APIの資格情報を設定するには、システム管理者に連絡してください。'
+              : 'Vui lòng liên hệ quản trị viên hệ thống để cấu hình thông tin API OpenRouter.'),
+          notes: []
+        }
+      });
+    }
+
+    const summaryData = await buildProductAISummary({ product, locale });
+    return res.json({
+      success: true,
+      aiReady: true,
+      data: summaryData
+    });
+  } catch (err) {
+    console.error('[productController] Error in AI summary:', err);
+    // Safe fallback handling:
+    const locale = req.query.locale || 'vi';
+    return res.json({
+      success: true,
+      aiReady: false,
+      error: err.message,
+      data: {
+        overview: locale === 'en'
+          ? 'Failed to generate AI summary.'
+          : (locale === 'ja' ? 'AI概要の生成に失敗しました。' : 'Không thể tạo tóm tắt AI.'),
+        strengths: [],
+        cautions: [],
+        recommendation: locale === 'en'
+          ? 'Please read the detailed product description below.'
+          : (locale === 'ja' ? '以下の詳細な製品説明をお読みください。' : 'Vui lòng tham khảo chi tiết mô tả sản phẩm bên dưới.'),
+        notes: [
+          locale === 'en'
+            ? 'The AI model might be temporarily busy or unreachable.'
+            : (locale === 'ja' ? 'AIモデルが一時的にビジー状態か、アクセスできない可能性があります。' : 'Hệ thống AI có thể đang bận hoặc không thể kết nối.')
+        ]
+      }
+    });
+  }
+};
+
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { NormalizedShopProduct } from '../types/product';
 import { resolveImageUrl, fallbackProductImage } from '../utils/imageUrl';
+import { HotDealCountdown } from './HotDealCountdown/HotDealCountdown';
 
 interface ProductCardProps {
   product: NormalizedShopProduct;
@@ -36,12 +37,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
   if (loading) return <ProductCardSkeleton />;
 
   const safeName = product.name || t('common.product');
-  const safePrice = Number(product.price) || 0;
+  const safePrice = Number(product.effective_price !== undefined ? product.effective_price : product.price) || 0;
   const safeOriginal = Number(product.original_price) || 0;
   const safeDiscount = Number(product.discount_percent) || 0;
   const safeRating = Number(product.rating) || 0;
   const safeStock = Math.max(0, Number(product.stock) || 0);
   const isOutOfStock = Boolean(product.isOutOfStock || safeStock <= 0);
+  const isHotDeal = product.pricing_source === 'HOT_DEAL' || !!product.active_hot_deal;
   const showDiscount = safeDiscount > 0 || (safeOriginal > safePrice && safeOriginal > 0);
 
   return (
@@ -50,9 +52,15 @@ const ProductCard: React.FC<ProductCardProps> = ({
       onClick={() => onClick?.(product)}
     >
       <div className="absolute left-3 top-3 z-20 flex flex-col gap-1">
-        {showDiscount && (
+        {isHotDeal && (
+          <span className="rounded bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase text-white shadow-sm flex items-center gap-0.5 animate-pulse">
+            <span className="material-symbols-outlined text-[10px]">local_fire_department</span>
+            {product.active_hot_deal?.badge_text || 'Hot Deal'}
+          </span>
+        )}
+        {showDiscount && !isHotDeal && (
           <span className="rounded bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
-            -{safeDiscount || Math.round(((safeOriginal - safePrice) / safeOriginal) * 100)}%
+            -{safeDiscount}%
           </span>
         )}
         {isOutOfStock && (
@@ -78,7 +86,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
       <div className="relative w-full aspect-square overflow-hidden rounded-xl bg-slate-100">
         <img
-          src={resolveImageUrl(product.image || product.thumbnail)}
+          src={resolveImageUrl(product.image)}
           alt={safeName}
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).src = fallbackProductImage;
@@ -89,6 +97,11 @@ const ProductCard: React.FC<ProductCardProps> = ({
       </div>
 
       <div className="flex flex-1 flex-col pt-3">
+        {isHotDeal && product.active_hot_deal?.end_date && (
+          <div className="mb-2 px-2 py-1 bg-red-50 rounded-lg border border-red-100">
+            <HotDealCountdown endDate={product.active_hot_deal.end_date} />
+          </div>
+        )}
         <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 line-clamp-1">{product.categoryShop || t('common.other')}</p>
         <h3 className="mt-1 min-h-10 text-sm font-semibold leading-5 text-slate-900 line-clamp-2">{safeName}</h3>
 

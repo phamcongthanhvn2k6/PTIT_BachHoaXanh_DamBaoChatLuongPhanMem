@@ -8,7 +8,7 @@ import { toast } from '../components/Toast/toastEvent';
 import { bannerService } from '../services/bannerService';
 import flashDealService from '../services/flashDealService';
 import ProductCard from '../components/ProductCard';
-import { deriveCategoryLookup, normalizeProduct as normalizeShopProduct } from '../utils/normalizeProduct';
+import { deriveCategoryLookup, normalizeProduct as normalizeShopProduct } from '../utils/productNormalization';
 import { dataService } from '../services/dataService';
 import { resolveFlashDealProductContext } from '../utils/flashDealProductResolver';
 import { getProductUrl } from '../utils/productUrl';
@@ -353,8 +353,8 @@ export const ShopAtHome: React.FC = () => {
           ) || null;
         }
 
-        const dealPrice = Number(deal?.deal_price || matchedBp?.price || productAny?.price || 0);
-        const originalPrice = Number(deal?.original_price || matchedBp?.original_price || productAny?.original_price || dealPrice || 0);
+        const dealPrice = Number(deal?.deal_price ?? matchedBp?.effective_price ?? matchedBp?.price ?? productAny?.effective_price ?? productAny?.price ?? 0);
+        const originalPrice = Number(deal?.original_price ?? matchedBp?.original_price ?? productAny?.original_price ?? dealPrice);
         
         const dealImages = Array.isArray(productAny?.images) ? productAny.images : [];
         const dealImage = deal?.image || deal?.image_url || productAny?.thumbnail || dealImages[0] || '';
@@ -369,7 +369,10 @@ export const ShopAtHome: React.FC = () => {
           image: dealImage,
           thumbnail: productAny?.thumbnail || dealImage,
           price: dealPrice,
+          effective_price: dealPrice,
           original_price: originalPrice,
+          pricing_source: 'HOT_DEAL',
+          active_hot_deal: deal,
           stock: matchedBp ? Number(matchedBp.stock) : Number(deal?.remaining_quantity ?? deal?.stock ?? 10),
           categoryShop: productAny?.category_name || productAny?.category?.name || 'Gia dụng',
           rating: productAny?.rating || productAny?.average_rating || 4.8,

@@ -6,7 +6,6 @@ import { promotionService } from '../services/promotionService';
 import { couponService } from '../services/couponService';
 import { useAppSelector, store } from '../store';
 import { useTranslation } from 'react-i18next';
-import { HotDealCountdown } from '../components/HotDealCountdown/HotDealCountdown';
 import { InlineVoucherBadge } from '../components/PromotionImageFallback/PromotionImageFallback';
 import PromotionImageDisplay from '../components/PromotionImageFallback/PromotionImageFallback';
 import { getProductUrl } from '../utils/productUrl';
@@ -60,7 +59,8 @@ const Promotions: React.FC = () => {
         ...deal,
         id: deal.id || deal._id,
         title: deal.title || deal.product_name || `Hot Deal #${String(deal.id || deal._id || '').slice(-6)}`,
-        price: Number(deal.price ?? deal.deal_price ?? 0),
+        price: Number(deal.effective_price ?? deal.price ?? deal.deal_price ?? 0),
+        original_price: Number(deal.original_price ?? deal.price ?? deal.deal_price ?? 0),
         image_url: deal.image_url || deal.image || '',
       })));
       

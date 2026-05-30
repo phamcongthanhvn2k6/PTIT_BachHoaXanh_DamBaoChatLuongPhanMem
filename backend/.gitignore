@@ -1,0 +1,20 @@
+# Dependency directories
+node_modules/
+
+# Environment files
+.env
+.env.development
+.env.production
+.env.*
+
+# Logs
+logs/
+*.log
+
+# System/IDE files
+.DS_Store
+.vscode/
+.idea/
+
+# Keep template
+!.env.example

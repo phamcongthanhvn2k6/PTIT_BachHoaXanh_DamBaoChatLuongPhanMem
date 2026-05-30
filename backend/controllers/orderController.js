@@ -15,6 +15,8 @@ import { calculateCheckoutTotals } from '../services/promotionCalculationService
 import { queueOrderSuccessEmail } from '../services/orderEmailService.js';
 import { isValidVietnamPhone, normalizeVietnamPhone } from '../utils/validatePhone.js';
 import { notifyOrderStatusChanged } from '../services/userNotificationService.js';
+import { resolveEffectivePrice, resolveProductPricing } from '../services/pricingResolverService.js';
+import { HotDeal } from '../models/Misc.js';
 
 // ─── Normalize helper: MongoDB _id → id ───
 const normalizeOrder = (order) => {
@@ -308,10 +310,6 @@ export const create = async (req, res) => {
             item.supplier_name = item.supplier_name || bp.supplier_name;
             item.expiry_date = item.expiry_date || bp.expiry_date;
 
-            // 🔥 SECURITY FIX: Enforce server-side pricing from DB
-            item.price = bp.price;
-            item.unit_price = bp.price;
-
             const p = await Product.findById(bp.product_id).session(session);
             if (p) {
               item.sku = item.sku || p.sku;
@@ -320,7 +318,24 @@ export const create = async (req, res) => {
               item.expiry_date = item.expiry_date || p.expiry_date;
               item.product_name = p.name || p.product_name || item.product_name || item.name;
               item.name = item.product_name; // Normalize for calculation service
-              item.product_image = p.image || p.product_image || item.product_image || item.image;
+              item.product_image = p.thumbnail || p.image || p.product_image || item.product_image || item.image;
+
+              // Dynamically resolve pricing
+              const pricingResolved = await resolveProductPricing(p, bp, branch_id_val, { now: new Date() });
+              item.price = pricingResolved.effective_price;
+              item.unit_price = pricingResolved.effective_price;
+              item.original_price = pricingResolved.original_price;
+              item.discount_percent = pricingResolved.discount_percent;
+              item.effective_price = pricingResolved.effective_price;
+              item.pricing_source = pricingResolved.pricing_source;
+              item.active_hot_deal = pricingResolved.active_hot_deal;
+              item.active_promotion = pricingResolved.active_promotion;
+              item.hot_deal_id = pricingResolved.active_hot_deal?.id || null;
+              item.pricing = pricingResolved;
+            } else {
+              item.price = bp.price;
+              item.unit_price = bp.price;
+              item.original_price = bp.original_price || bp.price;
             }
           }
         } catch (e) { console.warn('Snapshot logic error:', e.message); }
@@ -345,6 +360,19 @@ export const create = async (req, res) => {
       productVoucherId: req.body.product_voucher_id || null,
       shippingVoucherId: req.body.shipping_voucher_id || null
     });
+
+    if (serverPricing.price_changed) {
+      if (session) {
+        await session.abortTransaction();
+        session.endSession();
+      }
+      return res.status(409).json({
+        success: false,
+        code: 'PRICE_CHANGED',
+        message: 'Giá sản phẩm đã thay đổi. Vui lòng kiểm tra lại giỏ hàng và đặt hàng lại.',
+        data: serverPricing
+      });
+    }
 
     const orderData = {
       user_id: userId,
@@ -395,6 +423,18 @@ export const create = async (req, res) => {
         }
       } catch (e) {
         console.warn('[OrderCreate] sold_count update error for item:', item.branch_product_id, e.message);
+      }
+    }
+    // Decrement Hot Deal remaining_quantity if the item was bought under an active Hot Deal
+    for (const item of orderData.items) {
+      if (item.hot_deal_id) {
+        const dealId = toObjectIdIfValid(item.hot_deal_id);
+        const q = Number(item.quantity) || 1;
+        await HotDeal.updateOne(
+          { _id: dealId, remaining_quantity: { $gt: 0 } },
+          { $inc: { remaining_quantity: -q, sold_count: q } },
+          { session }
+        );
       }
     }
 
@@ -662,6 +702,19 @@ export const cancel = async (req, res) => {
           }
         }
       } catch (e) { console.warn('[OrderCancel] sold_count revert error:', e.message); }
+    }
+
+    // Restore Hot Deal remaining stock if order items were bought under a Hot Deal
+    for (const item of order.items) {
+      if (item.hot_deal_id) {
+        const dealId = toObjectIdIfValid(item.hot_deal_id);
+        const q = Number(item.quantity) || 1;
+        await HotDeal.updateOne(
+          { _id: dealId },
+          { $inc: { remaining_quantity: q, sold_count: -q } },
+          { session }
+        );
+      }
     }
 
     await order.save({ session });

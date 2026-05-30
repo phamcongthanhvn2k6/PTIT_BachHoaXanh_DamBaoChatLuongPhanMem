@@ -66,6 +66,25 @@ export const productService = {
     return product;
   },
 
+  getProductSummary: async (id: number | string, locale = 'vi') => {
+    try {
+      const res = await httpClient.get(endpoints.products.summary(id), { params: { locale } });
+      return res.data;
+    } catch {
+      return {
+        success: true,
+        aiReady: false,
+        data: {
+          overview: locale === 'en' ? 'Failed to load summary.' : (locale === 'ja' ? '概要の読み込みに失敗しました。' : 'Không thể tải tóm tắt.'),
+          strengths: [],
+          cautions: [],
+          recommendation: '',
+          notes: []
+        }
+      };
+    }
+  },
+
   getRelatedProducts: async (id: number | string) => {
     try {
       const res = await httpClient.get(endpoints.products.related(id)).catch(() => ({ data: { data: [] } }));

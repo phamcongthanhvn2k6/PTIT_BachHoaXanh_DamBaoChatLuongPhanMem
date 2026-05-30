@@ -19,7 +19,13 @@ const orderSchema = new mongoose.Schema({
     discount_amount: { type: Number, default: 0 },
     discount_applied: { type: Number, default: 0 },
     discount: { type: Number, default: 0 },
-    is_gift: { type: Boolean, default: false }
+    is_gift: { type: Boolean, default: false },
+    hot_deal_id: { type: mongoose.Schema.Types.Mixed, default: null },
+    purchased_price: { type: Number },
+    original_price_at_purchase: { type: Number },
+    discount_percent_at_purchase: { type: Number },
+    pricing_source_at_purchase: { type: String },
+    pricing: { type: mongoose.Schema.Types.Mixed, default: null }
   }],
   order_address: {
     receiver_name: String,

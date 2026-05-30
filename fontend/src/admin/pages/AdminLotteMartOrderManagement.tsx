@@ -607,8 +607,8 @@ const AdminLotteMartOrderManagement: React.FC = () => {
                 <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin">
                   {selectedOrder.items?.map((item: any, idx: number) => {
                      const isGift = item.is_gift || false;
-                     const finalPrice = item.final_price ?? item.price ?? 0;
-                     const originalPrice = item.original_price ?? finalPrice;
+                     const finalPrice = item.purchased_price ?? item.final_price ?? item.price ?? 0;
+                     const originalPrice = item.original_price_at_purchase ?? item.original_price ?? finalPrice;
                      const discountAmt = item.discount_amount ?? item.discount ?? 0;
                      return (
                     <div className="flex items-center gap-4" key={idx}>

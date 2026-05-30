@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { requestTextCompletion } from "../utils/aiClient.js";
 
 /**
  * Generate a detailed Vietnamese recipe using Gemini AI.
@@ -304,22 +305,12 @@ function validateRecipeQuality(recipe) {
  * Generate AI comparison summary for products.
  */
 export const generateComparisonSummary = async (products) => {
-  const apiKey = process.env.GEMINI_COMPARE_KEY;
-  if (!apiKey) {
-    console.error("[aiService] Missing GEMINI_COMPARE_KEY");
-    throw new Error("Missing GEMINI_COMPARE_KEY");
-  }
-
-  const modelName = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: modelName });
-
   const productDescriptions = products.map((p, i) =>
     `Sản phẩm ${i + 1}: ${p.name} - Giá: ${p.price}đ - Thương hiệu: ${p.brand || 'N/A'} - Mô tả: ${p.description || 'N/A'}`
   ).join('\n');
 
-  const prompt = `So sánh chi tiết các sản phẩm sau và đưa ra nhận xét chuyên sâu bằng tiếng Việt:\n${productDescriptions}\n\nTrả lời bằng markdown với tiêu đề, bảng so sánh, ưu/nhược điểm, và khuyến nghị mua.`;
+  const systemPrompt = "Bạn là chuyên gia tư vấn mua sắm.";
+  const userPrompt = `So sánh chi tiết các sản phẩm sau và đưa ra nhận xét chuyên sâu bằng tiếng Việt:\n${productDescriptions}\n\nTrả lời bằng markdown với tiêu đề, bảng so sánh, ưu/nhược điểm, và khuyến nghị mua.`;
 
-  const result = await model.generateContent(prompt);
-  return result.response.text();
+  return await requestTextCompletion({ systemPrompt, userPrompt });
 };

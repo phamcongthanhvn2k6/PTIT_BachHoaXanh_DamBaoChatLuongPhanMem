@@ -2,6 +2,9 @@ import Promotion from '../models/Promotion.js';
 import { PromotionUsage } from '../models/PromotionUsage.js';
 import { Coupon, CouponUsage } from '../models/Coupon.js';
 import { computeCampaignLifecycle } from './campaignLifecycleService.js';
+import Product from '../models/Product.js';
+import BranchProduct from '../models/BranchProduct.js';
+import { resolveEffectivePrice, resolveProductPricing } from './pricingResolverService.js';
 
 const DEFAULT_SHIPPING_FEE = 30000;
 
@@ -351,6 +354,7 @@ export async function calculateCheckoutTotals(input, branchIdArg, couponCodeArg 
     const normalizedItems = normalizeCartItems(options.cartItems || options.items || []);
     if (normalizedItems.length === 0) {
         return {
+            price_changed: false,
             original_total: 0,
             subtotal: 0,
             item_discounts: 0,
@@ -385,6 +389,47 @@ export async function calculateCheckoutTotals(input, branchIdArg, couponCodeArg 
                 final_total: 0,
             },
         };
+    }
+
+    // Recalculate latest effective price for each item to prevent stale pricing
+    let priceChanged = false;
+    for (const item of normalizedItems) {
+        const bpId = item.branch_product_id;
+        let bp = null;
+        let prod = null;
+
+        if (bpId) {
+            try {
+                bp = await BranchProduct.findById(bpId).lean();
+                if (bp) {
+                    prod = await Product.findById(bp.product_id).lean();
+                }
+            } catch (e) {}
+        }
+
+        if (!bp && item.product_id && branchId) {
+            try {
+                bp = await BranchProduct.findOne({ product_id: item.product_id, branch_id: branchId }).lean();
+                prod = await Product.findById(item.product_id).lean();
+            } catch (e) {}
+        }
+
+        if (prod) {
+            const pricing = await resolveProductPricing(prod, bp, branchId, { now });
+            const clientPrice = toNumber(item.price, 0);
+            if (Math.abs(pricing.effective_price - clientPrice) > 0.01) {
+                priceChanged = true;
+            }
+            item.price = pricing.effective_price;
+            item.original_price = pricing.original_price;
+            item.discount_percent = pricing.discount_percent;
+            item.effective_price = pricing.effective_price;
+            item.pricing_source = pricing.pricing_source;
+            item.active_hot_deal = pricing.active_hot_deal;
+            item.active_promotion = pricing.active_promotion;
+            item.hot_deal_id = pricing.active_hot_deal?.id || null;
+            item.pricing = pricing;
+        }
     }
 
     const originalSubtotal = normalizedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -536,6 +581,10 @@ export async function calculateCheckoutTotals(input, branchIdArg, couponCodeArg 
             points_multiplier_applied: Math.max(1, linePointsMultiplier),
             applied_promotions: appliedPromotionRefs,
             applied_promotion: appliedPromotionRefs[0] || null,
+            purchased_price: lineFinalPrice,
+            original_price_at_purchase: item.original_price,
+            discount_percent_at_purchase: item.discount_percent,
+            pricing_source_at_purchase: item.pricing_source || 'BASE_PRICE',
         });
     }
 
@@ -626,6 +675,7 @@ export async function calculateCheckoutTotals(input, branchIdArg, couponCodeArg 
         .sort((a, b) => toNumber(b.discount_amount, 0) - toNumber(a.discount_amount, 0));
 
     return {
+        price_changed: priceChanged,
         original_total: originalSubtotal,
         subtotal: subtotalAfterVouchers,
         item_discounts: itemDiscounts,

@@ -2,6 +2,7 @@ import ViewedHistory from '../models/ViewedHistory.js';
 import BranchProduct from '../models/BranchProduct.js';
 import Product from '../models/Product.js';
 import mongoose from 'mongoose';
+import { resolveProductPricing } from '../services/pricingResolverService.js';
 
 const toComparableId = (value) => String(value || '');
 const MAX_LIST_LIMIT = 200;
@@ -181,11 +182,31 @@ const buildHistorySnapshot = async (rows) => {
 
   const productMap = new Map(productsRaw.map((p) => [toComparableId(p._id), p]));
 
-  return rows.map((row) => {
+  const now = new Date();
+  return Promise.all(rows.map(async (row) => {
     const rowObj = row.toObject ? row.toObject() : { ...row };
     const bp = branchProductMap.get(toComparableId(rowObj.branch_product_id));
     const productId = toComparableId(rowObj.product_id || bp?.product_id || '');
     const product = productMap.get(productId);
+
+    let price = toNumber(rowObj.price, bp?.price ?? product?.price ?? 0);
+    let originalPrice = toNumber(rowObj.original_price, bp?.original_price ?? product?.original_price ?? price);
+    let discountPercent = bp?.discount_percent ?? product?.discount_percent ?? 0;
+    let effectivePrice = price;
+    let pricingSource = 'BASE_PRICE';
+    let activeHotDeal = null;
+    let activePromotion = null;
+
+    if (product) {
+      const pricing = await resolveProductPricing(product, bp, bp?.branch_id, { now });
+      price = pricing.effective_price;
+      originalPrice = pricing.original_price;
+      discountPercent = pricing.discount_percent;
+      effectivePrice = pricing.effective_price;
+      pricingSource = pricing.pricing_source;
+      activeHotDeal = pricing.active_hot_deal;
+      activePromotion = pricing.active_promotion;
+    }
 
     return {
       id: String(rowObj._id),
@@ -196,13 +217,18 @@ const buildHistorySnapshot = async (rows) => {
       view_count: Number(rowObj.view_count || 1),
       product_name: rowObj.product_name || product?.name || '',
       product_image: rowObj.product_image || product?.images?.[0] || product?.thumbnail || '',
-      price: toNumber(rowObj.price, bp?.price ?? product?.price ?? 0),
-      original_price: toNumber(rowObj.original_price, bp?.original_price ?? product?.original_price ?? 0),
+      price,
+      original_price: originalPrice,
+      discount_percent: discountPercent,
+      effective_price: effectivePrice,
+      pricing_source: pricingSource,
+      active_hot_deal: activeHotDeal,
+      active_promotion: activePromotion,
       category: rowObj.category || product?.category_name || product?.category?.name || '',
       stock: bp?.stock ?? product?.stock ?? 0,
       in_stock: bp ? Number(bp.stock || 0) > 0 && bp.is_available !== false : Number(product?.stock || 0) > 0,
     };
-  });
+  }));
 };
 
 export const list = async (req, res) => {

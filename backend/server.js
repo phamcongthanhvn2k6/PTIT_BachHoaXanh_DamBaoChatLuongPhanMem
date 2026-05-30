@@ -28,7 +28,7 @@ const PORT = process.env.PORT || 3001;
 const start = async () => {
   console.log('[startup] Loading environment variables...');
   console.log(`[startup] PORT=${PORT} | FRONTEND_URL=${process.env.FRONTEND_URL || 'http://localhost:5173'} | MONGODB_URI=${process.env.MONGODB_URI ? 'set' : 'missing'}`);
-  console.log('[AI] GEMINI_COMPARE_KEY exists:', !!process.env.GEMINI_COMPARE_KEY);
+  console.log('[AI] OPENROUTER_API_KEY exists:', !!process.env.OPENROUTER_API_KEY);
   console.log('[AI] GEMINI_RECIPE_KEY exists:', !!process.env.GEMINI_RECIPE_KEY);
 
   let app;

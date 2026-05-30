@@ -31,6 +31,7 @@ const hotDealSchema = new mongoose.Schema({
   badge_text: { type: String, default: '' },
   product_id: { type: mongoose.Schema.Types.Mixed, required: true }, // Keep for compatibility
   branch_product_id: { type: mongoose.Schema.Types.Mixed, default: null },
+  branch_id: { type: mongoose.Schema.Types.Mixed, default: null },
   type: { type: String, default: 'percent' },
   discount_value: { type: Number, default: 0 },
   discount_percent: { type: Number, default: 0 }, // Compatibility

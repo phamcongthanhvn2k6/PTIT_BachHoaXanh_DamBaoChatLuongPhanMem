@@ -128,6 +128,10 @@ type BasicAssetFormState = {
   link: string;
   position: string;
   product_id: string;
+  branch_product_id: string;
+  branch_id: string;
+  total_quantity: string;
+  remaining_quantity: string;
   original_price: string;
   deal_price: string;
   start_date: string;
@@ -225,6 +229,10 @@ const defaultBasicForm = (): BasicAssetFormState => ({
   link: '',
   position: 'home',
   product_id: '',
+  branch_product_id: '',
+  branch_id: '',
+  total_quantity: '',
+  remaining_quantity: '',
   original_price: '',
   deal_price: '',
   start_date: '',
@@ -298,6 +306,10 @@ const normalizeBasicItemToForm = (item?: GenericItem | null, activeTab: 'banners
     link: item.link || '',
     position: item.position || 'home',
     product_id: item.product_id ? String(item.product_id) : '',
+    branch_product_id: (item as any).branch_product_id ? String((item as any).branch_product_id) : '',
+    branch_id: (item as any).branch_id ? String((item as any).branch_id) : ((item as any).target_branch_ids && (item as any).target_branch_ids.length > 0 ? String((item as any).target_branch_ids[0]) : ''),
+    total_quantity: (item as any).total_quantity !== undefined && (item as any).total_quantity !== null ? String((item as any).total_quantity) : '',
+    remaining_quantity: (item as any).remaining_quantity !== undefined && (item as any).remaining_quantity !== null ? String((item as any).remaining_quantity) : '',
     original_price: String(item.original_price ?? ''),
     deal_price: String(item.deal_price ?? item.price ?? ''),
     start_date: toDateTimeLocal(item.start_date),
@@ -561,6 +573,28 @@ const AdminCouponsManagement: React.FC = () => {
   const [categoryOptions, setCategoryOptions] = useState<SelectOption[]>([]);
   const [branchOptions, setBranchOptions] = useState<SelectOption[]>([]);
   const [optionLoading, setOptionLoading] = useState(false);
+  const [branchProducts, setBranchProducts] = useState<any[]>([]);
+  const [branchProductsLoading, setBranchProductsLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchBranchProducts = async () => {
+      if (!basicForm.branch_id) {
+        setBranchProducts([]);
+        return;
+      }
+      setBranchProductsLoading(true);
+      try {
+        const data = await productService.getBranchProducts({ branch_id: basicForm.branch_id });
+        setBranchProducts(data || []);
+      } catch (err) {
+        console.error("Error fetching branch products", err);
+        setBranchProducts([]);
+      } finally {
+        setBranchProductsLoading(false);
+      }
+    };
+    fetchBranchProducts();
+  }, [basicForm.branch_id]);
   const [searchProduct, setSearchProduct] = useState('');
   const [searchCategory, setSearchCategory] = useState('');
   const [searchBranch, setSearchBranch] = useState('');
@@ -646,7 +680,7 @@ const AdminCouponsManagement: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (showFormModal && activeTab === 'promotions') {
+    if (showFormModal) {
       loadScopeOptions();
     }
   }, [showFormModal, activeTab]);
@@ -1150,6 +1184,14 @@ const AdminCouponsManagement: React.FC = () => {
       }
 
       if (activeTab === 'hot_deals') {
+        if (!basicForm.branch_id.trim()) {
+          toast.error(t('admin.promotions.hotDealBranchRequired', 'Hot Deal cần chọn chi nhánh'));
+          return;
+        }
+        if (!basicForm.branch_product_id.trim()) {
+          toast.error(t('admin.promotions.hotDealBranchProductRequired', 'Hot Deal cần chọn sản phẩm chi nhánh'));
+          return;
+        }
         if (!basicForm.product_id.trim()) {
           toast.error(t('admin.promotions.hotDealProductRequired', 'Hot Deal cần product_id'));
           return;
@@ -1165,6 +1207,9 @@ const AdminCouponsManagement: React.FC = () => {
 
         const payload: Record<string, any> = {
           product_id: basicForm.product_id.trim(),
+          branch_product_id: basicForm.branch_product_id.trim(),
+          branch_id: basicForm.branch_id.trim(),
+          target_branch_ids: basicForm.branch_id.trim() ? [basicForm.branch_id.trim()] : [],
           original_price: original,
           deal_price: deal,
           discount_percent: discountPercent,
@@ -1175,12 +1220,52 @@ const AdminCouponsManagement: React.FC = () => {
           image_url: finalImage || undefined,
           title: basicForm.title.trim() || undefined,
         };
-        // Set remaining_quantity for new deals
-        if (!editingItem) {
-          payload.remaining_quantity = 100;
-          payload.stock_limit = 100;
-          payload.total_quantity = 100;
+        // Set remaining_quantity for new deals validation
+        const selectedBp = branchProducts.find(x => String(x.id || x._id) === basicForm.branch_product_id);
+        const currentStock = selectedBp ? (selectedBp.stock ?? 0) : 0;
+
+        const totalQtyVal = basicForm.total_quantity.trim();
+        const totalQty = totalQtyVal ? Number(totalQtyVal) : 0;
+        if (isNaN(totalQty) || totalQty <= 0) {
+          toast.error(t('admin.promotions.totalQuantityError', 'Tổng số lượng deal phải lớn hơn 0'));
+          return;
         }
+
+        const remainingQtyVal = basicForm.remaining_quantity.trim();
+        const remainingQty = remainingQtyVal ? Number(remainingQtyVal) : totalQty;
+        if (isNaN(remainingQty) || remainingQty < 0) {
+          toast.error(t('admin.promotions.remainingQuantityInvalid', 'Số lượng còn lại không hợp lệ'));
+          return;
+        }
+
+        if (remainingQty > currentStock) {
+          toast.error(t('admin.promotions.remainingQuantityExceedStock', 'Số lượng còn lại không thể lớn hơn tồn kho hiện tại'));
+          return;
+        }
+
+        if (remainingQty > totalQty) {
+          toast.error(t('admin.promotions.remainingQuantityExceedTotal', 'Số lượng còn lại không thể lớn hơn tổng số lượng deal'));
+          return;
+        }
+
+        if (currentStock <= 0) {
+          toast.error(t('admin.promotions.productOutOfStockBlock', 'Sản phẩm đã hết hàng ở chi nhánh này. Không thể tạo hot deal.'));
+          return;
+        }
+
+        payload.total_quantity = totalQty;
+        payload.remaining_quantity = remainingQty;
+        payload.stock_limit = totalQty;
+
+
+
+
+
+
+
+
+
+
 
         if (editingItem && editingItem.item_type === 'hot_deal') {
           await hotDealService.updateHotDeal(editingId, payload);
@@ -1888,7 +1973,166 @@ const AdminCouponsManagement: React.FC = () => {
       ) : (
         <>
           <div>
-            <label className="block text-sm font-bold mb-2">{t('admin.promotions.productSelect', 'Sản phẩm')} *</label>
+            <label className="block text-sm font-bold mb-2">{t('admin.promotions.branchSelect', 'Chi nhánh')} *</label>
+            <select
+              value={basicForm.branch_id}
+              onChange={(e) => {
+                const selectedBranchId = e.target.value;
+                setBasicField('branch_id', selectedBranchId);
+                setBasicField('branch_product_id', '');
+                setBasicField('product_id', '');
+              }}
+              className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
+            >
+              <option value="">{t('admin.promotions.selectBranchPlaceholder', '-- Chọn chi nhánh --')}</option>
+              {branchOptions.map(opt => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold mb-2">{t('admin.promotions.branchProductSelect', 'Sản phẩm theo chi nhánh')} *</label>
+            <select
+              value={basicForm.branch_product_id}
+              disabled={!basicForm.branch_id}
+              onChange={(e) => {
+                const selectedBpId = e.target.value;
+                setBasicField('branch_product_id', selectedBpId);
+
+                const bp = branchProducts.find(x => String(x.id || x._id) === selectedBpId);
+                if (bp) {
+                  const prodId = bp.product_id || (bp.product ? (bp.product.id || bp.product._id) : '');
+                  setBasicField('product_id', String(prodId));
+
+                  setBasicField('original_price', bp.price || bp.original_price || (bp.product ? bp.product.price : 0));
+                  setBasicField('deal_price', bp.price || bp.original_price || (bp.product ? bp.product.price : 0));
+                  
+                  if (basicForm.title === '' || basicForm.title === 'Deal') {
+                    setBasicField('title', (bp.product ? bp.product.name : '') || '');
+                  }
+                  if (!basicForm.imagePreview && !basicForm.imageUrl) {
+                    setBasicField('imageUrl', (bp.product ? (bp.product.image_url || bp.product.image) : '') || bp.image || '');
+                  }
+                  // Auto-suggest stock
+                  setBasicField('remaining_quantity', String(bp.stock ?? 0));
+                  setBasicField('total_quantity', String(bp.stock ?? 0));
+                } else {
+                  setBasicField('product_id', '');
+                }
+              }}
+              className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
+            >
+              <option value="">
+                {!basicForm.branch_id 
+                  ? t('admin.promotions.selectBranchFirst', 'Vui lòng chọn chi nhánh trước') 
+                  : branchProductsLoading 
+                    ? t('admin.promotions.loading', 'Đang tải...') 
+                    : t('admin.promotions.selectBranchProductPlaceholder', '-- Chọn sản phẩm --')
+                }
+              </option>
+              {branchProducts.map(bp => {
+                const prodName = bp.product ? bp.product.name : '';
+                const stockCount = bp.stock ?? 0;
+                const isOutOfStock = stockCount <= 0;
+                const isInactive = bp.is_active === false || bp.is_available === false;
+                const priceFormatted = bp.price ? bp.price.toLocaleString() : '0';
+
+                let suffix = ` - ${t('admin.promotions.stock', 'Kho')}: ${stockCount} (Giá: ${priceFormatted}đ)`;
+                if (isOutOfStock) {
+                  suffix = ` - [${t('admin.promotions.outOfStock', 'Hết hàng')}] (Giá: ${priceFormatted}đ)`;
+                } else if (isInactive) {
+                  suffix = ` - [${t('admin.promotions.unavailable', 'Không bán')}] (Giá: ${priceFormatted}đ)`;
+                }
+
+                return (
+                  <option key={bp.id || bp._id} value={bp.id || bp._id}>
+                    {prodName} {suffix}
+                  </option>
+                );
+              })}
+            </select>
+            {(() => {
+              const selectedBp = branchProducts.find(x => String(x.id || x._id) === basicForm.branch_product_id);
+              if (selectedBp) {
+                const isOutOfStock = (selectedBp.stock ?? 0) <= 0;
+                const isInactive = selectedBp.is_active === false || selectedBp.is_available === false;
+                const selectedBranch = branchOptions.find(o => String(o.id) === basicForm.branch_id);
+                const branchName = selectedBranch ? selectedBranch.label : '';
+                const prodName = selectedBp.product ? selectedBp.product.name : '';
+                const prodPrice = selectedBp.price || selectedBp.original_price || (selectedBp.product ? selectedBp.product.price : 0);
+                const prodImg = (selectedBp.product ? (selectedBp.product.image_url || selectedBp.product.image) : '') || selectedBp.image || '';
+                const stockCount = selectedBp.stock ?? 0;
+
+                return (
+                  <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center gap-4 transition-all">
+                    {prodImg && (
+                      <img 
+                        src={prodImg} 
+                        alt={prodName} 
+                        className="w-16 h-16 object-cover rounded-xl border border-slate-100 bg-white shadow-sm flex-shrink-0"
+                      />
+                    )}
+                    <div className="flex-1">
+                      <div className="text-slate-800 text-sm font-bold flex flex-wrap items-center gap-2">
+                        {prodName}
+                        {isOutOfStock ? (
+                          <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-semibold rounded-md">
+                            {t('admin.promotions.outOfStock', 'Hết hàng')}
+                          </span>
+                        ) : isInactive ? (
+                          <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-semibold rounded-md">
+                            {t('admin.promotions.unavailable', 'Không bán')}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded-md">
+                            {t('common.inStock', 'Còn hàng')}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-slate-500 text-xs mt-1">
+                        {t('admin.promotions.branchSelect', 'Chi nhánh')}: <span className="font-medium text-slate-700">{branchName}</span>
+                      </div>
+                      <div className="text-slate-500 text-xs mt-0.5">
+                        {t('admin.promotions.originalPrice', 'Giá gốc')}: <span className="font-semibold text-slate-700">{prodPrice.toLocaleString()}đ</span>
+                      </div>
+                      <div className="text-slate-500 text-xs mt-0.5">
+                        {t('admin.promotions.currentStock', 'Tồn kho hiện tại')}: <span className={`font-semibold ${isOutOfStock ? 'text-red-600' : stockCount <= 10 ? 'text-amber-600' : 'text-slate-700'}`}>{stockCount}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+            {(() => {
+              const selectedBp = branchProducts.find(x => String(x.id || x._id) === basicForm.branch_product_id);
+              if (selectedBp) {
+                const isOutOfStock = (selectedBp.stock ?? 0) <= 0;
+                const isInactive = selectedBp.is_active === false || selectedBp.is_available === false;
+                if (isOutOfStock) {
+                  return (
+                    <div className="mt-2 text-sm text-red-500 font-medium">
+                      ⚠️ {t('admin.promotions.warningOutOfStock', 'Sản phẩm này hiện đang hết hàng ở chi nhánh đã chọn.')}
+                    </div>
+                  );
+                }
+                if (isInactive) {
+                  return (
+                    <div className="mt-2 text-sm text-amber-600 font-medium">
+                      ⚠️ {t('admin.promotions.warningUnavailable', 'Sản phẩm này hiện đang ngừng kinh doanh hoặc không khả dụng ở chi nhánh đã chọn.')}
+                    </div>
+                  );
+                }
+              }
+              return null;
+            })()}
+          </div>
+
+          <div style={{ display: 'none' }}>
+            <label className="block text-sm font-bold mb-2">Hidden Product ID</label>
             <select
               value={basicForm.product_id}
               onChange={(e) => {
@@ -1955,6 +2199,59 @@ const AdminCouponsManagement: React.FC = () => {
                 className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
               />
             </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {(() => {
+              const selectedBp = branchProducts.find(x => String(x.id || x._id) === basicForm.branch_product_id);
+              return (
+                <>
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-sm font-bold">{t('admin.promotions.totalQuantity', 'Tổng số lượng deal')} *</label>
+                      {selectedBp && (
+                        <button
+                          type="button"
+                          onClick={() => setBasicField('total_quantity', String(selectedBp.stock ?? 0))}
+                          className="text-xs text-primary hover:text-red-700 font-semibold flex items-center gap-1 transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-sm">inventory</span>
+                          {t('admin.promotions.useAllStock', 'Dùng toàn bộ tồn kho')}
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="number"
+                      value={basicForm.total_quantity}
+                      onChange={(e) => setBasicField('total_quantity', e.target.value)}
+                      placeholder={t('admin.promotions.totalQuantityPlaceholder', 'Nhập tổng số lượng phát hành')}
+                      className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="block text-sm font-bold">{t('admin.promotions.remainingQuantity', 'Số lượng còn lại')} *</label>
+                      {selectedBp && (
+                        <button
+                          type="button"
+                          onClick={() => setBasicField('remaining_quantity', String(selectedBp.stock ?? 0))}
+                          className="text-xs text-primary hover:text-red-700 font-semibold flex items-center gap-1 transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-xs">inventory_2</span>
+                          {t('admin.promotions.useAllStock', 'Dùng toàn bộ tồn kho')}
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="number"
+                      value={basicForm.remaining_quantity}
+                      onChange={(e) => setBasicField('remaining_quantity', e.target.value)}
+                      placeholder={t('admin.promotions.remainingQuantityPlaceholder', 'Nhập số lượng còn lại')}
+                      className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
+                    />
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </>
       )}
@@ -2107,6 +2404,11 @@ const AdminCouponsManagement: React.FC = () => {
                           <div className="flex flex-col min-w-0">
                             <span className="text-sm font-bold text-on-surface line-clamp-1">{item.title || item.code || '-'}</span>
                             <span className="text-xs text-secondary mt-0.5 uppercase tracking-wide">ID: {itemId}</span>
+                            {item.branch_id && (
+                              <span className="text-[10px] text-blue-600 font-bold mt-0.5 uppercase tracking-wide">
+                                {t('admin.promotions.branchSelect', 'Chi nhánh')}: {branchOptions.find(b => String(b.id) === String(item.branch_id))?.label || item.branch_id}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>

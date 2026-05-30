@@ -257,7 +257,7 @@ const OrderDetail: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
                 <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-100 flex flex-wrap items-center gap-2">
-                  {t('orders.userFriendlyStatus.' + order.status, STATUS_LABEL[order.status] || order.status)}
+                  {String(t('orders.userFriendlyStatus.' + order.status, STATUS_LABEL[order.status] || order.status))}
                 </h1>
                 <p className="text-xs md:text-sm font-mono text-slate-500 mt-2 break-all">
                   {t('orders.orderCode', { code: order.id })}
@@ -320,7 +320,7 @@ const OrderDetail: React.FC = () => {
                     {trackingHistory.map((track: any, i: number) => (
                         <div key={i} className="pl-6 relative">
                             <span className={`absolute -left-[9px] top-1 w-4 h-4 rounded-full ${(i === trackingHistory.length - 1 && track.status !== 'CANCELLED') ? 'bg-primary ring-4 ring-primary/20' : track.status === 'CANCELLED' ? 'bg-red-500' : 'bg-slate-300'}`}></span>
-                            <p className="font-bold text-slate-800 break-words">{t('orderStatuses.' + track.status, STATUS_LABEL[track.status] || track.status)}</p>
+                            <p className="font-bold text-slate-800 break-words">{String(t('orderStatuses.' + track.status, STATUS_LABEL[track.status] || track.status))}</p>
                             {track.note && track.note !== 'Cập nhật hệ thống' && (
                               <p className="text-sm text-slate-600 mt-1 break-words whitespace-normal">{track.note}</p>
                             )}
@@ -407,7 +407,7 @@ const OrderDetail: React.FC = () => {
                                </p>
                              )}
                            </div>
-                           <p className="text-sm text-slate-500 mt-1">Đơn giá: {(item.final_price || item.price || 0).toLocaleString('vi-VN')}đ | SL: {item.quantity}</p>
+                           <p className="text-sm text-slate-500 mt-1">Đơn giá: {(item.purchased_price ?? item.final_price ?? item.price ?? 0).toLocaleString('vi-VN')}đ | SL: {item.quantity}</p>
                            {(item as any).is_gift && (
                              <span className="inline-flex text-[11px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded mt-1">Quà tặng</span>
                            )}
@@ -434,7 +434,7 @@ const OrderDetail: React.FC = () => {
                            )}
                              </div>
                              <div className="text-right">
-                           <p className="font-bold text-primary">{((item.final_price || item.price || 0) * item.quantity).toLocaleString('vi-VN')}đ</p>
+                           <p className="font-bold text-primary">{((item.purchased_price ?? item.final_price ?? item.price ?? 0) * item.quantity).toLocaleString('vi-VN')}đ</p>
                            {(item.discount_amount || 0) > 0 && (
                              <p className="text-xs text-green-600 font-semibold">- {(item.discount_amount || 0).toLocaleString('vi-VN')}đ</p>
                            )}

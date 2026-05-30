@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import BranchProduct from '../models/BranchProduct.js';
 import StockMovement from '../models/StockMovement.js';
 import Product from '../models/Product.js';
+import { resolveProductPricing } from '../services/pricingResolverService.js';
 
 const parseBranchId = (id) => {
   if (!id) return null;
@@ -120,7 +121,7 @@ export const list = async (req, res) => {
 
     const now = new Date();
 
-    const data = bps.map(bp => {
+    const data = await Promise.all(bps.map(async (bp) => {
       const obj = { ...bp, id: bp._id };
       const prod = productMap[String(bp.product_id)] || null;
       let category = null;
@@ -139,6 +140,16 @@ export const list = async (req, res) => {
         obj.supplier_name = pickNonEmpty(bp.supplier_name, prod.supplier_name);
         obj.sku = pickNonEmpty(bp.sku, prod.sku, obj.sku);
         obj.master_id = pickNonEmpty(bp.master_id, prod.master_id, obj.master_id);
+
+        const resolvedPricing = await resolveProductPricing(prod, bp, bp.branch_id, { now });
+        obj.price = resolvedPricing.effective_price;
+        obj.original_price = resolvedPricing.original_price;
+        obj.discount_percent = resolvedPricing.discount_percent;
+        obj.effective_price = resolvedPricing.effective_price;
+        obj.pricing_source = resolvedPricing.pricing_source;
+        obj.active_hot_deal = resolvedPricing.active_hot_deal;
+        obj.active_promotion = resolvedPricing.active_promotion;
+        obj.pricing = resolvedPricing;
       } else {
         obj.product = null;
         obj.category_name = bp.category_name || '';
@@ -195,7 +206,7 @@ export const list = async (req, res) => {
       obj.badges = badges;
 
       return obj;
-    });
+    }));
 
     return res.json({ success: true, data });
   } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
@@ -212,6 +223,16 @@ export const detail = async (req, res) => {
       const prodObj = product.toObject();
       prodObj.id = prodObj._id;
       bpObj.product = prodObj;
+
+      const resolvedPricing = await resolveProductPricing(product, bp, bp.branch_id, { now: new Date() });
+      bpObj.price = resolvedPricing.effective_price;
+      bpObj.original_price = resolvedPricing.original_price;
+      bpObj.discount_percent = resolvedPricing.discount_percent;
+      bpObj.effective_price = resolvedPricing.effective_price;
+      bpObj.pricing_source = resolvedPricing.pricing_source;
+      bpObj.active_hot_deal = resolvedPricing.active_hot_deal;
+      bpObj.active_promotion = resolvedPricing.active_promotion;
+      bpObj.pricing = resolvedPricing;
     }
     return res.json({ success: true, data: bpObj });
   } catch (err) { return res.status(500).json({ success: false, message: err.message }); }

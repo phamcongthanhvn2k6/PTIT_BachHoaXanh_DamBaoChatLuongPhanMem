@@ -1,6 +1,7 @@
 import Cart from '../models/Cart.js';
 import BranchProduct from '../models/BranchProduct.js';
 import Product from '../models/Product.js';
+import { resolveEffectivePrice, resolveProductPricing } from '../services/pricingResolverService.js';
 
 const toSafeInteger = (value) => {
   const parsed = Number(value);
@@ -55,6 +56,29 @@ const populateCartItems = async (cart) => {
             const pObj = product.toObject ? product.toObject() : { ...product };
             pObj.id = product._id;
             bpObj.product = pObj;
+
+            // Resolve dynamic price
+            const pricingResolved = await resolveProductPricing(product, branchProduct, cart.branch_id, { now: new Date() });
+            
+            // Override price and unit_price under itemObj and branchProduct
+            itemObj.price = pricingResolved.effective_price;
+            itemObj.unit_price = pricingResolved.effective_price;
+            itemObj.original_price = pricingResolved.original_price;
+            itemObj.discount_percent = pricingResolved.discount_percent;
+            itemObj.effective_price = pricingResolved.effective_price;
+            itemObj.pricing_source = pricingResolved.pricing_source;
+            itemObj.active_hot_deal = pricingResolved.active_hot_deal;
+            itemObj.active_promotion = pricingResolved.active_promotion;
+            itemObj.pricing = pricingResolved;
+
+            bpObj.price = pricingResolved.effective_price;
+            bpObj.original_price = pricingResolved.original_price;
+            bpObj.discount_percent = pricingResolved.discount_percent;
+            bpObj.effective_price = pricingResolved.effective_price;
+            bpObj.pricing_source = pricingResolved.pricing_source;
+            bpObj.active_hot_deal = pricingResolved.active_hot_deal;
+            bpObj.active_promotion = pricingResolved.active_promotion;
+            bpObj.pricing = pricingResolved;
           }
         }
       } catch(e) {}

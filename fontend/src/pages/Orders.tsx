@@ -99,7 +99,7 @@ const Orders: React.FC = () => {
                         <div className="flex justify-between items-start mb-2">
                           <div>
                             <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                              {t(`orders.userFriendlyStatus.${order.status}`, order.status)}
+                              {String(t(`orders.userFriendlyStatus.${order.status}`, order.status))}
                             </h3>
                             <p className="text-xs font-mono text-slate-400 mt-1">
                               {t('orders.orderCode', { code: order.id })}

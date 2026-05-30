@@ -167,8 +167,8 @@ const Home: React.FC = () => {
         const actualBranchId = matchedBp ? String(matchedBp.branch_id) : dealBranchId;
         const matchedBranch = (branches || []).find((b: any) => String(b.id || b._id) === actualBranchId);
 
-        const dealPrice = Number(deal?.deal_price || matchedBp?.price || productAny?.price || 0);
-        const originalPrice = Number(deal?.original_price || matchedBp?.original_price || productAny?.original_price || dealPrice || 0);
+        const dealPrice = Number(deal?.deal_price ?? matchedBp?.effective_price ?? matchedBp?.price ?? productAny?.effective_price ?? productAny?.price ?? 0);
+        const originalPrice = Number(deal?.original_price ?? matchedBp?.original_price ?? productAny?.original_price ?? dealPrice);
 
         return {
           ...deal,
@@ -176,6 +176,7 @@ const Home: React.FC = () => {
           image_url: deal?.image_url || productAny?.images?.[0] || productAny?.thumbnail || '',
           product_id: resolvedProductId,
           deal_price: dealPrice,
+          effective_price: dealPrice,
           original_price: originalPrice,
           total_quantity: Number(deal?.total_quantity || deal?.stock_limit || 0),
           remaining_quantity: deal?.remaining_quantity,
@@ -244,7 +245,7 @@ const Home: React.FC = () => {
       redirectToLogin({
         action: 'add_to_cart',
         branch_product_id: String(item?.branch_product_id || item?._id || item?.id),
-        price: Number(item?.price || 0),
+        price: Number(item?.effective_price !== undefined ? item.effective_price : item?.price || 0),
         qty: 1,
         product: item,
       });
@@ -256,8 +257,8 @@ const Home: React.FC = () => {
         addToCartAsync({
           branchId: currentBranchId,
           branch_product_id: String(item?.branch_product_id || item?._id || item?.id),
-          price: Number(item?.price || 0),
-          unit_price: Number(item?.price || 0),
+          price: Number(item?.effective_price !== undefined ? item.effective_price : item?.price || 0),
+          unit_price: Number(item?.effective_price !== undefined ? item.effective_price : item?.price || 0),
           quantity: 1,
           product_name: item?.name,
           product_image: item?.images?.[0] || item?.thumbnail || '',
@@ -339,8 +340,10 @@ const Home: React.FC = () => {
               <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 line-clamp-2 mb-4 min-h-[3rem]">{item?.name}</h3>
 
               <div className="flex flex-col mt-auto">
-                <span className="text-2xl font-black text-primary">{Number(item?.price || 0).toLocaleString('vi-VN')}₫</span>
-                {item?.original_price && item.original_price > item.price && (
+                <span className="text-2xl font-black text-primary">
+                  {Number(item?.effective_price !== undefined ? item.effective_price : item?.price || 0).toLocaleString('vi-VN')}₫
+                </span>
+                {item?.original_price && item.original_price > (item?.effective_price !== undefined ? item.effective_price : item?.price || 0) && (
                   <span className="text-slate-400 text-xs line-through">{Number(item.original_price).toLocaleString('vi-VN')}₫</span>
                 )}
               </div>
@@ -470,7 +473,9 @@ const Home: React.FC = () => {
                         <img src={resolveImageUrl(item.images?.[0] || item.thumbnail) || fallbackProductImage} alt={item.name} className="w-12 h-12 rounded-lg object-cover" />
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-slate-800 dark:text-white line-clamp-1">{item.name}</p>
-                          <p className="text-xs text-primary font-extrabold">{Number(item.price || 0).toLocaleString('vi-VN')}₫</p>
+                          <p className="text-xs text-primary font-extrabold">
+                            {Number(item.effective_price !== undefined ? item.effective_price : item.price || 0).toLocaleString('vi-VN')}₫
+                          </p>
                         </div>
                       </Link>
                     ))}

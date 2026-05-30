@@ -513,6 +513,10 @@ export interface OrderItem {
   supplier_name?: string;
   expiry_date?: string;
   discount_applied?: number;
+  purchased_price?: number;
+  original_price_at_purchase?: number;
+  discount_percent_at_purchase?: number;
+  pricing_source_at_purchase?: string;
 }
 
 export interface Order {

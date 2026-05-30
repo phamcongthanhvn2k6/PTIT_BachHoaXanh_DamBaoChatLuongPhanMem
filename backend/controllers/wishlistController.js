@@ -1,6 +1,7 @@
 import WishlistItem from '../models/WishlistItem.js';
 import BranchProduct from '../models/BranchProduct.js';
 import Product from '../models/Product.js';
+import { resolveProductPricing } from '../services/pricingResolverService.js';
 
 const toComparableId = (value) => String(value || '');
 
@@ -36,11 +37,31 @@ const buildProductSnapshot = async (rows) => {
 
   const productMap = new Map(productsRaw.map((p) => [toComparableId(p._id), p]));
 
-  return rows.map((row) => {
+  const now = new Date();
+  return Promise.all(rows.map(async (row) => {
     const rowObj = row.toObject ? row.toObject() : { ...row };
     const bp = branchProductMap.get(toComparableId(rowObj.branch_product_id));
     const productId = toComparableId(rowObj.product_id || bp?.product_id || '');
     const product = productMap.get(productId);
+
+    let price = bp?.price ?? product?.price ?? 0;
+    let originalPrice = bp?.original_price ?? product?.original_price ?? price;
+    let discountPercent = bp?.discount_percent ?? product?.discount_percent ?? 0;
+    let effectivePrice = price;
+    let pricingSource = 'BASE_PRICE';
+    let activeHotDeal = null;
+    let activePromotion = null;
+
+    if (product) {
+      const pricing = await resolveProductPricing(product, bp, bp?.branch_id, { now });
+      price = pricing.effective_price;
+      originalPrice = pricing.original_price;
+      discountPercent = pricing.discount_percent;
+      effectivePrice = pricing.effective_price;
+      pricingSource = pricing.pricing_source;
+      activeHotDeal = pricing.active_hot_deal;
+      activePromotion = pricing.active_promotion;
+    }
 
     return {
       id: String(rowObj._id),
@@ -50,12 +71,17 @@ const buildProductSnapshot = async (rows) => {
       created_at: rowObj.created_at,
       product_name: product?.name || '',
       product_image: product?.images?.[0] || product?.thumbnail || '',
-      price: bp?.price ?? product?.price ?? 0,
-      original_price: bp?.original_price ?? product?.original_price ?? 0,
+      price,
+      original_price: originalPrice,
+      discount_percent: discountPercent,
+      effective_price: effectivePrice,
+      pricing_source: pricingSource,
+      active_hot_deal: activeHotDeal,
+      active_promotion: activePromotion,
       stock: bp?.stock ?? product?.stock ?? 0,
       in_stock: bp ? Number(bp.stock || 0) > 0 && bp.is_available !== false : Number(product?.stock || 0) > 0,
     };
-  });
+  }));
 };
 
 const findExistingWishlistItem = async ({ userId, productId, branchProductId }) => {

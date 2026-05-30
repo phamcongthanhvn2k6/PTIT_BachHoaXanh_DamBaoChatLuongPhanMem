@@ -119,6 +119,7 @@ const normalizeDeal = (doc) => {
     end_date: source.end_date || null,
     product_id: toId(source.product_id),
     branch_product_id: toId(source.branch_product_id),
+    branch_id: toId(source.branch_id),
     target_product_ids: Array.isArray(source.target_product_ids) ? source.target_product_ids.map(String) : [],
     target_category_ids: Array.isArray(source.target_category_ids) ? source.target_category_ids.map(String) : [],
     target_branch_ids: Array.isArray(source.target_branch_ids) ? source.target_branch_ids.map(String) : [],
@@ -138,6 +139,7 @@ const normalizePayload = (body, isUpdate = false) => {
   const badgeText = body?.badge_text !== undefined ? String(body.badge_text || '').trim() : undefined;
   const productId = body?.product_id !== undefined ? toId(body.product_id) : undefined;
   const branchProductId = body?.branch_product_id !== undefined ? toId(body.branch_product_id) : undefined;
+  const branchId = body?.branch_id !== undefined ? toId(body.branch_id) : undefined;
   const rawType = body?.type !== undefined ? String(body.type || '').trim().toLowerCase() : undefined;
   const status = body?.status !== undefined ? String(body.status || '').trim().toLowerCase() : undefined;
 
@@ -169,6 +171,7 @@ const normalizePayload = (body, isUpdate = false) => {
   assign('badge_text', badgeText);
   assign('product_id', productId);
   assign('branch_product_id', branchProductId);
+  assign('branch_id', branchId);
   assign('type', rawType);
   assign('discount_value', body?.discount_value !== undefined ? Math.max(0, toNumber(body.discount_value, 0)) : undefined);
   assign('discount_percent', body?.discount_percent !== undefined ? Math.max(0, toNumber(body.discount_percent, 0)) : undefined);

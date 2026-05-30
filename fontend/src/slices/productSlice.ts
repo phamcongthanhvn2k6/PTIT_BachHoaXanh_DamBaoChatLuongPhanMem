@@ -1,8 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import type { Product, BranchProduct, Category, EventPost } from '../types';
 import { dataService } from '../services/dataService';
-import { normalizeBranchProducts, normalizeCategories, normalizeProducts } from '../utils/productNormalization';
-import { deriveCategoryLookup, normalizeProducts as normalizeShopProducts } from '../utils/normalizeProduct';
+import { normalizeBranchProducts, normalizeCategories, normalizeProducts, deriveCategoryLookup } from '../utils/productNormalization';
 import i18n from '../i18n';
 
 export const loadProductsData = createAsyncThunk(
@@ -21,7 +20,7 @@ export const loadProductsData = createAsyncThunk(
     const normalizedBranchProductList = normalizeBranchProducts(branchProducts) as BranchProduct[];
 
     const shopProductMap = new Map(
-      normalizeShopProducts(normalizedProductList as any[], categoryLookup).map((item) => [String(item.product_id || item.id), item])
+      normalizeProducts(normalizedProductList as any[], categoryLookup).map((item) => [String(item.product_id || item.id), item])
     );
 
     const productsWithCategoryShop = normalizedProductList.map((product: any) => {

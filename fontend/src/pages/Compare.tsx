@@ -8,9 +8,11 @@ import { compareService } from '../services/compareService';
 import type { CompareAISummary, CompareProduct } from '../types/product';
 import CompareTable from '../components/compare/CompareTable';
 
-const normalizeLocale = (value?: string): 'vi' | 'en' => {
+const normalizeLocale = (value?: string): 'vi' | 'en' | 'ja' => {
   const normalized = String(value || '').trim().toLowerCase();
-  return normalized.startsWith('en') ? 'en' : 'vi';
+  if (normalized.startsWith('en')) return 'en';
+  if (normalized.startsWith('ja')) return 'ja';
+  return 'vi';
 };
 
 const ComparePage: React.FC = () => {
@@ -25,6 +27,7 @@ const ComparePage: React.FC = () => {
   const [summary, setSummary] = useState<CompareAISummary | null>(null);
   const [summarizing, setSummarizing] = useState(false);
   const [aiReady, setAiReady] = useState<boolean | null>(null);
+  const [aiReason, setAiReason] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
 
   const currentLocale = useMemo(
@@ -32,9 +35,9 @@ const ComparePage: React.FC = () => {
     [i18n.resolvedLanguage, i18n.language],
   );
 
-  const uiText = useMemo(() => (
-    currentLocale === 'en'
-      ? {
+  const uiText = useMemo(() => {
+    if (currentLocale === 'en') {
+      return {
         emptyTitle: 'No products selected for comparison',
         emptyHint: 'Choose 2 to 4 products from the products page to start comparing.',
         goProducts: 'Go to Products',
@@ -55,11 +58,38 @@ const ComparePage: React.FC = () => {
         summaryCons: 'Things to consider',
         summaryNotes: 'Notes',
         summaryHintReady: 'Click Summarize with AI to see highlights and drawbacks from real comparison data.',
-        summaryHintNotReady: 'AI is not ready. Please configure GEMINI_COMPARE_KEY in backend.',
+        summaryHintNotReady: 'AI is not ready. Please configure OPENROUTER_API_KEY in backend.',
         compareLoadError: 'Unable to load comparison data.',
         aiDefaultError: 'Unable to generate AI summary right now. Please try again.',
-      }
-      : {
+      };
+    } else if (currentLocale === 'ja') {
+      return {
+        emptyTitle: '比較する製品が選択されていません',
+        emptyHint: '比較を開始するには、製品ページから2〜4個の製品を選択してください。',
+        goProducts: '製品一覧へ',
+        pageTitle: '製品比較',
+        comparedCount: `${compareItems.length}/4 個の製品を比較中`,
+        addMore: 'さらに製品を追加',
+        clearAll: 'すべてクリア',
+        needTwo: '完全な比較表を表示するには、少なくとも2つの製品が必要です。',
+        loadCompareData: '比較データを読み込み中...',
+        aiTitle: 'AI要約',
+        viewDetails: '詳細な比較を表示',
+        summarizeBtn: 'AIで要約',
+        summarizingBtn: '要約中...',
+        aiNotReady: 'AIの準備ができていません',
+        aiGuide: 'AIは、欠落しているスペックを追加することなく、このページに表示されている実際の比較データのみに基づいて要約します。',
+        retry: '再試行',
+        summaryPros: '主な特徴',
+        summaryCons: '考慮すべき点',
+        summaryNotes: 'メモ',
+        summaryHintReady: '「AIで要約」をクリックすると、実際の比較データからハイライトとデメリットが表示されます。',
+        summaryHintNotReady: 'AIの準備ができていません。バックエンドでOPENROUTER_API_KEYを設定してください。',
+        compareLoadError: '比較データを読み込めません。',
+        aiDefaultError: '現在AI要約を生成できません。後でもう一度お試しください。',
+      };
+    } else {
+      return {
         emptyTitle: 'Chưa có sản phẩm để so sánh',
         emptyHint: 'Hãy chọn từ 2 đến 4 sản phẩm ở trang sản phẩm để bắt đầu so sánh.',
         goProducts: 'Đi đến trang sản phẩm',
@@ -67,7 +97,7 @@ const ComparePage: React.FC = () => {
         comparedCount: `Đang so sánh ${compareItems.length}/4 sản phẩm`,
         addMore: 'Thêm tiếp sản phẩm',
         clearAll: 'Xóa tất cả',
-        needTwo: 'Cần ít nhất 2 sản phẩm để xem bảng so sánh đầy đủ.',
+        needTwo: 'Cần nhất 2 sản phẩm để xem bảng so sánh đầy đủ.',
         loadCompareData: 'Đang tải dữ liệu so sánh...',
         aiTitle: 'Tóm tắt bằng AI',
         viewDetails: 'Xem so sánh chi tiết',
@@ -80,11 +110,12 @@ const ComparePage: React.FC = () => {
         summaryCons: 'Điểm cần cân nhắc',
         summaryNotes: 'Ghi chú',
         summaryHintReady: 'Bấm nút Tóm tắt bằng AI để xem tổng hợp ưu và nhược điểm dựa trên dữ liệu so sánh thực tế.',
-        summaryHintNotReady: 'AI chưa sẵn sàng. Vui lòng cấu hình GEMINI_COMPARE_KEY ở backend để sử dụng tính năng này.',
+        summaryHintNotReady: 'AI chưa sẵn sàng. Vui lòng cấu hình OPENROUTER_API_KEY ở backend để sử dụng tính năng này.',
         compareLoadError: 'Không thể tải dữ liệu so sánh.',
         aiDefaultError: 'Không thể tạo tóm tắt AI lúc này. Vui lòng thử lại.',
-      }
-  ), [currentLocale, compareItems.length]);
+      };
+    }
+  }, [currentLocale, compareItems.length]);
 
   const getSavedBranchId = () => {
     try {
@@ -110,6 +141,7 @@ const ComparePage: React.FC = () => {
       const status = await compareService.getAISummaryStatus();
       if (!active) return;
       setAiReady(status.aiReady);
+      setAiReason(status.reason || null);
     };
 
     checkAIStatus();
@@ -183,6 +215,47 @@ const ComparePage: React.FC = () => {
       active = false;
     };
   }, [ids, currentBranchId, compareItems, uiText.compareLoadError]);
+
+  const aiStatusMessage = useMemo(() => {
+    if (aiReady === true) return uiText.summaryHintReady;
+    if (aiReady === null) return uiText.loadCompareData;
+
+    if (currentLocale === 'en') {
+      if (aiReason === 'missing_key') return 'AI is not ready. Please configure OPENROUTER_API_KEY in backend/.env.';
+      if (aiReason === 'invalid_model') return 'AI is not ready. The configured OPENROUTER_MODEL is invalid.';
+      if (aiReason === 'api_error') return 'AI is not ready. Failed to connect to the backend status API.';
+      return 'AI is not ready due to configuration or connection issues.';
+    } else if (currentLocale === 'ja') {
+      if (aiReason === 'missing_key') return 'AIの準備ができていません。backend/.envでOPENROUTER_API_KEYを設定してください。';
+      if (aiReason === 'invalid_model') return 'AIの準備ができていません。設定されたOPENROUTER_MODELが無効です。';
+      if (aiReason === 'api_error') return 'AIの準備ができていません。バックエンドのステータスAPIへの接続に失敗しました。';
+      return '設定または接続の問題により、AIの準備ができていません。';
+    } else {
+      if (aiReason === 'missing_key') return 'AI chưa sẵn sàng. Vui lòng cấu hình OPENROUTER_API_KEY ở file backend/.env.';
+      if (aiReason === 'invalid_model') return 'AI chưa sẵn sàng. Model OPENROUTER_MODEL được cấu hình không hợp lệ.';
+      if (aiReason === 'api_error') return 'AI chưa sẵn sàng. Lỗi kết nối đến API trạng thái của backend.';
+      return 'AI chưa sẵn sàng do sự cố cấu hình hoặc kết nối.';
+    }
+  }, [aiReady, aiReason, currentLocale, uiText]);
+
+  const aiNotReadyLabel = useMemo(() => {
+    if (currentLocale === 'en') {
+      if (aiReason === 'missing_key') return 'Missing API Key';
+      if (aiReason === 'invalid_model') return 'Invalid Model';
+      if (aiReason === 'api_error') return 'Connection Error';
+      return 'AI Not Ready';
+    } else if (currentLocale === 'ja') {
+      if (aiReason === 'missing_key') return 'APIキーがありません';
+      if (aiReason === 'invalid_model') return '無効なモデル';
+      if (aiReason === 'api_error') return '接続エラー';
+      return 'AIの準備ができていません';
+    } else {
+      if (aiReason === 'missing_key') return 'Thiếu API Key';
+      if (aiReason === 'invalid_model') return 'Model không hợp lệ';
+      if (aiReason === 'api_error') return 'Lỗi kết nối API';
+      return 'AI chưa sẵn sàng';
+    }
+  }, [aiReason, currentLocale]);
 
   const generateSummary = async () => {
     setAiError(null);
@@ -289,7 +362,7 @@ const ComparePage: React.FC = () => {
             </button>
             {aiReady === false && (
               <span className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
-                {uiText.aiNotReady}
+                {aiNotReadyLabel}
               </span>
             )}
           </div>
@@ -370,9 +443,7 @@ const ComparePage: React.FC = () => {
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-slate-300 px-4 py-5 text-sm text-slate-500">
-            {aiReady === false
-              ? uiText.summaryHintNotReady
-              : uiText.summaryHintReady}
+            {aiStatusMessage}
           </div>
         )}
       </section>

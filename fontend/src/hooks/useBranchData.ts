@@ -21,12 +21,21 @@ export const useBranchData = () => {
       const branchProduct = branchProductsData.find(bp => String(bp.product_id) === String(product.id || (product as any)._id));
       if (!branchProduct) return null;
       
+      // Preserve backend-resolved pricing fields from branchProduct.
+      // The branchProductController already runs resolveProductPricing,
+      // so effective_price/pricing_source/active_hot_deal are authoritative.
+      const resolvedPrice = Number((branchProduct as any).effective_price ?? branchProduct.price ?? 0);
+      const resolvedOriginal = Number((branchProduct as any).original_price ?? branchProduct.original_price ?? product.original_price ?? resolvedPrice);
       return {
         ...product,
-        price: branchProduct.price || 0,
-        original_price: branchProduct.original_price || 0,
-        discount_percent: branchProduct.discount_percent || 0,
-        stock: branchProduct.stock || 0,
+        price: resolvedPrice,
+        effective_price: resolvedPrice,
+        original_price: resolvedOriginal,
+        discount_percent: Number(branchProduct.discount_percent ?? 0),
+        pricing_source: (branchProduct as any).pricing_source ?? 'BASE_PRICE',
+        active_hot_deal: (branchProduct as any).active_hot_deal ?? null,
+        active_promotion: (branchProduct as any).active_promotion ?? null,
+        stock: Number(branchProduct.stock ?? 0),
         is_new: branchProduct.is_new || false,
         is_best_seller: branchProduct.is_best_seller || false,
         branch_product_id: branchProduct.id || (branchProduct as any)._id,

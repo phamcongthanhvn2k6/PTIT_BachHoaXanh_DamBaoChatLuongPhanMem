@@ -1,5 +1,5 @@
 import { Banner, HotDeal, FeaturedCollection, DeliverySlot } from '../models/Misc.js';
-import { validateHotDealProductReference } from '../services/hotDealIntegrityService.js';
+import { validateHotDealProductReference, cleanupOrphanHotDeals } from '../services/hotDealIntegrityService.js';
 
 const isTruthy = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
@@ -72,6 +72,7 @@ export const deleteBanner = async (req, res) => {
 
 export const listHotDeals = async (req, res) => {
   try {
+    await cleanupOrphanHotDeals({ hideOutOfStock: true });
     const query = {};
     const includeInactive = isTruthy(req.query.include_inactive) && isPrivilegedRequest(req);
     if (!includeInactive) {
