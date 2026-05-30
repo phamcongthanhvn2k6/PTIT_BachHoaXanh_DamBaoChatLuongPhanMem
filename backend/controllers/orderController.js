@@ -285,9 +285,11 @@ export const create = async (req, res) => {
       }
     }
 
+    const orderId = new mongoose.Types.ObjectId();
+
     try {
       if (items.length > 0) {
-        const deductResult = await inventoryService.deductInventoryForOrder(branch_id_val, items, session);
+        const deductResult = await inventoryService.deductInventoryForOrder(branch_id_val, items, session, orderId);
         // We ensure deductStockFIFO throws if not enough stock.
       }
     } catch (invErr) {
@@ -375,6 +377,7 @@ export const create = async (req, res) => {
     }
 
     const orderData = {
+      _id: orderId,
       user_id: userId,
       branch_id: branch_id_val,
       branch_name: branchName,
@@ -684,7 +687,7 @@ export const cancel = async (req, res) => {
     order.tracking.history.push({ status: 'CANCELLED', note: req.body.reason || 'Hủy bởi khách hàng', timestamp: new Date() });
 
     // 1. Restore stock back to BranchProduct + InventoryBatch
-    await inventoryService.restoreInventoryFromOrder(order.items, session);
+    await inventoryService.restoreInventoryFromOrder(order.items, session, order._id);
 
     // 2. Decrement sold_count
     for (const item of order.items) {

@@ -65,7 +65,7 @@ export async function deductStockFIFO(branchProductId, qty, session = null) {
  * PRODUCTION-GRADE: Deduct inventory for an entire order using FIFO
  * Throws an explicit error if stock is insufficient, causing transaction to rollback.
  */
-export async function deductInventoryForOrder(branch_id, items, session) {
+export async function deductInventoryForOrder(branch_id, items, session, orderId = null) {
   const deductResults = [];
   const lockedKeys = [];
 
@@ -88,33 +88,56 @@ export async function deductInventoryForOrder(branch_id, items, session) {
       const qty = Number(item.quantity) || 1;
       if (!bpId) continue;
     
-    // 1. Áp dụng thuật toán FIFO trên các lô (Batches)
-    const result = await deductStockFIFO(bpId, qty, session);
-    
-    // Xóa Strict check của Batch vì hệ thống có thể chưa nhập kho qua Batch
-    // if (!result.success || result.remaining > 0) { ... }
-    
-    // 2. Cập nhật trực tiếp tồn kho tổng (stock) trong bảng BranchProduct
-    const BranchProductModel = mongoose.model('BranchProduct');
-    const bp = await BranchProductModel.findById(bpId).session(session);
-    if (!bp) {
-      throw new Error(`Không tìm thấy sản phẩm nhánh ${bpId}`);
+      // 1. Áp dụng thuật toán FIFO trên các lô (Batches)
+      const result = await deductStockFIFO(bpId, qty, session);
+      
+      // 2. Cập nhật trực tiếp tồn kho tổng (stock) trong bảng BranchProduct
+      const BranchProductModel = mongoose.model('BranchProduct');
+      const bp = await BranchProductModel.findById(bpId).session(session);
+      if (!bp) {
+        throw new Error(`Không tìm thấy sản phẩm nhánh ${bpId}`);
+      }
+      const currentStock = Number(bp.stock) || 0;
+      if (currentStock < qty) {
+        throw new Error(`Sản phẩm ${bp.name || bpId} chỉ còn ${currentStock} sản phẩm trong kho (yêu cầu: ${qty})`);
+      }
+      const beforeStock = currentStock;
+      const afterStock = currentStock - qty;
+      bp.stock = afterStock;
+      await bp.save({ session });
+
+      // Resolve product details
+      const ProductModel = mongoose.model('Product');
+      const p = await ProductModel.findById(bp.product_id).session(session);
+      const productName = p ? (p.name || p.product_name) : (bp.name || '');
+
+      // Create Stock Movement Ledger entry
+      const StockMovementModel = mongoose.model('StockMovement');
+      await StockMovementModel.create([{
+        branch_id: bp.branch_id || branch_id,
+        branch_name: bp.branch_name || '',
+        product_id: bp.product_id,
+        product_name: productName,
+        branch_product_id: bp._id,
+        batch_code: result.consumed?.[0]?.batchCode || bp.batch_code || '',
+        movement_type: 'sale',
+        quantity: qty,
+        before_stock: beforeStock,
+        after_stock: afterStock,
+        reference_type: 'order',
+        reference_id: orderId,
+        created_by: null,
+        note: 'Deduction for customer order',
+      }], { session });
+      
+      deductResults.push({
+        branch_product_id: bpId,
+        deducted_qty: qty,
+        batches_consumed: result.consumed
+      });
     }
-    const currentStock = Number(bp.stock) || 0;
-    if (currentStock < qty) {
-      throw new Error(`Sản phẩm ${bp.name || bpId} chỉ còn ${currentStock} sản phẩm trong kho (yêu cầu: ${qty})`);
-    }
-    bp.stock = currentStock - qty;
-    await bp.save({ session });
     
-    deductResults.push({
-      branch_product_id: bpId,
-      deducted_qty: qty,
-      batches_consumed: result.consumed
-    });
-  }
-  
-  return deductResults;
+    return deductResults;
   } finally {
     for (const lockKey of lockedKeys) {
       await releaseLock(lockKey);
@@ -126,7 +149,7 @@ export async function deductInventoryForOrder(branch_id, items, session) {
  * PRODUCTION-GRADE: Restore inventory for a refunded/cancelled order.
  * Restores both InventoryBatch quantities AND BranchProduct.stock.
  */
-export async function restoreInventoryFromOrder(items, session) {
+export async function restoreInventoryFromOrder(items, session, orderId = null) {
   const BranchProductModel = mongoose.model('BranchProduct');
 
   for (const item of items) {
@@ -134,16 +157,20 @@ export async function restoreInventoryFromOrder(items, session) {
     const qty = Number(item.quantity) || 0;
     if (!bpId || qty <= 0) continue;
     
+    let resolvedBatchCode = '';
+
     // 1. Restore InventoryBatch (FIFO restore to most recent batch)
     const recentBatch = await InventoryBatch.findOne({ branch_product_id: bpId }).sort({ exp_date: -1 }).session(session);
     
     if (recentBatch) {
       recentBatch.quantity += qty;
+      resolvedBatchCode = recentBatch.batch_code;
       await recentBatch.save({ session });
     } else {
+      resolvedBatchCode = `RETURN-${Date.now().toString(36).toUpperCase()}`;
       await InventoryBatch.create([{
         branch_product_id: bpId,
-        batch_code: `RETURN-${Date.now().toString(36)}`,
+        batch_code: resolvedBatchCode,
         quantity: qty,
         exp_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1))
       }], { session });
@@ -153,8 +180,34 @@ export async function restoreInventoryFromOrder(items, session) {
     try {
       const bp = await BranchProductModel.findById(bpId).session(session);
       if (bp) {
-        bp.stock = (Number(bp.stock) || 0) + qty;
+        const beforeStock = Number(bp.stock) || 0;
+        const afterStock = beforeStock + qty;
+        bp.stock = afterStock;
         await bp.save({ session });
+
+        // Resolve product details
+        const ProductModel = mongoose.model('Product');
+        const p = await ProductModel.findById(bp.product_id).session(session);
+        const productName = p ? (p.name || p.product_name) : (bp.name || '');
+
+        // Create Stock Movement Ledger entry
+        const StockMovementModel = mongoose.model('StockMovement');
+        await StockMovementModel.create([{
+          branch_id: bp.branch_id,
+          branch_name: bp.branch_name || '',
+          product_id: bp.product_id,
+          product_name: productName,
+          branch_product_id: bp._id,
+          batch_code: resolvedBatchCode,
+          movement_type: 'cancel',
+          quantity: qty,
+          before_stock: beforeStock,
+          after_stock: afterStock,
+          reference_type: 'order',
+          reference_id: orderId,
+          created_by: null,
+          note: 'Stock restored from cancelled/refunded order',
+        }], { session });
       }
     } catch (e) {
       console.warn('[InventoryService] Could not restore BranchProduct.stock:', bpId, e.message);

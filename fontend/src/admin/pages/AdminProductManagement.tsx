@@ -533,7 +533,6 @@ const AdminProductManagement: React.FC = () => {
         price: Number(editItem.price),
         original_price: Number(editItem.original_price),
         discount_percent: discountPct,
-        stock: Number(editItem.stock),
         is_available: editItem.is_active, // BP uses is_available, not is_active
         sku: editItem.sku || '',
         master_id: editItem.master_id || '',
@@ -1203,12 +1202,13 @@ const AdminProductManagement: React.FC = () => {
                     <input 
                       type="number" 
                       min="0"
+                      disabled
                       value={editItem.stock}
-                      onChange={e => setEditItem({...editItem, stock: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all font-bold text-slate-800"
+                      className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl cursor-not-allowed opacity-75 font-bold text-slate-500"
                     />
                     <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">inventory_2</span>
                   </div>
+                  <p className="mt-1 text-[10px] text-slate-400 leading-normal font-medium">Tồn kho được quản lý tự động qua Purchase Orders / Goods Receipts và Adjustment. Không cho phép sửa đổi thủ công trực tiếp.</p>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Trạng thái rổ hàng</label>

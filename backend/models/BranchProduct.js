@@ -14,6 +14,7 @@ const branchProductSchema = new mongoose.Schema({
   import_price: { type: Number, default: 0 },
   discount_percent: { type: Number, default: 0 },
   stock: { type: Number, default: 0 },
+  reserved_quantity: { type: Number, default: 0 },
   min_stock: { type: Number, default: 0 },
   max_purchase_limit: { type: Number, default: 0 },
   is_available: { type: Boolean, default: true },
@@ -25,6 +26,18 @@ const branchProductSchema = new mongoose.Schema({
   is_expired: { type: Boolean, default: false },
   promotion_tag: { type: String, default: '' },
   promotion_end_date: { type: Date, default: null },
-}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
+}, { 
+  timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+branchProductSchema.virtual('quantity_on_hand').get(function() {
+  return this.stock;
+});
+
+branchProductSchema.virtual('available_quantity').get(function() {
+  return Math.max(0, this.stock - (this.reserved_quantity || 0));
+});
 
 export default mongoose.model('BranchProduct', branchProductSchema);

@@ -1,6 +1,8 @@
+import mongoose from 'mongoose';
 import ReturnRequest from '../models/ReturnRequest.js';
 import Order from '../models/Order.js';
 import { createUserNotification } from '../services/userNotificationService.js';
+import inventoryService from '../services/inventoryService.js';
 
 const toComparableId = (value) => String(value || '');
 
@@ -223,14 +225,20 @@ export const cancel = async (req, res) => {
 };
 
 export const updateStatus = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
-    const doc = await ReturnRequest.findById(req.params.id);
+    const doc = await ReturnRequest.findById(req.params.id).session(session);
     if (!doc) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ success: false, message: 'Return request not found' });
     }
 
     const nextStatus = String(req.body.status || '').trim().toLowerCase();
     if (!ALLOWED_RETURN_STATUSES.has(nextStatus)) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ success: false, message: 'Invalid status' });
     }
 
@@ -244,6 +252,14 @@ export const updateStatus = async (req, res) => {
       doc.resolved_at = new Date();
     }
 
+    // ERP compliance: Return items to inventory when status becomes 'approved', 'refunded', or 'closed'
+    if (['approved', 'refunded', 'closed'].includes(nextStatus) && doc.is_returned_to_stock !== true) {
+      if (Array.isArray(doc.items) && doc.items.length > 0) {
+        await inventoryService.restoreInventoryFromOrder(doc.items, session, doc.order_id);
+        doc.is_returned_to_stock = true;
+      }
+    }
+
     doc.timeline.push({
       status: nextStatus,
       note: String(req.body.note || ''),
@@ -251,7 +267,10 @@ export const updateStatus = async (req, res) => {
       timestamp: new Date(),
     });
 
-    await doc.save();
+    await doc.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
 
     await createUserNotification({
       userId: doc.user_id,
@@ -268,6 +287,8 @@ export const updateStatus = async (req, res) => {
 
     return res.json({ success: true, data: normalize(doc), message: 'Cập nhật trạng thái thành công' });
   } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
     return res.status(500).json({ success: false, message: err.message });
   }
 };

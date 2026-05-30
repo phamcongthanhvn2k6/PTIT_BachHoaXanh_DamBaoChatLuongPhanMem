@@ -253,6 +253,13 @@ const processBranchProductData = (data) => {
 export const create = async (req, res) => {
   try {
     const body = processBranchProductData({ ...req.body });
+    // ERP stock control: stock can only be loaded via Goods Receipts or authorized adjustments
+    delete body.stock;
+    delete body.quantity_on_hand;
+    delete body.reserved_quantity;
+    delete body.available_quantity;
+    body.stock = 0;
+    body.reserved_quantity = 0;
     return res.status(201).json({ success: true, data: await BranchProduct.create(body) }); 
   }
   catch (err) { return res.status(500).json({ success: false, message: err.message }); }
@@ -261,6 +268,11 @@ export const create = async (req, res) => {
 export const update = async (req, res) => {
   try {
     const body = processBranchProductData({ ...req.body });
+    // ERP stock control: prevent direct inventory stock overwriting via update API
+    delete body.stock;
+    delete body.quantity_on_hand;
+    delete body.reserved_quantity;
+    delete body.available_quantity;
     return res.json({ success: true, data: await BranchProduct.findByIdAndUpdate(req.params.id, body, { new: true }) }); 
   }
   catch (err) { return res.status(500).json({ success: false, message: err.message }); }
@@ -272,14 +284,147 @@ export const remove = async (req, res) => {
 };
 
 export const adjustStock = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
-    const bp = await BranchProduct.findById(req.params.id);
-    if (!bp) return res.status(404).json({ success: false, message: 'Not found' });
-    const { quantity, type = 'adjustment', reason = '' } = req.body;
-    const previous = bp.stock;
-    bp.stock = Math.max(0, bp.stock + quantity);
-    await bp.save();
-    await StockMovement.create({ branch_product_id: bp._id, type, quantity, previous_stock: previous, new_stock: bp.stock, reason, performed_by: req.userId });
-    return res.json({ success: true, data: bp, message: 'Điều chỉnh tồn kho thành công' });
-  } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+    const bp = await BranchProduct.findById(req.params.id).session(session);
+    if (!bp) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ success: false, message: 'BranchProduct not found' });
+    }
+
+    const { quantity: rawQuantity, reason, batch_code } = req.body || {};
+    const quantity = Number(rawQuantity || 0);
+
+    if (quantity === 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: 'Số lượng điều chỉnh phải khác 0' });
+    }
+
+    if (!reason || !reason.trim()) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: 'Lý do điều chỉnh tồn kho là bắt buộc' });
+    }
+
+    const beforeStock = Number(bp.stock || 0);
+    const nextStock = beforeStock + quantity;
+
+    if (nextStock < 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: `Không đủ tồn kho để giảm. Tồn hiện tại: ${beforeStock}, Yêu cầu giảm: ${Math.abs(quantity)}` });
+    }
+
+    // Resolve Product info for traceability
+    const product = await Product.findById(bp.product_id).session(session);
+    const productName = product ? (product.name || product.product_name) : '';
+
+    let resolvedBatchCode = batch_code || '';
+
+    // Adjust InventoryBatch to prevent inventory drift
+    if (quantity > 0) {
+      // Stock increase: Create a new batch
+      resolvedBatchCode = resolvedBatchCode || `ADJ-${Date.now().toString(36).toUpperCase()}`;
+      await InventoryBatch.create([
+        {
+          branch_product_id: bp._id,
+          batch_code: resolvedBatchCode,
+          quantity: quantity,
+          cost_price: Number(bp.import_price || 0),
+          supplier_id: bp.supplier_id || null,
+          supplier_name: bp.supplier_name || '',
+          note: `Điều chỉnh tăng: ${reason}`,
+          received_date: new Date(),
+        }
+      ], { session });
+    } else {
+      // Stock decrease: Deduct from batches using FIFO
+      let toReduce = Math.abs(quantity);
+      
+      const query = { branch_product_id: bp._id, quantity: { $gt: 0 } };
+      if (resolvedBatchCode) {
+        query.batch_code = resolvedBatchCode;
+      }
+
+      const batches = await InventoryBatch.find(query)
+        .sort({ exp_date: 1, received_date: 1 })
+        .session(session);
+
+      for (const batch of batches) {
+        if (toReduce <= 0) break;
+        const used = Math.min(Number(batch.quantity || 0), toReduce);
+        batch.quantity = Number(batch.quantity || 0) - used;
+        toReduce -= used;
+        await batch.save({ session });
+        if (!resolvedBatchCode) {
+          resolvedBatchCode = batch.batch_code;
+        }
+      }
+
+      if (toReduce > 0) {
+        // Fallback: Check any active batches
+        const fallbackBatches = await InventoryBatch.find({ branch_product_id: bp._id, quantity: { $gt: 0 } })
+          .sort({ exp_date: 1, received_date: 1 })
+          .session(session);
+        
+        for (const batch of fallbackBatches) {
+          if (toReduce <= 0) break;
+          const used = Math.min(Number(batch.quantity || 0), toReduce);
+          batch.quantity = Number(batch.quantity || 0) - used;
+          toReduce -= used;
+          await batch.save({ session });
+        }
+      }
+
+      if (toReduce > 0) {
+        // Fallback: correction for inconsistency
+        const anyBatch = await InventoryBatch.findOne({ branch_product_id: bp._id }).session(session);
+        if (anyBatch) {
+          anyBatch.quantity = Math.max(0, Number(anyBatch.quantity || 0) - toReduce);
+          await anyBatch.save({ session });
+        }
+      }
+    }
+
+    // Save main BranchProduct stock
+    bp.stock = nextStock;
+    await bp.save({ session });
+
+    // Create Stock Movement Ledger entry
+    const [movement] = await StockMovement.create([
+      {
+        branch_id: bp.branch_id,
+        branch_name: bp.branch_name || '',
+        product_id: bp.product_id,
+        product_name: productName,
+        branch_product_id: bp._id,
+        batch_code: resolvedBatchCode || 'ADJUST',
+        movement_type: 'adjustment',
+        quantity: Math.abs(quantity),
+        before_stock: beforeStock,
+        after_stock: nextStock,
+        reference_type: 'manual',
+        reference_id: null,
+        created_by: req.userId,
+        note: reason,
+      }
+    ], { session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.json({
+      success: true,
+      data: bp,
+      movement,
+      message: 'Điều chỉnh tồn kho thành công',
+    });
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };

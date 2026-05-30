@@ -211,6 +211,13 @@ export const create = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Import order not found' });
     }
 
+    // ERP Integrity: Prevent receiving cancelled Purchase Orders
+    if (importOrder.status === 'cancelled') {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: 'Không thể nhận hàng cho Đơn mua hàng đã bị hủy (Cancelled PO)' });
+    }
+
     const supplierId = supplier_id || importOrder.supplier_id;
     const supplier = await Supplier.findById(supplierId).session(session);
     if (!supplier) {
@@ -224,6 +231,34 @@ export const create = async (req, res) => {
       await session.abortTransaction();
       session.endSession();
       return res.status(400).json({ success: false, message: 'No valid receipt items' });
+    }
+
+    // ERP Integrity: Prevent receiving more than ordered, and ensure product matches PO lines
+    for (const receiptLine of normalizedItems) {
+      const orderLine = importOrder.items.find(
+        (i) => String(i.product_id) === String(receiptLine.product_id)
+      );
+      if (!orderLine) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          success: false,
+          message: `Sản phẩm ${receiptLine.product_name || receiptLine.product_id} không nằm trong Đơn mua hàng ${importOrder.order_code}`
+        });
+      }
+      const quantityOrdered = Number(orderLine.quantity_ordered || 0);
+      const quantityAlreadyReceived = Number(orderLine.quantity_received || 0);
+      const remainingAllowed = quantityOrdered - quantityAlreadyReceived;
+      const quantityReceived = Number(receiptLine.quantity_received || 0);
+
+      if (quantityReceived > remainingAllowed) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          success: false,
+          message: `Không thể nhận thêm ${quantityReceived} đơn vị của ${receiptLine.product_name || orderLine.product_name}. Số lượng còn lại được phép nhận là ${remainingAllowed} (Đã nhận: ${quantityAlreadyReceived}/${quantityOrdered}).`
+        });
+      }
     }
 
     const [receipt] = await ImportReceipt.create([
