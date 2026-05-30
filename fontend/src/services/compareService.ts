@@ -110,9 +110,10 @@ export const compareService = {
       return {
         aiReady: typeof payload.aiReady === 'boolean' ? payload.aiReady : null,
         provider: payload.provider || 'openrouter',
+        reason: payload.reason || null,
       };
     } catch {
-      return { aiReady: null, provider: 'openrouter' };
+      return { aiReady: null, provider: 'openrouter', reason: null };
     }
   },
 

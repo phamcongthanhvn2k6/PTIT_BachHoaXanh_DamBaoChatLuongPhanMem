@@ -1,5 +1,5 @@
 import Recipe from '../models/Recipe.js';
-import { generateRecipe } from '../services/aiService.js';
+import { generateRecipe, enrichRecipe } from '../services/aiService.js';
 
 const normalizeStr = (str) => {
   return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
@@ -82,10 +82,65 @@ export const getRecipeByName = async (req, res) => {
   }
 };
 
+const isRecipeComplete = (recipe) => {
+  if (!recipe) return false;
+  if (!recipe.title || String(recipe.title).trim().length < 2) return false;
+  if (!recipe.description || String(recipe.description).trim().length < 10) return false;
+  if (!recipe.prep_time || String(recipe.prep_time).trim().length === 0) return false;
+  if (!recipe.cook_time || String(recipe.cook_time).trim().length === 0) return false;
+  
+  if (!Array.isArray(recipe.ingredients) || recipe.ingredients.length < 4) return false;
+  for (const ing of recipe.ingredients) {
+    if (!ing.name || String(ing.name).trim().length === 0) return false;
+    if (!ing.quantity || String(ing.quantity).trim().length === 0) return false;
+  }
+
+  if (!Array.isArray(recipe.steps) || recipe.steps.length < 3) return false;
+  for (const s of recipe.steps) {
+    if (!s.description || String(s.description).trim().length < 25) return false;
+  }
+
+  return true;
+};
+
+const scaleRecipe = (recipe, targetServings) => {
+  const currentServings = recipe.servings || 2;
+  if (currentServings === targetServings) return recipe;
+  
+  const ratio = targetServings / currentServings;
+  const scaledIngredients = (recipe.ingredients || []).map(ing => {
+    const qtyStr = String(ing.quantity || '').trim();
+    let scaledQty = qtyStr;
+    
+    let num = parseFloat(qtyStr);
+    if (!isNaN(num)) {
+      scaledQty = String(Math.round(num * ratio * 100) / 100);
+    } else if (qtyStr.includes('/')) {
+      const parts = qtyStr.split('/');
+      const num1 = parseFloat(parts[0]);
+      const num2 = parseFloat(parts[1]);
+      if (!isNaN(num1) && !isNaN(num2)) {
+        scaledQty = String(Math.round((num1 / num2) * ratio * 100) / 100);
+      }
+    }
+    
+    return {
+      ...ing,
+      quantity: scaledQty
+    };
+  });
+  
+  return {
+    ...recipe,
+    ingredients: scaledIngredients,
+    servings: targetServings
+  };
+};
+
 // POST /api/recipes/generate
 export const generateUserRecipe = async (req, res) => {
   try {
-    const { dishName, servings, appetite = 'normal' } = req.body;
+    const { dishName, servings, appetite = 'normal', sourceProductIds = [] } = req.body;
 
     // ── INPUT VALIDATION ──
     if (!dishName || typeof dishName !== 'string' || dishName.trim().length === 0) {
@@ -105,134 +160,154 @@ export const generateUserRecipe = async (req, res) => {
     const cleanDishName = dishName.trim();
     const validAppetites = ['small', 'normal', 'large'];
     const cleanAppetite = validAppetites.includes(appetite) ? appetite : 'normal';
-    const normalizedKey = normalizeStr(cleanDishName) + '-' + srv + '-' + cleanAppetite;
+    const canonicalKey = normalizeStr(cleanDishName) + '-' + srv + '-' + cleanAppetite;
 
     console.log(`[RecipeGenerate] ═══════════════════════════════════════`);
     console.log(`[RecipeGenerate] Request: "${cleanDishName}" for ${srv} servings (appetite=${cleanAppetite})`);
-    console.log(`[RecipeGenerate] Cache key: "${normalizedKey}"`);
+    console.log(`[RecipeGenerate] Canonical Key: "${canonicalKey}"`);
 
-    // ── DB-FIRST: return cached recipe if exists ──
-    const existing = await Recipe.findOne({ normalized_name: normalizedKey, status: 'active' });
-    if (existing) {
-      console.log(`[RecipeGenerate] ✅ CACHE HIT: "${existing.title}" (id=${existing._id})`);
-      existing.access_count += 1;
-      existing.last_accessed_at = new Date();
-      await existing.save();
-      return res.json({ success: true, data: existing, cached: true });
+    // ── DB-FIRST: lookup exact match or alias ──
+    let recipeObj = await Recipe.findOne({
+      $or: [
+        { normalized_name: canonicalKey },
+        { canonical_key: canonicalKey },
+        { aliases: canonicalKey }
+      ],
+      status: 'active'
+    });
+
+    let wasScaled = false;
+    let cached = false;
+
+    if (recipeObj) {
+      console.log(`[RecipeGenerate] ✅ CACHE HIT (exact match): "${recipeObj.title}" (id=${recipeObj._id})`);
+      cached = true;
+    } else {
+      // Look up any recipe for the same dish base key, regardless of servings or appetite
+      const baseDishKey = normalizeStr(cleanDishName);
+      const similarRecipe = await Recipe.findOne({
+        normalized_name: { $regex: '^' + baseDishKey + '-' },
+        status: 'active'
+      });
+
+      if (similarRecipe) {
+        console.log(`[RecipeGenerate] 🔄 CACHE HIT (similar dish): "${similarRecipe.title}" (servings=${similarRecipe.servings}). Scaling ingredients to ${srv} servings.`);
+        recipeObj = scaleRecipe(similarRecipe.toObject(), srv);
+        recipeObj.canonical_key = canonicalKey;
+        recipeObj.normalized_name = canonicalKey;
+        recipeObj.source_product_ids = sourceProductIds || recipeObj.source_product_ids || [];
+        wasScaled = true;
+        cached = true;
+      }
     }
 
-    // ── AI GENERATION (only when no cache) ──
-    console.log(`[RecipeGenerate] ❌ Cache miss — calling AI service...`);
+    // ── AI GENERATION OR ENRICHMENT ──
+    if (cached) {
+      // Check completeness
+      const isComplete = isRecipeComplete(recipeObj);
+      if (!isComplete) {
+        console.log(`[RecipeGenerate] ⚠️ Cached recipe is INCOMPLETE. Enriching with AI...`);
+        try {
+          const enriched = await enrichRecipe(
+            recipeObj.toObject ? recipeObj.toObject() : recipeObj,
+            srv,
+            cleanAppetite
+          );
+          if (enriched) {
+            recipeObj.title = enriched.title || recipeObj.title;
+            recipeObj.description = enriched.description || recipeObj.description;
+            recipeObj.prep_time = enriched.prep_time || recipeObj.prep_time;
+            recipeObj.cook_time = enriched.cook_time || recipeObj.cook_time;
+            recipeObj.difficulty = enriched.difficulty || recipeObj.difficulty;
+            recipeObj.ingredients = enriched.ingredients || recipeObj.ingredients;
+            recipeObj.steps = enriched.steps || recipeObj.steps;
+            recipeObj.tips = enriched.tips || recipeObj.tips;
+            recipeObj.tags = enriched.tags || recipeObj.tags;
+            recipeObj.completeness_status = 'complete';
+            recipeObj.last_checked_at = new Date();
+            recipeObj.canonical_key = canonicalKey;
+            recipeObj.normalized_name = canonicalKey;
+            recipeObj.ai_generated = true;
+            recipeObj.source_type = 'ai_generated';
+            recipeObj.source_product_ids = sourceProductIds || recipeObj.source_product_ids || [];
+
+            if (recipeObj.save && !wasScaled) {
+              await recipeObj.save();
+              console.log(`[RecipeGenerate] Enriched existing recipe saved: id=${recipeObj._id}`);
+            } else {
+              if (recipeObj._id) delete recipeObj._id; // Ensure clean insert
+              recipeObj = await Recipe.create(recipeObj);
+              console.log(`[RecipeGenerate] Created and saved new enriched recipe: id=${recipeObj._id}`);
+            }
+          }
+        } catch (enrichError) {
+          console.warn(`[RecipeGenerate] AI Enrichment failed. Returning base cached recipe. Error:`, enrichError.message);
+        }
+      } else {
+        // Exact match cache hit - increment access count
+        if (recipeObj.save && !wasScaled) {
+          recipeObj.access_count += 1;
+          recipeObj.last_accessed_at = new Date();
+          await recipeObj.save();
+        } else if (wasScaled) {
+          // Save scaled complete recipe to cache
+          if (recipeObj._id) delete recipeObj._id;
+          recipeObj.completeness_status = 'complete';
+          recipeObj.last_checked_at = new Date();
+          recipeObj = await Recipe.create(recipeObj);
+          console.log(`[RecipeGenerate] Scaled complete recipe saved to cache: id=${recipeObj._id}`);
+        }
+      }
+
+      return res.json({ success: true, data: recipeObj, cached: true });
+    }
+
+    // ── CACHE MISS: Generate completely new recipe ──
+    console.log(`[RecipeGenerate] ❌ Cache miss — generating new recipe with AI...`);
     let generatedData = null;
     try {
       generatedData = await generateRecipe(cleanDishName, srv, cleanAppetite);
     } catch (aiError) {
       console.error(`[RecipeGenerate] AI service error:`, aiError.message);
-
-      if (aiError.message?.includes('Missing GEMINI_RECIPE_KEY')) {
-        return res.status(503).json({
-          success: false,
-          message: 'AI chưa được cấu hình. Vui lòng liên hệ admin.'
-        });
-      }
-
       return res.status(503).json({
         success: false,
-        message: 'Dịch vụ AI tạm thời không khả dụng. Vui lòng thử lại sau ít phút.'
+        message: 'Dịch vụ AI tạm thời không khả dụng. Vui lòng thử lại sau.'
       });
     }
 
     if (!generatedData) {
-      console.error(`[RecipeGenerate] AI returned null — generation failed entirely`);
       return res.status(500).json({
         success: false,
-        message: 'AI không thể tạo công thức chi tiết cho món này. Vui lòng thử lại hoặc nhập tên món khác.'
+        message: 'AI không thể tạo công thức chi tiết cho món này. Vui lòng thử lại.'
       });
     }
 
-    // ── VALIDATE AI OUTPUT BEFORE SAVING ──
-    if (!generatedData.title || typeof generatedData.title !== 'string') {
-      generatedData.title = cleanDishName;
-    }
-
-    // Ensure minimum quality for ingredients
-    if (!Array.isArray(generatedData.ingredients) || generatedData.ingredients.length < 3) {
-      console.error(`[RecipeGenerate] AI output has too few ingredients: ${generatedData.ingredients?.length || 0}`);
-      return res.status(500).json({
-        success: false,
-        message: 'AI tạo công thức không đủ chi tiết. Vui lòng thử lại.'
-      });
-    }
-
-    // Ensure minimum quality for steps
-    if (!Array.isArray(generatedData.steps) || generatedData.steps.length < 3) {
-      console.error(`[RecipeGenerate] AI output has too few steps: ${generatedData.steps?.length || 0}`);
-      return res.status(500).json({
-        success: false,
-        message: 'AI tạo công thức không đủ bước nấu. Vui lòng thử lại.'
-      });
-    }
-
-    // ── NORMALIZE DATA FOR DB ──
-    generatedData.normalized_name = normalizedKey;
+    // Prepare for DB
+    generatedData.normalized_name = canonicalKey;
+    generatedData.canonical_key = canonicalKey;
     generatedData.servings = srv;
     generatedData.ai_generated = true;
     generatedData.source_type = 'ai_generated';
     generatedData.status = 'active';
+    generatedData.completeness_status = 'complete';
+    generatedData.last_checked_at = new Date();
+    generatedData.source_product_ids = sourceProductIds;
 
-    // Ensure ingredients are properly formatted
-    generatedData.ingredients = generatedData.ingredients.map(ing => ({
-      name: String(ing.name || '').trim() || 'Nguyên liệu',
-      quantity: String(ing.quantity ?? '').trim(),
-      unit: String(ing.unit || '').trim(),
-      note: String(ing.note || '').trim()
-    }));
-
-    // Ensure steps are properly formatted
-    generatedData.steps = generatedData.steps.map((s, idx) => ({
-      step: Number(s.step) || idx + 1,
-      title: String(s.title || `Bước ${idx + 1}`).trim(),
-      description: String(s.description || '').trim(),
-      duration: String(s.duration || '').trim()
-    }));
-
-    // Ensure tips are strings
-    if (Array.isArray(generatedData.tips)) {
-      generatedData.tips = generatedData.tips.filter(t => typeof t === 'string' && t.trim().length > 0);
-    } else {
-      generatedData.tips = [];
-    }
-
-    // Ensure tags are strings
-    if (Array.isArray(generatedData.tags)) {
-      generatedData.tags = generatedData.tags.filter(t => typeof t === 'string' && t.trim().length > 0);
-    } else {
-      generatedData.tags = [];
-    }
-
-    // ── SAVE TO DB ──
+    // Save
     try {
       const newRecipe = await Recipe.create(generatedData);
-      console.log(`[RecipeGenerate] ✅ SAVED: "${newRecipe.title}" (id=${newRecipe._id}, ingredients=${newRecipe.ingredients.length}, steps=${newRecipe.steps.length})`);
+      console.log(`[RecipeGenerate] ✅ SAVED new recipe: "${newRecipe.title}" (id=${newRecipe._id})`);
       return res.json({ success: true, data: newRecipe, cached: false });
     } catch (saveError) {
-      // Handle duplicate key — race condition where another request saved it first
       if (saveError.code === 11000) {
-        console.log(`[RecipeGenerate] Duplicate key — fetching existing record...`);
-        const dup = await Recipe.findOne({ normalized_name: normalizedKey });
-        if (dup) {
-          dup.access_count += 1;
-          dup.last_accessed_at = new Date();
-          await dup.save();
-          return res.json({ success: true, data: dup, cached: true });
-        }
+        // Race condition fallback
+        const dup = await Recipe.findOne({ normalized_name: canonicalKey });
+        if (dup) return res.json({ success: true, data: dup, cached: true });
       }
-      console.error(`[RecipeGenerate] DB save error:`, saveError.message);
       throw saveError;
     }
-
   } catch (err) {
-    console.error('[RecipeGenerate] Unexpected error:', err);
-    res.status(500).json({ success: false, message: 'Lỗi hệ thống khi tạo công thức. Vui lòng thử lại.' });
+    console.error('[RecipeGenerate] Error:', err);
+    res.status(500).json({ success: false, message: 'Lỗi hệ thống khi tạo công thức.' });
   }
 };

@@ -18,6 +18,7 @@ const RecipeDetail: React.FC = () => {
   const { currentBranchId, availableProducts } = useBranchData();
 
   const [recipe, setRecipe] = useState<any>(null);
+  const [isCached, setIsCached] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,6 +45,7 @@ const RecipeDetail: React.FC = () => {
         const res = await recipeService.getRecipeByName(name);
         if (res.success && res.data) {
           setRecipe(res.data);
+          setIsCached(res.cached ?? true);
           setServings(res.data.servings || 2);
           setShowForm(false);
         } else {
@@ -87,6 +89,7 @@ const RecipeDetail: React.FC = () => {
       });
       if (res.success && res.data) {
         setRecipe(res.data);
+        setIsCached(res.cached ?? false);
         setShowForm(false);
         toast.success(res.cached ? `✅ ${t('recipe.foundCached')}` : `🧑‍🍳 ${t('recipe.generateSuccess')}`);
       } else {
@@ -292,13 +295,13 @@ const RecipeDetail: React.FC = () => {
               </div>
             )}
             <div className="absolute top-4 right-4 flex gap-2">
-              {recipe.ai_generated ? (
-                <span className="bg-indigo-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
-                  <span className="material-symbols-outlined !text-sm">smart_toy</span> AI Generated
+              {isCached ? (
+                <span className="bg-green-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
+                  <span className="material-symbols-outlined !text-sm">database</span> {t('recipe.sourceCacheBadge', 'Saved Recipe')}
                 </span>
               ) : (
-                <span className="bg-green-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
-                  <span className="material-symbols-outlined !text-sm">verified</span> Saved Recipe
+                <span className="bg-indigo-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
+                  <span className="material-symbols-outlined !text-sm">smart_toy</span> {t('recipe.sourceAiBadge', 'AI Generated')}
                 </span>
               )}
             </div>

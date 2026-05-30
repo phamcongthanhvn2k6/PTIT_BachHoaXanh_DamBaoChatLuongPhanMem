@@ -25,6 +25,7 @@ const RecipeSchema = new mongoose.Schema({
   servings: { type: Number, default: 2 },
   difficulty: { type: String, default: 'Trung bình' },
   tips: [{ type: String }],
+  notes: [{ type: String }],
   tags: [{ type: String }],
   image_url: { type: String, default: '' },
   source_type: { type: String, enum: ['ai_generated', 'user_submitted', 'admin'], default: 'ai_generated' },
@@ -32,7 +33,12 @@ const RecipeSchema = new mongoose.Schema({
   created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   status: { type: String, enum: ['draft', 'active', 'archived'], default: 'active' },
   access_count: { type: Number, default: 0 },
-  last_accessed_at: { type: Date, default: Date.now }
+  last_accessed_at: { type: Date, default: Date.now },
+  canonical_key: { type: String },
+  aliases: [{ type: String }],
+  completeness_status: { type: String, enum: ['complete', 'incomplete'], default: 'complete' },
+  last_checked_at: { type: Date, default: Date.now },
+  source_product_ids: [{ type: String }]
 }, { timestamps: true });
 
 RecipeSchema.pre('save', function(next) {
