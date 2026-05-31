@@ -3,7 +3,7 @@ import { dataService } from "../../services/dataService";
 
 // ─── Types ─────────────────────────────────────────────
 interface EventPost {
-  id: number;
+  id: string | number;
   title: string;
   slug: string;
   category_id: number;
@@ -20,7 +20,7 @@ interface EventPost {
   end_date: string;
   is_featured: boolean;
   is_published?: boolean;
-  status: string; // "draft" | "published" | "archived"
+  status: string; // "draft" | "published" | "archived" | "scheduled" | "expired"
   created_at: string;
   updated_at: string;
 }
@@ -62,7 +62,7 @@ const AdminLotteMartEventsManagementPortal: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
 
   // Selection & Editor State
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
   const [selectedEvent, setSelectedEvent] = useState<EventPost | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -81,7 +81,7 @@ const AdminLotteMartEventsManagementPortal: React.FC = () => {
 
   // Toast
   const [toast, setToast] = useState<{ msg: string; visible: boolean }>({ msg: "", visible: false });
-  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | number | null>(null);
 
   // ─── Load Data ───
   const loadData = useCallback(async () => {
@@ -233,7 +233,7 @@ const AdminLotteMartEventsManagementPortal: React.FC = () => {
   }, [selectedEvent, validateForm, constructPayload, editStatus, editFeatured, loadData, showToastMsg]);
 
   // ─── Direct Delete Event ───
-  const handleDeleteEvent = useCallback(async (id: number) => {
+  const handleDeleteEvent = useCallback(async (id: string | number) => {
     try {
       await dataService.deleteEventPost(id);
       if (selectedEvent?.id === id) setSelectedEvent(null);
@@ -291,7 +291,7 @@ const AdminLotteMartEventsManagementPortal: React.FC = () => {
   }, [selectedIds, selectedEvent, loadData, showToastMsg]);
 
   // ─── Selection ───
-  const toggleSelect = (id: number) => {
+  const toggleSelect = (id: string | number) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -318,11 +318,23 @@ const AdminLotteMartEventsManagementPortal: React.FC = () => {
   };
 
   // ─── Image Upload ───
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const url = URL.createObjectURL(file);
-      setEditThumbnail(url);
+      setSaving(true);
+      try {
+        const url = await dataService.uploadEventImage(file);
+        if (url) {
+          setEditThumbnail(url);
+          showToastMsg("Đã tải ảnh lên thành công");
+        } else {
+          showToastMsg("Không tải được ảnh lên");
+        }
+      } catch (err) {
+        showToastMsg("Lỗi tải ảnh lên");
+      } finally {
+        setSaving(false);
+      }
     }
   };
 

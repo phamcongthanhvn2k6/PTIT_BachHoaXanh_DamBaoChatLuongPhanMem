@@ -363,7 +363,24 @@ export const remove = async (req, res) => {
 
 export const removeCoupon = async (req, res) => {
   try {
+    const coupon = await Coupon.findById(req.params.id);
     await Coupon.findByIdAndDelete(req.params.id);
+
+    try {
+      const { logActivity } = await import('../services/auditService.js');
+      await logActivity({
+        userId: req.userId,
+        userName: req.user?.full_name || req.user?.username || 'Admin',
+        action: 'DELETE',
+        entity: 'coupon',
+        entityId: req.params.id,
+        details: { code: coupon?.code, title: coupon?.title },
+        ip: req.ip
+      });
+    } catch (auditErr) {
+      console.error('[Audit] Failed to log coupon deletion:', auditErr.message);
+    }
+
     return res.json({ success: true, message: 'Xóa mã thành công' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -399,6 +416,21 @@ export const create = async (req, res) => {
       }
 
       const c = await Coupon.create(body);
+
+      try {
+        const { logActivity } = await import('../services/auditService.js');
+        await logActivity({
+          userId: req.userId,
+          userName: req.user?.full_name || req.user?.username || 'Admin',
+          action: 'CREATE',
+          entity: 'coupon',
+          entityId: c._id,
+          details: { code: c.code, title: c.title },
+          ip: req.ip
+        });
+      } catch (auditErr) {
+        console.error('[Audit] Failed to log coupon creation:', auditErr.message);
+      }
 
       if (c.is_active) {
         try {
@@ -439,6 +471,21 @@ export const update = async (req, res) => {
 
       const c = await Coupon.findByIdAndUpdate(req.params.id, body, { new: true });
       if (!c) return res.status(404).json({ success: false, message: 'Coupon not found' });
+
+      try {
+        const { logActivity } = await import('../services/auditService.js');
+        await logActivity({
+          userId: req.userId,
+          userName: req.user?.full_name || req.user?.username || 'Admin',
+          action: 'UPDATE',
+          entity: 'coupon',
+          entityId: c._id,
+          details: { code: c.code, title: c.title },
+          ip: req.ip
+        });
+      } catch (auditErr) {
+        console.error('[Audit] Failed to log coupon update:', auditErr.message);
+      }
 
       // Broadcast when coupon transitions from inactive → active
       if (wasInactive && c.is_active) {

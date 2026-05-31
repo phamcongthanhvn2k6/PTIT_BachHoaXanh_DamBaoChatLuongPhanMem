@@ -237,6 +237,7 @@ export const endpoints = {
     promotionImage: '/uploads/promotion-image',
     reviewImages: '/uploads/review-images',
     evidenceImages: '/uploads/evidence-images',
+    eventImage: '/uploads/event-image',
   },
 
   wishlist: {

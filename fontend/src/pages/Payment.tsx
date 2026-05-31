@@ -30,10 +30,21 @@ const Payment: React.FC = () => {
   const { data: addresses } = useAppSelector(state => state.address);
   const { currentBranch } = useAppSelector(state => state.branch);
 
-  // Get checkout details from navigation state
-  const { total, deliveryFee, discount, selectedDelivery, addressId, promoData, isQuickBuy, quickBuyItem, source: checkoutSource } = location.state || {
+  // Get checkout details from navigation state or recovered from sessionStorage to prevent refresh state-loss
+  const getPersistedState = () => {
+    try {
+      const raw = sessionStorage.getItem('lotte_checkout_payment_state');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const paymentState = location.state || getPersistedState() || {
     total: 0, deliveryFee: 0, discount: 0, selectedDelivery: 'standard', addressId: 0, promoData: null, isQuickBuy: false, quickBuyItem: null, source: 'cart'
   };
+
+  const { total, deliveryFee, discount, selectedDelivery, addressId, promoData, isQuickBuy, quickBuyItem, source: checkoutSource } = paymentState;
 
   console.log('[Payment] Init — source:', checkoutSource, 'isQuickBuy:', isQuickBuy, 'quickBuyItem:', quickBuyItem);
 
@@ -56,9 +67,72 @@ const Payment: React.FC = () => {
   const checkoutItems = (isQuickBuy && quickBuyItem) ? [quickBuyItem] : cartItems;
   const address = addresses.find(a => String(a.id) === String(addressId));
 
+  const [providers, setProviders] = useState<any[]>([]);
+
+  const isProviderActive = useCallback((methodProvider: string) => {
+    if (!methodProvider) return true;
+    const p = providers.find(prov => prov.code?.toUpperCase() === methodProvider.toUpperCase());
+    return p ? p.is_active !== false : true;
+  }, [providers]);
+
+  const isCardExpired = useCallback((expiryStr: string) => {
+    if (!expiryStr) return false;
+    const parts = expiryStr.split('/');
+    if (parts.length !== 2) return false;
+    const month = parseInt(parts[0], 10);
+    let year = parseInt(parts[1], 10);
+    if (isNaN(month) || isNaN(year)) return false;
+    if (year < 100) year += 2000;
+    const now = new Date();
+    const lastDayOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
+    return now > lastDayOfMonth;
+  }, []);
+
+  const getMethodAvailability = useCallback((method: any) => {
+    if (!isProviderActive(method.provider)) {
+      return { available: false, reason: method.type === 'wallet' ? 'Ví điện tử đang bảo trì' : 'Cổng thanh toán đang bảo trì' };
+    }
+    if (method.type === 'card' && isCardExpired(method.expiry)) {
+      return { available: false, reason: 'Thẻ đã hết hạn sử dụng' };
+    }
+    if (method.type === 'wallet') {
+      const balance = currentUser?.wallet_balance || 0;
+      if (balance < total) {
+        const missing = total - balance;
+        return { available: false, reason: `Số dư không đủ (Thiếu ${missing.toLocaleString('vi-VN')}đ)` };
+      }
+    }
+    return { available: true, reason: '' };
+  }, [isProviderActive, isCardExpired, currentUser?.wallet_balance, total]);
+
   useEffect(() => {
-    if (currentUser?.id) {
-      paymentService.listMethods(Number(currentUser.id)).then(methods => {
+    paymentService.listProviders().then(res => {
+      setProviders(res || []);
+    }).catch(err => console.error("Failed to load providers", err));
+  }, []);
+
+  useEffect(() => {
+    if (currentUser?.id && providers.length > 0) {
+      paymentService.listMethods(currentUser.id).then(methods => {
+        const safeMethods = methods || [];
+        setSavedMethods(safeMethods);
+        
+        // Find default method or first available method
+        const defaultMethod = safeMethods.find(m => m.is_default);
+        if (defaultMethod && getMethodAvailability(defaultMethod).available) {
+          setSelectedMethodId(defaultMethod.id);
+        } else {
+          const firstAvailable = safeMethods.find(m => getMethodAvailability(m).available);
+          if (firstAvailable) {
+            setSelectedMethodId(firstAvailable.id);
+          } else {
+            setSelectedMethodId('cod'); // fallback
+          }
+        }
+      });
+    } else if (currentUser?.id) {
+      // If providers not loaded yet, do a simple list
+      paymentService.listMethods(currentUser.id).then(methods => {
         const safeMethods = methods || [];
         setSavedMethods(safeMethods);
         const defaultMethod = safeMethods.find(m => m.is_default);
@@ -69,7 +143,7 @@ const Payment: React.FC = () => {
         }
       });
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, providers, getMethodAvailability]);
 
   // Countdown timer for QR expiry (15 minutes)
   useEffect(() => {
@@ -170,6 +244,20 @@ const Payment: React.FC = () => {
       return;
     }
 
+    // Verify method exists and is active/available
+    if (selectedMethodId !== 'cod' && selectedMethodId !== 'qr_transfer') {
+      const selectedMethod = savedMethods.find(m => m.id === selectedMethodId);
+      if (!selectedMethod) {
+        toast.error("Phương thức thanh toán đã bị xóa hoặc không hợp lệ. Vui lòng chọn phương thức khác.");
+        return;
+      }
+      const { available, reason } = getMethodAvailability(selectedMethod);
+      if (!available) {
+        toast.error(`Phương thức thanh toán không khả dụng: ${reason}`);
+        return;
+      }
+    }
+
     setIsProcessing(true);
     setPaymentStatus('processing');
 
@@ -187,7 +275,7 @@ const Payment: React.FC = () => {
       const branchName = currentBranch?.name || '';
 
       const orderPayload = {
-        user_id: Number(currentUser?.id) || Number(currentUser?._id) || 1,
+        user_id: currentUser?.id || currentUser?._id || '',
         branch_id: selectedBranchId || 'ALL',
         branch_name: branchName,
         subtotal: Number(subtotal) || 0,
@@ -303,7 +391,7 @@ const Payment: React.FC = () => {
           provider,
           amount: finalTotal,
           methodId: selectedMethodId,
-          userId: Number(currentUser?.id) || 1,
+          userId: currentUser?.id || currentUser?._id || '',
           currency: 'VND'
         });
       } catch(err: any) {
@@ -460,7 +548,7 @@ const Payment: React.FC = () => {
   // ============================================================
   // RENDER: No order state
   // ============================================================
-  if (!location.state) {
+  if (!location.state && !getPersistedState()) {
     return (
       <div className="p-10 text-center flex flex-col items-center justify-center min-h-[50vh]">
         <span className="material-symbols-outlined text-6xl text-slate-300 mb-4">remove_shopping_cart</span>
@@ -632,6 +720,9 @@ const Payment: React.FC = () => {
               {isConfirming ? (
                 <>
                   <span className="material-symbols-outlined animate-spin">autorenew</span>{t('common.processing')}</>
+              ) : isExpired ? (
+                <>
+                  <span className="material-symbols-outlined">timer_off</span>Giao dịch đã hết hạn</>
               ) : (
                 <>
                   <span className="material-symbols-outlined">check_circle</span>{t('payment.iPaid')}</>
@@ -730,24 +821,45 @@ const Payment: React.FC = () => {
         </div>
 
         <div className="space-y-3 mb-8">
-          {(savedMethods || []).map((method: any) => (
-             <label key={method.id} className={`relative flex items-center p-4 rounded-xl border-2 ${selectedMethodId === method.id ? 'border-primary bg-primary/5 shadow-sm ring-2 ring-primary/20' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 hover:border-slate-300'} cursor-pointer transition-all`}>
-               <div className="flex-1 flex items-center gap-4">
-                 <div className={`w-12 h-8 rounded shrink-0 flex items-center justify-center overflow-hidden border border-slate-100 shadow-sm ${method?.type === 'wallet' ? 'bg-[#A50064] text-white' : 'bg-slate-50 text-blue-800'}`}>
-                   {method?.type === 'wallet' ? <span className="font-black text-xs italic tracking-tighter">{method?.brand || 'VÍ'}</span> : <span className="font-black text-xs italic tracking-tighter">{method?.brand || 'THẺ'}</span>}
-                 </div>
-                 <div className="flex flex-col">
-                   <p className="text-slate-900 dark:text-slate-100 text-sm font-bold tracking-widest">{method?.type === 'wallet' ? (method?.phone || '0000000000').replace(/(\d{4})\d{3}(\d{3})/, "$1***$2") : `•••• •••• •••• ${method?.last4 || '0000'}`}</p>
-                   {method?.type === 'card' && <p className="text-slate-500 text-[10px] uppercase font-bold mt-0.5">{method?.holder_name || 'LOTTE MEMBER'}</p>}
-                 </div>
-               </div>
+          {(savedMethods || []).map((method: any) => {
+             const { available, reason } = getMethodAvailability(method);
+             const isSelected = selectedMethodId === method.id;
+             return (
+                <label 
+                  key={method.id} 
+                  className={`relative flex items-center p-4 rounded-xl border-2 transition-all ${
+                    !available 
+                      ? 'border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/40 opacity-60 cursor-not-allowed' 
+                      : isSelected 
+                        ? 'border-primary bg-primary/5 shadow-sm ring-2 ring-primary/20 cursor-pointer' 
+                        : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 hover:border-slate-300 cursor-pointer'
+                  }`}
+                >
+                  <div className="flex-1 flex items-center gap-4">
+                    <div className={`w-12 h-8 rounded shrink-0 flex items-center justify-center overflow-hidden border border-slate-100 shadow-sm ${method?.type === 'wallet' ? 'bg-[#A50064] text-white' : 'bg-slate-50 text-blue-800'}`}>
+                      {method?.type === 'wallet' ? <span className="font-black text-xs italic tracking-tighter">{method?.brand || 'VÍ'}</span> : <span className="font-black text-xs italic tracking-tighter">{method?.brand || 'THẺ'}</span>}
+                    </div>
+                    <div className="flex flex-col">
+                      <p className="text-slate-900 dark:text-slate-100 text-sm font-bold tracking-widest">{method?.type === 'wallet' ? (method?.phone || '0000000000').replace(/(\d{4})\d{3}(\d{3})/, "$1***$2") : `•••• •••• •••• ${method?.last4 || '0000'}`}</p>
+                      {method?.type === 'card' && <p className="text-slate-500 text-[10px] uppercase font-bold mt-0.5">{method?.holder_name || 'LOTTE MEMBER'}</p>}
+                      {!available && <p className="text-red-500 text-xs font-bold mt-1">{reason}</p>}
+                    </div>
+                  </div>
 
-               <div className="flex items-center gap-3">
-                 {method?.is_default && <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded uppercase tracking-wider">{t('address.default')}</span>}
-                 <input checked={selectedMethodId === method?.id} onChange={() => setSelectedMethodId(method?.id)} className="w-5 h-5 text-primary border-2 border-slate-300 focus:ring-primary rounded-full" name="payment_method" type="radio" />
-               </div>
-             </label>
-          ))}
+                  <div className="flex items-center gap-3">
+                    {method?.is_default && <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded uppercase tracking-wider">{t('address.default')}</span>}
+                    <input 
+                      disabled={!available}
+                      checked={isSelected} 
+                      onChange={() => { if (available) setSelectedMethodId(method?.id); }} 
+                      className="w-5 h-5 text-primary border-2 border-slate-300 focus:ring-primary rounded-full disabled:opacity-40" 
+                      name="payment_method" 
+                      type="radio" 
+                    />
+                  </div>
+                </label>
+             );
+          })}
 
           {/* QR Transfer Option - only available if at least 1 saved payment method exists */}
           {savedMethods.length > 0 ? (

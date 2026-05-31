@@ -62,6 +62,7 @@ import { configurePassportFacebook } from './config/passportFacebook.js';
 import { setupSwagger } from './config/swagger.js';
 import { seedDefaultFlags } from './services/featureFlagService.js';
 import { startBackupScheduler } from './services/backupScheduler.js';
+import { startReconciliationScheduler } from './services/reconciliationService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -88,6 +89,7 @@ seedDefaultFlags().catch((err) => {
 });
 
 startBackupScheduler();
+startReconciliationScheduler();
 
 // Middleware
 app.use(helmet({

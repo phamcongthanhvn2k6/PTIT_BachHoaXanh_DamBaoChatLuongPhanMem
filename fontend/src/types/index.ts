@@ -521,7 +521,7 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
-  user_id: number;
+  user_id: number | string;
   branch_id: string;
   branch_name?: string;
   subtotal: number;
@@ -846,6 +846,7 @@ export interface PaymentMethod {
   brand: string;
   expiry?: string;
   holder_name?: string;
+  phone?: string;
   is_default: boolean;
 }
 

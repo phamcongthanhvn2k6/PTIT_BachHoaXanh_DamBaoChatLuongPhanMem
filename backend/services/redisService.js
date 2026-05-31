@@ -118,12 +118,9 @@ export const deleteCachePattern = async (pattern) => {
 export const acquireLock = async (key, ttlSeconds = 5) => {
   if (isConnected && redis) {
     try {
-      const result = await redis.setnx(`lock:${key}`, '1');
-      if (result) {
-        await redis.expire(`lock:${key}`, ttlSeconds);
-        return true;
-      }
-      return false;
+      // Atomic SET NX EX — prevents lock leak if process crashes between setnx and expire
+      const result = await redis.set(`lock:${key}`, '1', 'EX', ttlSeconds, 'NX');
+      return result === 'OK';
     } catch (e) {
       // Fall through to memory lock
     }

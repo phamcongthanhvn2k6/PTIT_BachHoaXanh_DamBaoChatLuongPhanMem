@@ -24,6 +24,55 @@ const calculateMembershipTier = (totalPoints) => {
   return tier;
 };
 
+// ─── Payment security & validation helpers ───
+const mockDecrypt = (encText) => {
+  if (!encText) return '';
+  if (encText.startsWith('MOCK_ENC_')) {
+    try {
+      return Buffer.from(encText.substring(9), 'base64').toString('utf8');
+    } catch (e) {
+      return '';
+    }
+  }
+  return encText;
+};
+
+const checkLuhn = (numStr) => {
+  const clean = numStr.replace(/\D/g, '');
+  if (!clean || clean.length < 13 || clean.length > 19) return false;
+  let sum = 0;
+  let double = false;
+  for (let i = clean.length - 1; i >= 0; i--) {
+    let digit = parseInt(clean.charAt(i), 10);
+    if (double) {
+      digit *= 2;
+      if (digit > 9) digit -= 9;
+    }
+    sum += digit;
+    double = !double;
+  }
+  return sum % 10 === 0;
+};
+
+const checkExpiry = (expiryStr) => {
+  if (!/^(0[1-9]|1[0-2])\/(\d{2}|\d{4})$/.test(expiryStr)) return false;
+  const parts = expiryStr.split('/');
+  const month = parseInt(parts[0], 10);
+  let year = parseInt(parts[1], 10);
+  if (year < 100) year += 2000;
+  const now = new Date();
+  const lastDay = new Date(year, month, 0, 23, 59, 59, 999);
+  return now <= lastDay;
+};
+
+const checkHolderName = (name) => {
+  return /^[A-Z\s]+$/.test(name.trim());
+};
+
+const checkCvv = (cvvStr) => {
+  return /^\d{3,4}$/.test(cvvStr);
+};
+
 export const methods = async (req, res) => {
   try {
     const filter = {};
@@ -43,9 +92,63 @@ export const methods = async (req, res) => {
 export const addMethod = async (req, res) => {
   try {
     const userId = (req.user?.role_id !== 3 && req.body.user_id) ? req.body.user_id : req.userId;
-    if (req.body.is_default) await PaymentMethod.updateMany({ user_id: userId }, { is_default: false });
-    return res.status(201).json({ success: true, data: await PaymentMethod.create({ ...req.body, user_id: userId }) });
-  } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+    const { type, brand, last4, expiry, holder_name, phone, card_number_encrypted, cvv_encrypted, phone_encrypted } = req.body;
+
+    // 1. Validation and Duplication Checks
+    if (type === 'card') {
+      const rawCardNumber = mockDecrypt(card_number_encrypted);
+      const rawCvv = mockDecrypt(cvv_encrypted);
+
+      if (!rawCardNumber) {
+        return res.status(400).json({ success: false, message: 'Mã số thẻ bị thiếu hoặc mã hóa không đúng' });
+      }
+      if (!checkLuhn(rawCardNumber)) {
+        return res.status(400).json({ success: false, message: 'Số thẻ không hợp lệ (Lỗi kiểm tra Luhn)' });
+      }
+      if (!expiry || !checkExpiry(expiry)) {
+        return res.status(400).json({ success: false, message: 'Thẻ đã hết hạn hoặc định dạng ngày không hợp lệ (MM/YY hoặc MM/YYYY)' });
+      }
+      if (!holder_name || !checkHolderName(holder_name)) {
+        return res.status(400).json({ success: false, message: 'Tên in trên thẻ phải viết hoa không dấu và chỉ chứa chữ cái' });
+      }
+      if (!rawCvv || !checkCvv(rawCvv)) {
+        return res.status(400).json({ success: false, message: 'Mã CVC/CVV không hợp lệ (phải gồm 3 hoặc 4 chữ số)' });
+      }
+
+      // Check duplicate
+      const duplicate = await PaymentMethod.findOne({ user_id: userId, type: 'card', brand, last4 });
+      if (duplicate) {
+        return res.status(400).json({ success: false, message: 'Thẻ thanh toán này đã được thêm từ trước' });
+      }
+    } else if (type === 'wallet') {
+      const rawPhone = mockDecrypt(phone_encrypted) || phone;
+      if (!rawPhone || rawPhone.length < 10) {
+        return res.status(400).json({ success: false, message: 'Số điện thoại ví không hợp lệ' });
+      }
+
+      // Check duplicate
+      const duplicate = await PaymentMethod.findOne({ user_id: userId, type: 'wallet', brand, phone: rawPhone });
+      if (duplicate) {
+        return res.status(400).json({ success: false, message: 'Ví điện tử này đã được liên kết từ trước' });
+      }
+    } else {
+      return res.status(400).json({ success: false, message: 'Loại phương thức thanh toán không hợp lệ' });
+    }
+
+    if (req.body.is_default) {
+      await PaymentMethod.updateMany({ user_id: userId }, { is_default: false });
+    }
+
+    const newMethod = await PaymentMethod.create({
+      ...req.body,
+      user_id: userId,
+      phone: type === 'wallet' ? (mockDecrypt(phone_encrypted) || phone) : ''
+    });
+
+    return res.status(201).json({ success: true, data: newMethod });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 export const updateMethod = async (req, res) => {
@@ -163,6 +266,7 @@ export const process = async (req, res) => {
 // POST /api/payments/:id/confirm
 // Confirms payment: updates status, updates order, awards loyalty points, updates membership tier
 export const confirm = async (req, res) => {
+  let session = null;
   try {
     const txId = req.params.id;
 
@@ -174,12 +278,35 @@ export const confirm = async (req, res) => {
 
     console.log('[PaymentController] Confirming payment for transaction:', txId);
 
-    const tx = await PaymentTransaction.findById(txId);
-    if (!tx) return res.status(404).json({ success: false, message: 'Không tìm thấy giao dịch thanh toán' });
+    session = await mongoose.startSession();
+    session.startTransaction();
 
-    // Prevent double-confirm
+    // Find and lock the transaction
+    const tx = await PaymentTransaction.findById(txId).session(session);
+    if (!tx) {
+      if (session) {
+        await session.abortTransaction();
+        session.endSession();
+      }
+      return res.status(404).json({ success: false, message: 'Không tìm thấy giao dịch thanh toán' });
+    }
+
+    // Prevent double-confirm or confirmation of failed/cancelled transactions
+    if (tx.status === 'FAILED' || tx.status === 'CANCELLED') {
+      console.log('[PaymentController] Cannot confirm failed or cancelled transaction:', txId);
+      if (session) {
+        await session.abortTransaction();
+        session.endSession();
+      }
+      return res.status(400).json({ success: false, message: 'Không thể thanh toán giao dịch đã thất bại hoặc đã hủy' });
+    }
+
     if (tx.status === 'COMPLETED' || tx.status === 'PAID') {
       console.log('[PaymentController] Transaction already confirmed:', txId);
+      if (session) {
+        await session.commitTransaction();
+        session.endSession();
+      }
       if (tx.order_id && mongoose.isValidObjectId(String(tx.order_id))) {
         try {
           const existingOrder = await Order.findById(String(tx.order_id));
@@ -204,14 +331,38 @@ export const confirm = async (req, res) => {
     // Check expiry
     if (tx.expired_at && new Date() > tx.expired_at) {
       tx.status = 'FAILED';
-      await tx.save();
+      await tx.save({ session });
+      await session.commitTransaction();
+      session.endSession();
       return res.status(400).json({ success: false, message: 'Phiên thanh toán đã hết hạn. Vui lòng tạo giao dịch mới.' });
+    }
+
+    // Validate and process wallet balance check/deduction if applicable
+    let isWalletPayment = false;
+    if (tx.method_id && mongoose.isValidObjectId(tx.method_id)) {
+      const pm = await PaymentMethod.findById(tx.method_id).session(session);
+      if (pm && pm.type === 'wallet') {
+        isWalletPayment = true;
+      }
+    }
+
+    if (isWalletPayment) {
+      const user = await User.findById(tx.user_id).session(session);
+      if (!user) {
+        throw new Error('Không tìm thấy người dùng sở hữu ví');
+      }
+      if ((user.wallet_balance || 0) < tx.amount) {
+        throw new Error('Số dư ví điện tử không đủ để thực hiện giao dịch');
+      }
+      user.wallet_balance = (user.wallet_balance || 0) - tx.amount;
+      await user.save({ session });
+      console.log('[PaymentController] Deducted wallet balance:', tx.amount, 'New balance:', user.wallet_balance);
     }
 
     // Mark as paid
     tx.status = 'COMPLETED';
     tx.paid_at = new Date();
-    await tx.save();
+    await tx.save({ session });
 
     console.log('[PaymentController] Confirmed transaction:', tx._id, 'for order:', tx.order_id);
 
@@ -220,7 +371,6 @@ export const confirm = async (req, res) => {
     let membershipLevel = null;
 
     // Update order status and payment info
-    // CRITICAL: validate order_id is a real ObjectId before querying to prevent CastError
     const orderIdStr = tx.order_id ? String(tx.order_id) : '';
     const hasValidOrderId = orderIdStr 
       && orderIdStr !== 'undefined' 
@@ -231,64 +381,73 @@ export const confirm = async (req, res) => {
     console.log('[PaymentController] order_id from transaction:', tx.order_id, '→ valid:', hasValidOrderId);
 
     if (hasValidOrderId) {
-      try {
-        const order = await Order.findById(orderIdStr);
-        if (order) {
-          const previousStatus = order.status;
-          order.payment_status = 'PAID';
-          if (order.status === 'PENDING') order.status = 'CONFIRMED';
-          if (order.payment) {
-            order.payment.status = 'PAID';
-            order.payment.transaction_id = tx.transaction_id;
-          } else {
-            order.payment = {
-              method: tx.provider || 'BANK_TRANSFER',
-              status: 'PAID',
-              transaction_id: tx.transaction_id,
-            };
-          }
-
-          orderTotalAmount = order.total_amount || tx.amount || 0;
-
-          // CRITICAL: Amount validation
-          // If order exists, transaction amount must match order total amount
-          if (tx.amount < orderTotalAmount) {
-            return res.status(400).json({ success: false, message: 'Số tiền thanh toán không khớp với tổng đơn hàng' });
-          }
-
-          // Calculate loyalty points: 10,000 VND = 1 point
-          pointsEarned = Math.floor(orderTotalAmount / 10000);
-          order.points_earned = pointsEarned;
-          await order.save();
-          queueOrderSuccessEmail(order._id);
-
-          if (previousStatus !== order.status) {
-            try {
-              await notifyOrderStatusChanged({
-                userId: order.user_id,
-                orderId: String(order._id),
-                status: order.status,
-                note: 'Thanh toán đã xác nhận thành công',
-              });
-            } catch (notifyErr) {
-              console.warn('[PaymentController] order status notification failed:', notifyErr.message);
-            }
-          }
-
-          console.log('[PaymentController] Updated order:', order._id, 'status:', order.status, 'payment_status:', order.payment_status, 'points_earned:', pointsEarned);
-        } else {
-          console.warn('[PaymentController] Order not found for id:', orderIdStr);
-          // Fallback: calculate from transaction amount
-          pointsEarned = Math.floor((tx.amount || 0) / 10000);
+      const order = await Order.findById(orderIdStr).session(session);
+      if (order) {
+        if (order.status === 'CANCELLED') {
+          throw new Error('Đơn hàng liên kết đã bị hủy. Không thể hoàn tất thanh toán.');
         }
-      } catch(orderErr) {
-        console.error('[PaymentController] Error updating order:', orderErr.message, 'order_id:', orderIdStr);
-        // Fallback: calculate from transaction amount
+        const previousStatus = order.status;
+        order.payment_status = 'PAID';
+        if (order.status === 'PENDING') order.status = 'CONFIRMED';
+        if (order.payment) {
+          order.payment.status = 'PAID';
+          order.payment.transaction_id = tx.transaction_id;
+        } else {
+          order.payment = {
+            method: tx.provider || 'BANK_TRANSFER',
+            status: 'PAID',
+            transaction_id: tx.transaction_id,
+          };
+        }
+
+        orderTotalAmount = order.total_amount || tx.amount || 0;
+
+        // CRITICAL: Amount validation
+        if (tx.amount < orderTotalAmount) {
+          throw new Error('Số tiền thanh toán không khớp với tổng đơn hàng');
+        }
+
+        // Calculate loyalty points: 10,000 VND = 1 point
+        pointsEarned = Math.floor(orderTotalAmount / 10000);
+        order.points_earned = pointsEarned;
+        await order.save({ session });
+        
+        // Log order confirmation to AuditLog inside session
+        try {
+          const { logActivity } = await import('../services/auditService.js');
+          await logActivity({
+            userId: order.user_id,
+            userName: 'System/Payment',
+            action: 'CONFIRM_PAYMENT',
+            entity: 'order',
+            entityId: order._id,
+            details: { transaction_id: tx.transaction_id, amount: tx.amount },
+            session
+          });
+        } catch (auditErr) {
+          console.error('[Audit] Failed to log payment confirmation:', auditErr.message);
+        }
+
+        if (previousStatus !== order.status) {
+          try {
+            await notifyOrderStatusChanged({
+              userId: order.user_id,
+              orderId: String(order._id),
+              status: order.status,
+              note: 'Thanh toán đã xác nhận thành công',
+            });
+          } catch (notifyErr) {
+            console.warn('[PaymentController] order status notification failed:', notifyErr.message);
+          }
+        }
+
+        console.log('[PaymentController] Updated order:', order._id, 'status:', order.status, 'payment_status:', order.payment_status, 'points_earned:', pointsEarned);
+      } else {
+        console.warn('[PaymentController] Order not found for id:', orderIdStr);
         pointsEarned = Math.floor((tx.amount || 0) / 10000);
       }
     } else {
       console.warn('[PaymentController] No valid order_id on transaction:', tx._id, 'raw order_id:', tx.order_id);
-      // No order_id — calculate from transaction amount
       pointsEarned = Math.floor((tx.amount || 0) / 10000);
     }
 
@@ -297,67 +456,70 @@ export const confirm = async (req, res) => {
     const hasValidUserId = userIdStr && userIdStr !== 'undefined' && userIdStr !== 'null' && mongoose.isValidObjectId(userIdStr);
     
     if (pointsEarned > 0 && hasValidUserId) {
-      try {
-        // Check for duplicate: don't award points twice for the same order
-        let alreadyAwarded = false;
-        if (tx.order_id) {
-          const existingTx = await LoyaltyTransaction.findOne({
-            user_id: tx.user_id,
-            order_id: tx.order_id,
-            type: 'earn',
-            source: 'purchase',
-          });
-          if (existingTx) {
-            console.log('[PaymentController] Points already awarded for order:', tx.order_id, '— skipping');
-            alreadyAwarded = true;
-            pointsEarned = 0; // Don't award again
-          }
+      let alreadyAwarded = false;
+      if (tx.order_id) {
+        const existingTx = await LoyaltyTransaction.findOne({
+          user_id: tx.user_id,
+          order_id: tx.order_id,
+          type: 'earn',
+          source: 'purchase',
+        }).session(session);
+        if (existingTx) {
+          console.log('[PaymentController] Points already awarded for order:', tx.order_id, '— skipping');
+          alreadyAwarded = true;
+          pointsEarned = 0; // Don't award again
         }
-
-        if (!alreadyAwarded) {
-          const user = await User.findById(userIdStr);
-          if (user) {
-            const previousBalance = user.lotte_points || 0;
-            user.lotte_points = previousBalance + pointsEarned;
-
-            // Update membership tier based on new total points
-            const newTier = calculateMembershipTier(user.lotte_points);
-            const oldTier = user.membership_level || 'Đồng';
-            user.membership_level = newTier;
-            membershipLevel = newTier;
-
-            await user.save();
-
-            await LoyaltyTransaction.create({
-              user_id: user._id,
-              type: 'earn',
-              points: pointsEarned,
-              source: 'purchase',
-              description: `Tích điểm từ đơn hàng #${tx.order_id || tx.transaction_id} (${orderTotalAmount.toLocaleString('vi-VN')}đ)`,
-              order_id: tx.order_id || null,
-              balance_after: user.lotte_points,
-            });
-
-            try {
-              await notifyPointsEarned({
-                userId: user._id,
-                points: pointsEarned,
-                orderId: tx.order_id || null,
-                newBalance: user.lotte_points,
-              });
-            } catch (notifyErr) {
-              console.warn('[PaymentController] loyalty notification failed:', notifyErr.message);
-            }
-
-            console.log('[PaymentController] Awarded', pointsEarned, 'points to user:', user._id, 
-              'new balance:', user.lotte_points, 
-              'tier:', oldTier, '→', newTier);
-          }
-        }
-      } catch(loyaltyErr) {
-        console.error('[PaymentController] Error awarding loyalty points:', loyaltyErr.message);
-        // Don't fail the payment confirmation if loyalty fails
       }
+
+      if (!alreadyAwarded) {
+        const user = await User.findById(userIdStr).session(session);
+        if (user) {
+          const previousBalance = user.lotte_points || 0;
+          user.lotte_points = previousBalance + pointsEarned;
+
+          // Update membership tier based on new total points
+          const newTier = calculateMembershipTier(user.lotte_points);
+          const oldTier = user.membership_level || 'Đồng';
+          user.membership_level = newTier;
+          membershipLevel = newTier;
+
+          await user.save({ session });
+
+          await LoyaltyTransaction.create([{
+            user_id: user._id,
+            type: 'earn',
+            points: pointsEarned,
+            source: 'purchase',
+            description: `Tích điểm từ đơn hàng #${tx.order_id || tx.transaction_id} (${orderTotalAmount.toLocaleString('vi-VN')}đ)`,
+            order_id: tx.order_id || null,
+            balance_after: user.lotte_points,
+          }], { session });
+
+          try {
+            await notifyPointsEarned({
+              userId: user._id,
+              points: pointsEarned,
+              orderId: tx.order_id || null,
+              newBalance: user.lotte_points,
+            });
+          } catch (notifyErr) {
+            console.warn('[PaymentController] loyalty notification failed:', notifyErr.message);
+          }
+
+          console.log('[PaymentController] Awarded', pointsEarned, 'points to user:', user._id, 
+            'new balance:', user.lotte_points, 
+            'tier:', oldTier, '→', newTier);
+        }
+      }
+    }
+
+    if (session) {
+      await session.commitTransaction();
+      session.endSession();
+    }
+
+    if (hasValidOrderId) {
+      queueOrderSuccessEmail(orderIdStr);
     }
 
     // Send payment success notification
@@ -378,6 +540,10 @@ export const confirm = async (req, res) => {
       message: 'Thanh toán đã được xác nhận thành công',
     });
   } catch (err) {
+    if (session) {
+      try { await session.abortTransaction(); } catch (e) {}
+      session.endSession();
+    }
     console.error('[PaymentController] confirm error:', err);
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -401,7 +567,7 @@ export const fail = async (req, res) => {
     tx.metadata = { ...(tx.metadata || {}), fail_reason: req.body.reason || 'Payment failed', failed_at: new Date() };
     await tx.save();
 
-    // Restore inventory if order exists
+    // Restore inventory and rollback order if order exists
     const orderIdStr = tx.order_id ? String(tx.order_id) : '';
     if (orderIdStr && mongoose.isValidObjectId(orderIdStr)) {
       try {
@@ -409,7 +575,24 @@ export const fail = async (req, res) => {
         session.startTransaction();
         const order = await Order.findById(orderIdStr).session(session);
         if (order && order.status === 'PENDING') {
-          await inventoryService.restoreInventoryFromOrder(order.items, session);
+          // 1. Restore inventory (idempotent)
+          if (!order.is_inventory_restored) {
+            await inventoryService.restoreInventoryFromOrder(order.items, session, order._id);
+            order.is_inventory_restored = true;
+          }
+          // 2. Restore hot deals (idempotent)
+          if (!order.is_hot_deal_restored) {
+            const { restoreHotDealsForOrderItems } = await import('../services/orderHardeningService.js');
+            await restoreHotDealsForOrderItems(order.items, session);
+            order.is_hot_deal_restored = true;
+          }
+          // 3. Restore coupons and promotions (idempotent)
+          if (!order.is_coupon_restored || !order.is_promotion_restored) {
+            const { restorePromotionsAndCoupons } = await import('../services/orderHardeningService.js');
+            await restorePromotionsAndCoupons(order, session);
+            order.is_coupon_restored = true;
+            order.is_promotion_restored = true;
+          }
           order.status = 'CANCELLED';
           order.payment.status = 'FAILED';
           order.tracking.history.push({ status: 'CANCELLED', note: 'Thanh toán thất bại — tự động hủy', timestamp: new Date() });

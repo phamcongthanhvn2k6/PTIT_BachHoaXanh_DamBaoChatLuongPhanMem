@@ -208,14 +208,28 @@ const AdminCustomers: React.FC = () => {
             </button>
             <button
               onClick={() => {
+                const escapeCSV = (val: any): string => {
+                  if (val === null || val === undefined) return '';
+                  let str = String(val);
+                  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+                    str = `"${str.replace(/"/g, '""')}"`;
+                  }
+                  return str;
+                };
+
                 const headers = ['ID', 'Username', 'Full Name', 'Email', 'Phone', 'Membership', 'Points', 'Active', 'Created At'];
                 const rows = displayedCustomers.map(c => [
-                  c.id, c.username, `"${c.full_name || ''}"`, c.email, c.phone || '',
-                  c.membership_level || 'Bronze', c.lotte_points || 0,
+                  c.id,
+                  c.username,
+                  c.full_name || '',
+                  c.email,
+                  c.phone || '',
+                  c.membership_level || 'Bronze',
+                  c.lotte_points || 0,
                   (c.is_active ?? true) ? 'Active' : 'Locked',
                   c.created_at ? new Date(c.created_at).toLocaleDateString('vi-VN') : ''
                 ]);
-                const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+                const csv = [headers.map(escapeCSV).join(','), ...rows.map(r => r.map(escapeCSV).join(','))].join('\r\n');
                 const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');

@@ -2,10 +2,91 @@ import { EventComment } from '../models/Event.js';
 import { EventPost } from '../models/EventPost.js';
 import mongoose from 'mongoose';
 
+// Dynamic status resolution based on date and administrative status
+export const resolveEventStatus = (event) => {
+  const now = new Date();
+  
+  if (event.status === 'draft' || event.status === 'archived') {
+    return event.status;
+  }
+  if (event.end_date && new Date(event.end_date) < now) {
+    return 'expired';
+  }
+  if (event.start_date && new Date(event.start_date) > now) {
+    return 'scheduled';
+  }
+  if (event.is_published || event.status === 'published') {
+    return 'published';
+  }
+  return 'draft';
+};
+
+// Map DB object to the required API contract
+export const mapEventToContract = (event) => {
+  if (!event) return null;
+  const obj = event.toObject ? event.toObject() : { ...event };
+  
+  const idStr = obj._id ? obj._id.toString() : '';
+  
+  const contract = {
+    id: idStr,
+    _id: idStr,
+    title: obj.title || '',
+    slug: obj.slug || '',
+    summary: obj.summary || obj.excerpt || '',
+    description: obj.description || (obj.content_blocks && Array.isArray(obj.content_blocks) ? obj.content_blocks.map(b => b.text || '').join('\n') : '') || '',
+    image: obj.image || obj.thumbnail || '',
+    banner: obj.banner || obj.banner_image || '',
+    startDate: obj.startDate || obj.start_date || null,
+    endDate: obj.endDate || obj.end_date || null,
+    status: resolveEventStatus(obj),
+    branch: obj.branch || obj.branch_id || null,
+    isFeatured: obj.isFeatured || obj.is_featured || false,
+  };
+  
+  return {
+    ...obj,
+    ...contract,
+  };
+};
+
+const toSlug = (s) =>
+  s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+
+const generateUniqueSlug = async (title, excludeId = null) => {
+  let baseSlug = toSlug(title);
+  if (!baseSlug) baseSlug = 'event';
+  let slug = baseSlug;
+  let counter = 1;
+  while (true) {
+    const query = { slug };
+    if (excludeId) query._id = { $ne: excludeId };
+    const existing = await EventPost.findOne(query);
+    if (!existing) break;
+    slug = `${baseSlug}-${counter}`;
+    counter++;
+  }
+  return slug;
+};
+
 export const list = async (req, res) => {
   try {
     const { featured, page, limit } = req.query;
-    const filter = { is_published: true };
+    const isAdmin = req.user && Number(req.user.role_id) <= 2;
+    
+    let filter = {};
+    if (!isAdmin) {
+      const now = new Date();
+      filter = {
+        is_published: true,
+        status: { $nin: ['draft', 'archived'] },
+        $and: [
+          { $or: [{ start_date: null }, { start_date: { $lte: now } }] },
+          { $or: [{ end_date: null }, { end_date: { $gte: now } }] }
+        ]
+      };
+    }
+    
     if (featured === 'true') filter.is_featured = true;
 
     let query = EventPost.find(filter).sort('-published_at');
@@ -16,20 +97,50 @@ export const list = async (req, res) => {
     }
 
     const data = await query;
-    return res.json({ success: true, data, items: data });
+    const mappedData = data.map(ev => mapEventToContract(ev));
+    return res.json({ success: true, data: mappedData, items: mappedData });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
 
 export const published = async (req, res) => {
-  try { return res.json({ success: true, data: await EventPost.find({ is_published: true }).sort('-published_at') }); }
-  catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+  try {
+    const now = new Date();
+    const filter = {
+      is_published: true,
+      status: { $nin: ['draft', 'archived'] },
+      $and: [
+        { $or: [{ start_date: null }, { start_date: { $lte: now } }] },
+        { $or: [{ end_date: null }, { end_date: { $gte: now } }] }
+      ]
+    };
+    const data = await EventPost.find(filter).sort('-published_at');
+    const mappedData = data.map(ev => mapEventToContract(ev));
+    return res.json({ success: true, data: mappedData });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 export const featured = async (req, res) => {
-  try { return res.json({ success: true, data: await EventPost.find({ is_featured: true, is_published: true }).sort('-published_at') }); }
-  catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+  try {
+    const now = new Date();
+    const filter = {
+      is_featured: true,
+      is_published: true,
+      status: { $nin: ['draft', 'archived'] },
+      $and: [
+        { $or: [{ start_date: null }, { start_date: { $lte: now } }] },
+        { $or: [{ end_date: null }, { end_date: { $gte: now } }] }
+      ]
+    };
+    const data = await EventPost.find(filter).sort('-published_at');
+    const mappedData = data.map(ev => mapEventToContract(ev));
+    return res.json({ success: true, data: mappedData });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 export const detail = async (req, res) => {
@@ -46,59 +157,150 @@ export const detail = async (req, res) => {
 
     ev.views = (ev.views || 0) + 1;
     await ev.save();
-    return res.json({ success: true, data: ev });
-  } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+    return res.json({ success: true, data: mapEventToContract(ev) });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 export const create = async (req, res) => {
-  try { return res.status(201).json({ success: true, data: await EventPost.create(req.body) }); }
-  catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+  try {
+    const { title, start_date, end_date, start_date: startDate, end_date: endDate } = req.body;
+    if (!title) {
+      return res.status(400).json({ success: false, message: 'Title is required' });
+    }
+    const finalStartDate = start_date || startDate;
+    const finalEndDate = end_date || endDate;
+    if (finalStartDate && finalEndDate && new Date(finalStartDate) > new Date(finalEndDate)) {
+      return res.status(400).json({ success: false, message: 'End date must be after start date' });
+    }
+
+    if (!req.body.slug) {
+      req.body.slug = await generateUniqueSlug(title);
+    }
+
+    if (req.body.startDate) req.body.start_date = req.body.startDate;
+    if (req.body.endDate) req.body.end_date = req.body.endDate;
+    if (req.body.isFeatured !== undefined) req.body.is_featured = req.body.isFeatured;
+    if (req.body.image) req.body.thumbnail = req.body.image;
+    if (req.body.summary) req.body.excerpt = req.body.summary;
+    if (req.body.description) req.body.content_blocks = [{ type: 'text', text: req.body.description }];
+
+    const computedStatus = resolveEventStatus(req.body);
+    req.body.status = computedStatus;
+    req.body.is_published = computedStatus === 'published';
+    req.body.published_at = req.body.is_published ? new Date() : null;
+
+    const ev = await EventPost.create(req.body);
+    return res.status(201).json({ success: true, data: mapEventToContract(ev) });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 export const update = async (req, res) => {
-  try { return res.json({ success: true, data: await EventPost.findByIdAndUpdate(req.params.id, req.body, { new: true }) }); }
-  catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+  try {
+    const idParam = req.params.id;
+    const { title, start_date, end_date, start_date: startDate, end_date: endDate } = req.body;
+    const finalStartDate = start_date || startDate;
+    const finalEndDate = end_date || endDate;
+    if (finalStartDate && finalEndDate && new Date(finalStartDate) > new Date(finalEndDate)) {
+      return res.status(400).json({ success: false, message: 'End date must be after start date' });
+    }
+
+    let ev = await EventPost.findById(idParam);
+    if (!ev) return res.status(404).json({ success: false, message: 'Not found' });
+
+    if (title && title !== ev.title && !req.body.slug) {
+      req.body.slug = await generateUniqueSlug(title, ev._id);
+    }
+
+    if (req.body.startDate !== undefined) req.body.start_date = req.body.startDate;
+    if (req.body.endDate !== undefined) req.body.end_date = req.body.endDate;
+    if (req.body.isFeatured !== undefined) req.body.is_featured = req.body.isFeatured;
+    if (req.body.image !== undefined) req.body.thumbnail = req.body.image;
+    if (req.body.summary !== undefined) req.body.excerpt = req.body.summary;
+    if (req.body.description !== undefined) req.body.content_blocks = [{ type: 'text', text: req.body.description }];
+
+    const tempObj = { ...ev.toObject(), ...req.body };
+    const computedStatus = resolveEventStatus(tempObj);
+    req.body.status = computedStatus;
+    req.body.is_published = computedStatus === 'published';
+    
+    if (req.body.is_published && !ev.is_published) {
+      req.body.published_at = new Date();
+    }
+
+    const updated = await EventPost.findByIdAndUpdate(idParam, req.body, { new: true });
+    return res.json({ success: true, data: mapEventToContract(updated) });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 export const remove = async (req, res) => {
-  try { await EventPost.findByIdAndDelete(req.params.id); return res.json({ success: true, message: 'Deleted' }); }
-  catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+  try {
+    await EventPost.findByIdAndDelete(req.params.id);
+    return res.json({ success: true, message: 'Deleted' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 export const publish = async (req, res) => {
-  try { return res.json({ success: true, data: await EventPost.findByIdAndUpdate(req.params.id, { is_published: true }, { new: true }) }); }
-  catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+  try {
+    const updated = await EventPost.findByIdAndUpdate(
+      req.params.id,
+      { is_published: true, status: 'published', published_at: new Date() },
+      { new: true }
+    );
+    return res.json({ success: true, data: mapEventToContract(updated) });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 export const unpublish = async (req, res) => {
-  try { return res.json({ success: true, data: await EventPost.findByIdAndUpdate(req.params.id, { is_published: false }, { new: true }) }); }
-  catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+  try {
+    const updated = await EventPost.findByIdAndUpdate(
+      req.params.id,
+      { is_published: false, status: 'draft' },
+      { new: true }
+    );
+    return res.json({ success: true, data: mapEventToContract(updated) });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 export const toggleFeatured = async (req, res) => {
   try {
     const ev = await EventPost.findById(req.params.id);
     if (!ev) return res.status(404).json({ success: false, message: 'Not found' });
-    ev.is_featured = !ev.is_featured; await ev.save();
-    return res.json({ success: true, data: ev });
-  } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+    ev.is_featured = !ev.is_featured;
+    await ev.save();
+    return res.json({ success: true, data: mapEventToContract(ev) });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 export const bulkDelete = async (req, res) => {
-  try { await EventPost.deleteMany({ _id: { $in: req.body.ids } }); return res.json({ success: true, message: 'Deleted' }); }
-  catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+  try {
+    await EventPost.deleteMany({ _id: { $in: req.body.ids } });
+    return res.json({ success: true, message: 'Deleted' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 export const comments = async (req, res) => {
   try {
     const cmts = await EventComment.find({ event_id: req.params.id, status: 'active' })
-      .sort('created_at') // Sort ascending for threaded view or keep descending
+      .sort('created_at')
       .lean();
       
-    // Manual populate to ensure avatar is always up-to-date and accurate
     const userIds = cmts.map(c => c.user_id).filter(Boolean);
-    
-    // We only query valid ObjectIds to prevent cast errors
     const validUserIds = userIds.filter(id => mongoose.Types.ObjectId.isValid(id));
     const users = await mongoose.model('User').find({ _id: { $in: validUserIds } }).select('avatar full_name username').lean();
     
@@ -116,12 +318,11 @@ export const comments = async (req, res) => {
       return c;
     });
 
-    // We can also sort comments here: parent comments descending, replies ascending, etc.
-    // Let's sort by created_at descending generally, but frontend handles it anyway
     data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
     return res.json({ success: true, data });
-  } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 export const addComment = async (req, res) => {
@@ -129,7 +330,9 @@ export const addComment = async (req, res) => {
     const comment = await EventComment.create({ ...req.body, event_id: req.params.id });
     await EventPost.findByIdAndUpdate(req.params.id, { $inc: { comments_count: 1 } });
     return res.status(201).json({ success: true, data: comment });
-  } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 export const related = async (req, res) => {
@@ -143,15 +346,26 @@ export const related = async (req, res) => {
       ev = await EventPost.findOne({ slug: idParam });
     }
     const data = ev ? await EventPost.find({ category_id: ev.category_id, _id: { $ne: ev._id }, is_published: true }).limit(4) : [];
-    return res.json({ success: true, data });
-  } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+    const mappedData = data.map(item => mapEventToContract(item));
+    return res.json({ success: true, data: mappedData });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
+
+const EVENT_CATEGORIES = [
+  { id: 2, name: 'Khuyến mãi', slug: 'khuyen-mai' },
+  { id: 3, name: 'Sự kiện', slug: 'su-kien' },
+  { id: 4, name: 'Khai trương', slug: 'khai-truong' },
+  { id: 5, name: 'Nội dung', slug: 'noi-dung' }
+];
 
 export const categories = async (req, res) => {
   try {
-    const cats = await EventPost.distinct('category_id');
-    return res.json({ success: true, data: cats });
-  } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+    return res.json({ success: true, data: EVENT_CATEGORIES });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 export const likeEvent = async (req, res) => {
@@ -162,17 +376,17 @@ export const likeEvent = async (req, res) => {
     
     const idx = ev.liked_by.indexOf(userId);
     if (idx !== -1) {
-      // unlike
       ev.liked_by.splice(idx, 1);
       ev.likes = Math.max(0, (ev.likes || 1) - 1);
     } else {
-      // like
       ev.liked_by.push(userId);
       ev.likes = (ev.likes || 0) + 1;
     }
     await ev.save();
     return res.json({ success: true, likes: ev.likes, isLiked: idx === -1 });
-  } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
 export const likeComment = async (req, res) => {
@@ -183,15 +397,15 @@ export const likeComment = async (req, res) => {
     
     const idx = comment.liked_by.indexOf(userId);
     if (idx !== -1) {
-      // unlike
       comment.liked_by.splice(idx, 1);
       comment.likes = Math.max(0, (comment.likes || 1) - 1);
     } else {
-      // like
       comment.liked_by.push(userId);
       comment.likes = (comment.likes || 0) + 1;
     }
     await comment.save();
     return res.json({ success: true, likes: comment.likes, isLiked: idx === -1 });
-  } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };

@@ -36,7 +36,7 @@ const orderSchema = new mongoose.Schema({
     ward: String,
     note: String,
   },
-  status: { type: String, default: 'PENDING', enum: ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPING', 'DELIVERED', 'CANCELLED', 'RETURNED'] },
+  status: { type: String, default: 'PENDING', enum: ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPING', 'DELIVERED', 'CANCELLED', 'RETURNED', 'REFUNDED'] },
   subtotal: { type: Number, default: 0 },
   shipping_fee: { type: Number, default: 0 },
   discount_amount: { type: Number, default: 0 },
@@ -105,6 +105,16 @@ const orderSchema = new mongoose.Schema({
   email_notification_error: { type: String, default: null },
   idempotency_key: { type: String, default: null, index: true },
   is_deleted: { type: Boolean, default: false },
+  // Voucher snapshots for rollback
+  product_voucher_applied: { type: mongoose.Schema.Types.Mixed, default: null },
+  shipping_voucher_applied: { type: mongoose.Schema.Types.Mixed, default: null },
+  // ── Idempotency flags for cancel / refund rollback ──
+  is_inventory_restored: { type: Boolean, default: false },
+  is_coupon_restored: { type: Boolean, default: false },
+  is_promotion_restored: { type: Boolean, default: false },
+  is_hot_deal_restored: { type: Boolean, default: false },
+  is_wallet_refunded: { type: Boolean, default: false },
+  is_points_reversed: { type: Boolean, default: false },
   timeline: [{
     status: { type: String },
     timestamp: { type: Date, default: Date.now }

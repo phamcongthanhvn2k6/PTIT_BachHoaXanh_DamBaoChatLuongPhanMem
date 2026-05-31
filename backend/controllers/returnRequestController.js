@@ -225,6 +225,16 @@ export const cancel = async (req, res) => {
 };
 
 export const updateStatus = async (req, res) => {
+  const RETURN_STATUS_TRANSITIONS = {
+    pending: ['approved', 'rejected', 'cancelled'],
+    approved: ['picked_up', 'refunded', 'closed'],
+    picked_up: ['refunded', 'closed'],
+    refunded: ['closed'],
+    rejected: [],
+    cancelled: [],
+    closed: []
+  };
+
   const session = await mongoose.startSession();
   session.startTransaction();
   try {
@@ -235,11 +245,23 @@ export const updateStatus = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Return request not found' });
     }
 
+    const currentStatus = String(doc.status || '').trim().toLowerCase();
     const nextStatus = String(req.body.status || '').trim().toLowerCase();
     if (!ALLOWED_RETURN_STATUSES.has(nextStatus)) {
       await session.abortTransaction();
       session.endSession();
       return res.status(400).json({ success: false, message: 'Invalid status' });
+    }
+
+    // Strict status transitions validation
+    const allowed = RETURN_STATUS_TRANSITIONS[currentStatus] || [];
+    if (!allowed.includes(nextStatus)) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({
+        success: false,
+        message: `Không thể chuyển trạng thái đổi trả từ "${currentStatus}" sang "${nextStatus}". Trạng thái hợp lệ: ${allowed.join(', ') || 'không có'}`
+      });
     }
 
     doc.status = nextStatus;
@@ -253,10 +275,81 @@ export const updateStatus = async (req, res) => {
     }
 
     // ERP compliance: Return items to inventory when status becomes 'approved', 'refunded', or 'closed'
-    if (['approved', 'refunded', 'closed'].includes(nextStatus) && doc.is_returned_to_stock !== true) {
+    if (['approved', 'refunded', 'closed'].includes(nextStatus)) {
       if (Array.isArray(doc.items) && doc.items.length > 0) {
-        await inventoryService.restoreInventoryFromOrder(doc.items, session, doc.order_id);
-        doc.is_returned_to_stock = true;
+        if (doc.is_returned_to_stock !== true) {
+          // 1. Restore stock inventory
+          await inventoryService.restoreInventoryFromOrder(doc.items, session, doc.order_id);
+
+          const order = await Order.findById(doc.order_id).session(session);
+          if (order) {
+            // Dynamic imports to prevent circular references
+            const User = (await import('../models/User.js')).default;
+            const { HotDeal } = await import('../models/Misc.js');
+            const { restorePromotionsAndCoupons } = await import('../services/orderHardeningService.js');
+
+            // 2. Restore hot deal remaining quantity and sold count for returned items
+            for (const returnedItem of doc.items) {
+              const orderItem = order.items.find(
+                (oi) => String(oi.branch_product_id) === String(returnedItem.branch_product_id)
+              );
+              if (orderItem && orderItem.hot_deal_id) {
+                const q = Number(returnedItem.quantity) || 1;
+                await HotDeal.updateOne(
+                  { _id: orderItem.hot_deal_id },
+                  { $inc: { remaining_quantity: q, sold_count: -q } },
+                  { session }
+                );
+              }
+            }
+
+            // 3. Deduct loyalty points earned for returned items
+            const user = await User.findById(doc.user_id).session(session);
+            if (user) {
+              const returnedValue = doc.items.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
+              const pointsToDeduct = Math.floor(returnedValue / 10000);
+              if (pointsToDeduct > 0) {
+                user.lotte_points = Math.max(0, (user.lotte_points || 0) - pointsToDeduct);
+                // Record loyalty ledger entry for auditability
+                const { LoyaltyTransaction } = await import('../models/Loyalty.js');
+                await LoyaltyTransaction.create([{
+                  user_id: doc.user_id,
+                  type: 'adjust',
+                  points: -pointsToDeduct,
+                  source: 'return_approved',
+                  description: `Thu hồi điểm do đổi trả đơn #${doc.order_id}`,
+                  order_id: doc.order_id,
+                  balance_after: user.lotte_points,
+                }], { session });
+              }
+              await user.save({ session });
+            }
+
+            // 4. Restore coupons and promotions if all items are returned
+            const allReturned = order.items.every(oi => {
+              const rit = doc.items.find(ri => String(ri.branch_product_id) === String(oi.branch_product_id));
+              return rit && rit.quantity >= oi.quantity;
+            });
+
+            if (allReturned) {
+              await restorePromotionsAndCoupons(order, session);
+            }
+          }
+
+          doc.is_returned_to_stock = true;
+        }
+
+        // 5. Restore cash to wallet if status is refunded (runs exactly once)
+        if (nextStatus === 'refunded' && doc.is_refunded !== true) {
+          const User = (await import('../models/User.js')).default;
+          const user = await User.findById(doc.user_id).session(session);
+          if (user) {
+            const returnedValue = doc.items.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 1)), 0);
+            user.wallet_balance = (user.wallet_balance || 0) + returnedValue;
+            await user.save({ session });
+          }
+          doc.is_refunded = true;
+        }
       }
     }
 
@@ -268,6 +361,22 @@ export const updateStatus = async (req, res) => {
     });
 
     await doc.save({ session });
+
+    // Write Audit Log
+    try {
+      const { logActivity } = await import('../services/auditService.js');
+      await logActivity({
+        userId: req.userId,
+        userName: req.user?.full_name || req.user?.username || 'Staff',
+        action: 'STATUS_CHANGE',
+        entity: 'return_request',
+        entityId: doc._id,
+        details: { from_status: currentStatus, to_status: nextStatus, note: req.body.note || '' },
+        ip: req.ip
+      });
+    } catch (auditErr) {
+      console.error('[Audit] Failed to write status change audit log:', auditErr.message);
+    }
 
     await session.commitTransaction();
     session.endSession();

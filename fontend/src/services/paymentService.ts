@@ -3,18 +3,18 @@ import { dataService } from './dataService';
 import httpClient from '../api/httpClient';
 
 export const paymentService = {
-  listMethods: (_userId: number) => dataService.getPaymentMethods(),
+  listMethods: (_userId: string | number) => dataService.getPaymentMethods(),
   addMethod: (payload: Partial<PaymentMethod>) => dataService.addPaymentMethod(payload),
   updateMethod: (id: string, payload: Partial<PaymentMethod>) => dataService.updatePaymentMethod(id, payload),
   deleteMethod: (id: string) => dataService.deletePaymentMethod(id),
-  setDefaultMethod: (id: string, _userId: number) => dataService.setDefaultPaymentMethod(id),
+  setDefaultMethod: (id: string, _userId: string | number) => dataService.setDefaultPaymentMethod(id),
 
   processPayment: (payload: {
     orderId: string;
     provider: string;
     amount: number;
     methodId?: string;
-    userId?: number;
+    userId?: string | number;
     currency?: string;
   }) =>
     dataService.createPaymentTransaction({

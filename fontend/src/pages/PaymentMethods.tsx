@@ -55,14 +55,77 @@ const PaymentMethods: React.FC = () => {
     }
   };
 
+  const checkLuhn = (numStr: string): boolean => {
+    const clean = numStr.replace(/\D/g, '');
+    if (!clean || clean.length < 13 || clean.length > 19) return false;
+    let sum = 0;
+    let double = false;
+    for (let i = clean.length - 1; i >= 0; i--) {
+      let digit = parseInt(clean.charAt(i), 10);
+      if (double) {
+        digit *= 2;
+        if (digit > 9) digit -= 9;
+      }
+      sum += digit;
+      double = !double;
+    }
+    return sum % 10 === 0;
+  };
+
+  const isFutureExpiry = (expiryStr: string): boolean => {
+    if (!/^(0[1-9]|1[0-2])\/(\d{2}|\d{4})$/.test(expiryStr)) return false;
+    const parts = expiryStr.split('/');
+    const month = parseInt(parts[0], 10);
+    let year = parseInt(parts[1], 10);
+    if (year < 100) year += 2000;
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    if (year < currentYear) return false;
+    if (year === currentYear && month < currentMonth) return false;
+    return true;
+  };
+
+  const isValidCardholderName = (name: string): boolean => {
+    return /^[A-Z\s]+$/.test(name.trim());
+  };
+
+  const mockEncrypt = (text: string): string => {
+    return 'MOCK_ENC_' + btoa(text);
+  };
+
   const validateForm = () => {
     if (formType === 'card') {
+       const cleanCard = cardNumber.replace(/\s/g, '');
        if (!holderName.trim()) return "Vui lòng nhập tên in trên thẻ";
-       if (cardNumber.replace(/\s/g, '').length < 15) return "Số thẻ không hợp lệ";
-       if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(expiry)) return "Ngày hết hạn phải là MM/YY";
-       if (cvv.length < 3) return "CVC/CVV không hợp lệ";
+       if (!isValidCardholderName(holderName.toUpperCase())) {
+          return "Tên in trên thẻ phải viết hoa không dấu và chỉ chứa chữ cái (Ví dụ: NGUYEN VAN A)";
+       }
+       if (cleanCard.length < 13 || cleanCard.length > 19) {
+          return "Số thẻ phải từ 13 đến 19 chữ số";
+       }
+       if (!checkLuhn(cleanCard)) {
+          return "Số thẻ không hợp lệ (Lỗi kiểm định Luhn)";
+       }
+       if (!isFutureExpiry(expiry)) {
+          return "Ngày hết hạn không hợp lệ hoặc đã quá hạn (định dạng MM/YY hoặc MM/YYYY)";
+       }
+       if (!/^\d{3,4}$/.test(cvv)) {
+          return "Mã CVC/CVV không hợp lệ (phải gồm 3 hoặc 4 chữ số)";
+       }
+       
+       // Duplicate check
+       const last4 = cleanCard.slice(-4);
+       const isDup = methods.some(m => m.type === 'card' && m.brand === brand && m.last4 === last4);
+       if (isDup) {
+          return "Thẻ thanh toán này đã được thêm từ trước";
+       }
     } else {
        if (walletPhone.length < 10) return "Số điện thoại ví không hợp lệ";
+       const isDup = methods.some(m => m.type === 'wallet' && m.brand === brand && m.phone === walletPhone);
+       if (isDup) {
+          return "Ví điện tử này đã được liên kết từ trước";
+       }
     }
     return null;
   };
@@ -85,13 +148,20 @@ const PaymentMethods: React.FC = () => {
       };
 
       if (formType === 'card') {
-         payload.last4 = cardNumber.replace(/\s/g, '').slice(-4);
+         const cleanCard = cardNumber.replace(/\s/g, '');
+         payload.last4 = cleanCard.slice(-4);
          payload.brand = brand;
          payload.expiry = expiry;
          payload.holder_name = holderName.toUpperCase();
+         
+         // Secure card fields (Masking and mock encrypting sensitive details)
+         payload.card_number = `•••• •••• •••• ${payload.last4}`;
+         payload.card_number_encrypted = mockEncrypt(cleanCard);
+         payload.cvv_encrypted = mockEncrypt(cvv);
       } else {
          payload.brand = brand;
          payload.phone = walletPhone;
+         payload.phone_encrypted = mockEncrypt(walletPhone);
       }
 
       await dispatch(addPaymentMethod(payload)).unwrap();
@@ -100,8 +170,8 @@ const PaymentMethods: React.FC = () => {
       
       // reset form
       setHolderName(''); setCardNumber(''); setExpiry(''); setCvv(''); setWalletPhone(''); setIsDefault(false);
-    } catch {
-      toast.error('Lỗi khi thêm phương thức mới.');
+    } catch (err: any) {
+      toast.error(err?.message || 'Lỗi khi thêm phương thức mới.');
     } finally {
       setIsSubmitting(false);
     }

@@ -94,13 +94,18 @@ export async function resolveEffectivePrice(product, branchProduct = null, branc
   const pId = String(prod._id || prod.id || '');
   const bId = branchId ? String(branchId) : (bp ? String(bp.branch_id || '') : null);
 
-  // Fallback branch product lookup if not passed but branchId is present
-  if (!bp && bId && mongoose.Types.ObjectId.isValid(pId)) {
+  // Fallback branch product lookup if not passed
+  if (!bp && mongoose.Types.ObjectId.isValid(pId)) {
     try {
-      const foundBp = await BranchProduct.findOne({
-        product_id: pId,
-        branch_id: bId,
-      }).lean();
+      const bpQuery = {
+        product_id: { $in: [pId, new mongoose.Types.ObjectId(pId)] }
+      };
+      if (bId) {
+        bpQuery.branch_id = mongoose.Types.ObjectId.isValid(bId)
+          ? { $in: [bId, new mongoose.Types.ObjectId(bId)] }
+          : bId;
+      }
+      const foundBp = await BranchProduct.findOne(bpQuery).lean();
       if (foundBp) bp = foundBp;
     } catch (e) {}
   }
@@ -117,14 +122,35 @@ export async function resolveEffectivePrice(product, branchProduct = null, branc
       ]
     };
     if (bp) {
+      const bpIds = [String(bp._id || bp.id)];
+      if (mongoose.Types.ObjectId.isValid(bp._id || bp.id)) {
+        bpIds.push(new mongoose.Types.ObjectId(bp._id || bp.id));
+      }
+      const prodIds = [pId];
+      if (mongoose.Types.ObjectId.isValid(pId)) {
+        prodIds.push(new mongoose.Types.ObjectId(pId));
+      }
+      const branchIds = bId ? [bId] : [];
+      if (bId && mongoose.Types.ObjectId.isValid(bId)) {
+        branchIds.push(new mongoose.Types.ObjectId(bId));
+      }
+
       dealQuery.$or = [
-        { branch_product_id: bp._id || bp.id },
-        { product_id: prod._id || prod.id, branch_id: bId }
+        { branch_product_id: { $in: bpIds } },
+        { product_id: { $in: prodIds }, branch_id: bId ? { $in: branchIds } : null }
       ];
     } else {
-      dealQuery.product_id = prod._id || prod.id;
+      const prodIds = [pId];
+      if (mongoose.Types.ObjectId.isValid(pId)) {
+        prodIds.push(new mongoose.Types.ObjectId(pId));
+      }
+      dealQuery.product_id = { $in: prodIds };
       if (bId) {
-        dealQuery.branch_id = bId;
+        const branchIds = [bId];
+        if (mongoose.Types.ObjectId.isValid(bId)) {
+          branchIds.push(new mongoose.Types.ObjectId(bId));
+        }
+        dealQuery.branch_id = { $in: branchIds };
       }
     }
     try {

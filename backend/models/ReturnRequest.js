@@ -29,6 +29,7 @@ const returnRequestSchema = new mongoose.Schema({
   resolved_by: { type: mongoose.Schema.Types.Mixed, default: null },
   resolved_at: { type: Date, default: null },
   is_returned_to_stock: { type: Boolean, default: false },
+  is_refunded: { type: Boolean, default: false },
   timeline: [{
     status: { type: String, required: true },
     note: { type: String, default: '' },

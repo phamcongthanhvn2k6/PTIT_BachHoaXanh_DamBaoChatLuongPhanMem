@@ -9,6 +9,7 @@ import { generateToken } from '../utils/jwt.js';
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import { ensureRbacSeed, getPermissionsForUser, mapRoleIdToKey } from '../services/rbacService.js';
+import { resolveProductPricing } from '../services/pricingResolverService.js';
 
 const router = Router();
 
@@ -33,10 +34,29 @@ router.get('/analytics', auth, admin, async (req, res) => {
 
     const activeUsers = await User.countDocuments({ is_deleted: { $ne: true }, is_active: true });
 
-    const topSellingProducts = await Product.find({ is_deleted: { $ne: true } })
+    const rawTopProducts = await Product.find({ is_deleted: { $ne: true } })
       .sort({ sold_count: -1 })
-      .limit(5)
-      .select('name sold_count price');
+      .limit(5);
+
+    const topSellingProducts = await Promise.all(
+      rawTopProducts.map(async (p) => {
+        const pricing = await resolveProductPricing(p, null, null, { now: new Date() });
+        const img = (p.images && p.images.length > 0) ? p.images[0] : (p.thumbnail || '');
+        const pr = pricing.effective_price ?? p.price ?? p.original_price ?? 0;
+        return {
+          productId: String(p._id),
+          productName: p.name || '',
+          image: img,
+          quantitySold: p.sold_count || 0,
+          price: pr,
+          effectivePrice: pr,
+          // Keep legacy fields for backward compatibility
+          _id: p._id,
+          name: p.name || '',
+          sold_count: p.sold_count || 0
+        };
+      })
+    );
 
     res.json({
       success: true,
@@ -84,28 +104,6 @@ router.post('/auth/login', async (req, res) => {
     const normalizedEmail = email?.toLowerCase().trim();
     
     let user = await User.findOne({ email: normalizedEmail, role_id: { $ne: 3 } });
-    
-    // Auto-create admin@lottemart.vn if missing
-    if (!user && normalizedEmail === 'admin@lottemart.vn') {
-      const bcrypt = await import('bcryptjs');
-      const password_hash = await bcrypt.default.hash('Admin@123', 10);
-      user = await User.create({
-        username: 'admin',
-        full_name: 'Admin Lotte',
-        email: 'admin@lottemart.vn',
-        password_hash: password_hash,
-        role_id: 1,
-        role_key: 'super_admin',
-        permissions: [],
-        is_active: true,
-        email_verified: true,
-        status: 'ACTIVE',
-        membership_level: 'Kim Cương',
-        lotte_points: 9999,
-        signup_method: 'email'
-      });
-      console.log('Tự động khởi tạo tài khoản Admin');
-    }
 
     if (!user) return res.status(401).json({ success: false, message: 'Sai email hoặc mật khẩu' });
     if (Number(user.role_id) === 3) return res.status(403).json({ success: false, message: 'Không có quyền truy cập admin' });

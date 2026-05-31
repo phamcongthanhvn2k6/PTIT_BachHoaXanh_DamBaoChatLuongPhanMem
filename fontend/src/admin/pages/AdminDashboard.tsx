@@ -8,10 +8,11 @@ import { useTranslation } from 'react-i18next';
 
 /* ─── Helpers ─── */
 
-/** Format currency with proper VND style (no wrapping) */
-const fmtCurrency = (val: number): string => {
-  if (!val && val !== 0) return '0 ₫';
-  return val.toLocaleString('vi-VN') + ' ₫';
+const fmtCurrency = (val: any): string => {
+  if (val === undefined || val === null || val === '') return '--';
+  const num = Number(val);
+  if (isNaN(num)) return '--';
+  return num.toLocaleString('vi-VN') + ' ₫';
 };
 
 /** Format a change value with correct sign and color class */
@@ -147,23 +148,32 @@ const AdminDashboard: React.FC = () => {
             </div>
             <button
               onClick={() => {
-                const lines = [
-                  `Lotte Mart Dashboard Report - ${new Date().toLocaleDateString('vi-VN')}`,
-                  ``,
-                  `${t('adminDash.sales')},${summary.sales.value},VND,${summary.sales.change}%`,
-                  `${t('adminDash.orders')},${summary.orders.value},,${summary.orders.change}%`,
-                  `${t('adminDash.customers')},${summary.customers.value},,${summary.customers.newThisMonth}`,
-                  `CR,${summary.cr.value}%,,${summary.cr.change}%`,
-                  ``,
-                  `${t('adminDash.revenueOverview')}`,
-                  `Month,In-Store,Online`,
-                  ...revenue.map(r => `${r.month},${r.inStore},${r.online}`),
-                  ``,
-                  `${t('adminDash.topSelling')}`,
-                  `Name,Price,Sold`,
-                  ...topProducts.map(p => `"${p.name}",${p.price},${p.soldCount}`),
+                const escapeCSV = (val: any): string => {
+                  if (val === null || val === undefined) return '';
+                  let str = String(val);
+                  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+                    str = `"${str.replace(/"/g, '""')}"`;
+                  }
+                  return str;
+                };
+
+                const rows = [
+                  [`Lotte Mart Dashboard Report - ${new Date().toLocaleDateString('vi-VN')}`],
+                  [],
+                  [t('adminDash.sales'), summary.sales.value, 'VND', `${summary.sales.change}%`],
+                  [t('adminDash.orders'), summary.orders.value, '', `${summary.orders.change}%`],
+                  [t('adminDash.customers'), summary.customers.value, '', summary.customers.newThisMonth],
+                  ['CR', `${summary.cr.value}%`, '', `${summary.cr.change}%`],
+                  [],
+                  [t('adminDash.revenueOverview')],
+                  ['Month', 'In-Store', 'Online'],
+                  ...revenue.map(r => [r.month, r.inStore, r.online]),
+                  [],
+                  [t('adminDash.topSelling')],
+                  ['Name', 'Price', 'Sold'],
+                  ...topProducts.map(p => [p.name, p.price, p.soldCount]),
                 ];
-                const csv = lines.join('\n');
+                const csv = rows.map(row => row.map(escapeCSV).join(',')).join('\r\n');
                 const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');

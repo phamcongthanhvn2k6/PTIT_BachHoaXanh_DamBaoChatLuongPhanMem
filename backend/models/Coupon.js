@@ -66,7 +66,7 @@ const couponClaimSchema = new mongoose.Schema({
   coupon_id: { type: mongoose.Schema.Types.Mixed, required: true },
   user_id: { type: mongoose.Schema.Types.Mixed, required: true },
   claimed_at: { type: Date, default: Date.now },
-  status: { type: String, enum: ['claimed', 'used', 'expired', 'cancelled'], default: 'claimed' },
+  status: { type: String, enum: ['claimed', 'used', 'expired', 'cancelled', 'refunded'], default: 'claimed' },
   used_order_id: { type: mongoose.Schema.Types.Mixed, default: null },
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
 

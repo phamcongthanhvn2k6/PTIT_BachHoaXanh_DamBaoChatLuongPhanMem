@@ -589,6 +589,15 @@ export const dataService = {
     const urls = payload?.data?.urls || payload?.urls || [];
     return Array.isArray(urls) ? urls : [];
   },
+  uploadEventImage: async (file: File): Promise<string> => {
+    const form = new FormData();
+    form.append('image', file);
+    const res = await httpClient.post(endpoints.uploads.eventImage, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    const payload = res?.data ?? res;
+    return payload?.data?.url || payload?.url || '';
+  },
 
 
   // ═══════════════════════════════════════════════

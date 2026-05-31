@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import InventoryBatch from '../models/InventoryBatch.js';
 import BranchProduct from '../models/BranchProduct.js';
 import Product from '../models/Product.js';
@@ -168,21 +169,31 @@ export const detail = async (req, res) => {
 };
 
 export const create = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
     const payload = req.body || {};
     if (!payload.branch_product_id) {
+      await session.abortTransaction(); session.endSession();
       return res.status(400).json({ success: false, message: 'branch_product_id is required' });
     }
 
-    const bp = await BranchProduct.findById(payload.branch_product_id);
-    if (!bp) return res.status(404).json({ success: false, message: 'Branch product not found' });
+    const bp = await BranchProduct.findById(payload.branch_product_id).session(session);
+    if (!bp) {
+      await session.abortTransaction(); session.endSession();
+      return res.status(404).json({ success: false, message: 'Branch product not found' });
+    }
 
     const qty = Number(payload.quantity || 0);
-    if (qty <= 0) return res.status(400).json({ success: false, message: 'quantity must be > 0' });
+    if (qty <= 0) {
+      await session.abortTransaction(); session.endSession();
+      return res.status(400).json({ success: false, message: 'quantity must be > 0' });
+    }
 
-    const batch = await InventoryBatch.create({
+    const batchCode = payload.batch_code || `LOT-${Date.now().toString(36).toUpperCase()}`;
+    const [batch] = await InventoryBatch.create([{
       branch_product_id: payload.branch_product_id,
-      batch_code: payload.batch_code || `LOT-${Date.now().toString(36).toUpperCase()}`,
+      batch_code: batchCode,
       quantity: qty,
       exp_date: payload.exp_date || null,
       received_date: payload.received_date || new Date(),
@@ -190,13 +201,60 @@ export const create = async (req, res) => {
       supplier_id: payload.supplier_id || null,
       purchase_order_id: payload.purchase_order_id || null,
       import_receipt_id: payload.import_receipt_id || null,
+    }], { session });
+
+    const beforeStock = Number(bp.stock || 0);
+    const nextStock = beforeStock + qty;
+    bp.stock = nextStock;
+    await bp.save({ session });
+
+    // Create Stock Movement Ledger entry
+    const StockMovement = mongoose.model('StockMovement');
+    const product = await Product.findById(bp.product_id).session(session);
+    const productName = product ? (product.name || product.product_name) : '';
+
+    await StockMovement.create([{
+      branch_id: bp.branch_id,
+      branch_name: bp.branch_name || '',
+      product_id: bp.product_id,
+      product_name: productName,
+      branch_product_id: bp._id,
+      batch_code: batchCode,
+      movement_type: 'inbound',
+      quantity: qty,
+      before_stock: beforeStock,
+      after_stock: nextStock,
+      reference_type: 'manual_batch',
+      reference_id: batch._id,
+      created_by: req.userId,
+      note: payload.note || 'Manual batch creation',
+    }], { session });
+
+    // Write Audit Log
+    const { logActivity } = await import('../services/auditService.js');
+    await logActivity({
+      userId: req.userId,
+      userName: req.user?.full_name || req.user?.username || 'Staff',
+      action: 'CREATE_BATCH',
+      entity: 'inventory_batch',
+      entityId: batch._id,
+      details: {
+        product_name: productName,
+        quantity: qty,
+        batch_code: batchCode,
+        before_stock: beforeStock,
+        after_stock: nextStock
+      },
+      ip: req.ip
     });
 
-    bp.stock = Number(bp.stock || 0) + qty;
-    await bp.save();
+    await session.commitTransaction();
+    session.endSession();
 
     return res.status(201).json({ success: true, data: batch, message: 'Inventory batch created' });
   } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
     return res.status(500).json({ success: false, message: err.message });
   }
 };

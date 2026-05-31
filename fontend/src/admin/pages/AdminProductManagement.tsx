@@ -450,13 +450,30 @@ const AdminProductManagement: React.FC = () => {
   };
 
   const handleExport = () => {
+    const escapeCSV = (val: any): string => {
+      if (val === null || val === undefined) return '';
+      let str = String(val);
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        str = `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
     const headers = ['ID', 'SKU', 'Name', 'Price', 'Original Price', 'Stock', 'Sold', 'Active', 'Featured', 'Best Seller', 'New'];
     const rows = filteredAndSorted.map(item => [
-      item.id, item.sku || '', `"${item.name || ''}"`, item.price || 0, item.original_price || 0,
-      item.stock || 0, item.sold_count || 0, item.is_active ? 'Yes' : 'No',
-      item.is_featured ? 'Yes' : 'No', item.is_best_seller ? 'Yes' : 'No', item.is_new ? 'Yes' : 'No'
+      item.id,
+      item.sku || '',
+      item.name || '',
+      item.price || 0,
+      item.original_price || 0,
+      item.stock || 0,
+      item.sold_count || 0,
+      item.is_active ? 'Yes' : 'No',
+      item.is_featured ? 'Yes' : 'No',
+      item.is_best_seller ? 'Yes' : 'No',
+      item.is_new ? 'Yes' : 'No'
     ]);
-    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const csv = [headers.map(escapeCSV).join(','), ...rows.map(r => r.map(escapeCSV).join(','))].join('\r\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

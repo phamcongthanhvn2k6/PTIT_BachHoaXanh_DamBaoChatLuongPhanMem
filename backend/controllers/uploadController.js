@@ -304,3 +304,36 @@ export const serveFile = async (req, res) => {
     return res.status(500).send('Error serving file');
   }
 };
+
+export const eventImageUploadMiddleware = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: MAX_IMAGE_SIZE_BYTES },
+}).single('image');
+
+export const uploadEventImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Image file is required' });
+    }
+
+    const filename = await uploadToGridFS(req.file, 'event');
+    const host = `${req.protocol}://${req.get('host')}`;
+    const relativePath = `/uploads/events/${filename}`;
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        url: `${host}${relativePath}`,
+        relative_url: relativePath,
+        filename,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+      },
+      message: 'Upload successful',
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+

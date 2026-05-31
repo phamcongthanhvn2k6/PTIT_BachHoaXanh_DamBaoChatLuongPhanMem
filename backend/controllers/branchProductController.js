@@ -413,6 +413,28 @@ export const adjustStock = async (req, res) => {
       }
     ], { session });
 
+    // Write Audit Log
+    try {
+      const { logActivity } = await import('../services/auditService.js');
+      await logActivity({
+        userId: req.userId,
+        userName: req.user?.full_name || req.user?.username || 'Staff',
+        action: 'STOCK_ADJUSTMENT',
+        entity: 'branch_product',
+        entityId: bp._id,
+        details: {
+          product_name: productName,
+          quantity: quantity,
+          before_stock: beforeStock,
+          after_stock: nextStock,
+          reason
+        },
+        ip: req.ip
+      });
+    } catch (auditErr) {
+      console.error('[Audit] Failed to log stock adjustment:', auditErr.message);
+    }
+
     await session.commitTransaction();
     session.endSession();
 

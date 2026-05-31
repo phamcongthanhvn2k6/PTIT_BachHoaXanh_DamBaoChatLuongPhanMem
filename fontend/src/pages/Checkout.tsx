@@ -230,12 +230,12 @@ const Checkout: React.FC = () => {
   }, [otpCooldown]);
 
   useEffect(() => {
-    const nextPhone = String(user?.phone || '');
     if (!phoneTouched) {
+      const nextPhone = currentAddress?.phone || user?.phone || '';
       setCheckoutPhone(nextPhone);
       setPhoneError(null);
     }
-  }, [user?.phone, phoneTouched]);
+  }, [currentAddress, user?.phone, phoneTouched]);
 
   const normalizedCheckoutPhone = normalizeVietnamPhone(checkoutPhone || '');
   const isCheckoutPhoneValid = validatePhone(checkoutPhone || '');
@@ -368,7 +368,7 @@ const Checkout: React.FC = () => {
         return;
       }
       console.log('[Checkout] Proceeding to payment:', { source: checkoutSource, total: safeTotal, itemsCount: items.length });
-      navigate('/payment', { state: {
+      const paymentState = {
         total: safeTotal,
         deliveryFee: safeShippingFee,
         discount: safeDiscount,
@@ -379,7 +379,9 @@ const Checkout: React.FC = () => {
         promoData,
         couponCode: appliedCoupon?.code,
         source: checkoutSource
-      } });
+      };
+      sessionStorage.setItem('lotte_checkout_payment_state', JSON.stringify(paymentState));
+      navigate('/payment', { state: paymentState });
     };
 
     proceed();

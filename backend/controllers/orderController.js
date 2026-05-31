@@ -7,7 +7,7 @@ import BranchProduct from '../models/BranchProduct.js';
 import Product from '../models/Product.js';
 import Branch from '../models/Branch.js';
 import Promotion from '../models/Promotion.js';
-import { Coupon, CouponUsage } from '../models/Coupon.js';
+import { Coupon, CouponUsage, CouponClaim } from '../models/Coupon.js';
 import { PromotionUsage } from '../models/PromotionUsage.js';
 import { paginateMeta } from '../utils/helpers.js';
 import inventoryService from '../services/inventoryService.js';
@@ -17,6 +17,8 @@ import { isValidVietnamPhone, normalizeVietnamPhone } from '../utils/validatePho
 import { notifyOrderStatusChanged } from '../services/userNotificationService.js';
 import { resolveEffectivePrice, resolveProductPricing } from '../services/pricingResolverService.js';
 import { HotDeal } from '../models/Misc.js';
+import { acquireLock, releaseLock } from '../services/redisService.js';
+import { LoyaltyTransaction } from '../models/Loyalty.js';
 
 // ─── Normalize helper: MongoDB _id → id ───
 const normalizeOrder = (order) => {
@@ -50,31 +52,43 @@ const recordPromotionAndCouponUsage = async ({
   orderId,
   session,
 }) => {
+  // 1. Process active promotions
   for (const promo of appliedPromotions) {
     if (!promo?.promotion_id) continue;
     const promoId = toObjectIdIfValid(promo.promotion_id);
 
-    const updateResult = await Promotion.updateOne(
-      {
-        _id: promoId,
-        $or: [
-          { usage_limit: null },
-          { $expr: { $lt: ['$usage_count', '$usage_limit'] } },
-          { total_quantity: null },
-          { $expr: { $lt: ['$usage_count', '$total_quantity'] } }
-        ]
-      },
-      { $inc: { usage_count: 1, claimed_count: 1 } },
-      { session },
+    // Write lock the Promotion document
+    const promotion = await Promotion.findOneAndUpdate(
+      { _id: promoId },
+      { $inc: { __v: 0 } },
+      { session, new: true }
     );
 
-    if (updateResult.modifiedCount === 0) {
-      // It either didn't exist or hit the limit
-      const checkPromo = await Promotion.findById(promoId).session(session);
-      if (checkPromo && checkPromo.usage_limit && checkPromo.usage_count >= checkPromo.usage_limit) {
-        throw new Error(`Khuyến mãi ${checkPromo.title || 'này'} đã hết lượt sử dụng`);
+    if (!promotion || !promotion.is_active || (promotion.status && promotion.status === 'paused')) {
+      throw new Error(`Khuyến mãi ${promotion?.title || 'này'} hiện không hoạt động.`);
+    }
+
+    if (promotion.end_date && new Date() > new Date(promotion.end_date)) {
+      throw new Error(`Khuyến mãi ${promotion.title} đã hết hạn.`);
+    }
+
+    const usageCount = Number(promotion.usage_count || 0);
+    const limit = Number(promotion.usage_limit || promotion.total_quantity || 0);
+    if (limit > 0 && usageCount >= limit) {
+      throw new Error(`Khuyến mãi ${promotion.title} đã hết lượt sử dụng.`);
+    }
+
+    if (userId && promotion.usage_per_user) {
+      const userUsageCount = await PromotionUsage.countDocuments({ promotion_id: promoId, user_id: userId }).session(session);
+      if (userUsageCount >= Number(promotion.usage_per_user)) {
+        throw new Error(`Bạn đã dùng hết lượt cho chương trình khuyến mãi ${promotion.title}`);
       }
     }
+
+    // Increment global counters
+    promotion.usage_count = (promotion.usage_count || 0) + 1;
+    promotion.claimed_count = (promotion.claimed_count || 0) + 1;
+    await promotion.save({ session });
 
     await PromotionUsage.create([{
       promotion_id: promoId,
@@ -84,64 +98,72 @@ const recordPromotionAndCouponUsage = async ({
     }], { session });
   }
 
+  // 2. Process Coupons (Global Coupon, Product Voucher, Shipping Voucher)
   const couponsToProcess = [couponApplied];
   if (productVoucherApplied) couponsToProcess.push(productVoucherApplied);
   if (shippingVoucherApplied) couponsToProcess.push(shippingVoucherApplied);
 
   for (const cInfo of couponsToProcess) {
     if (!cInfo) continue;
-    if (cInfo.code) {
-      const normalizedCode = String(cInfo.code).toUpperCase();
-      const coupon = await Coupon.findOne({ code: normalizedCode }).session(session);
-      if (coupon) {
-        const updateResult = await Coupon.updateOne(
-          {
-            _id: coupon._id,
-            $or: [
-              { usage_limit: null },
-              { $expr: { $lt: ['$used_count', '$usage_limit'] } },
-              { total_quantity: null },
-              { $expr: { $lt: ['$used_count', '$total_quantity'] } }
-            ]
-          },
-          { $inc: { used_count: 1, claimed_count: 1 } },
-          { session },
-        );
-
-        if (updateResult.modifiedCount === 0) {
-          throw new Error(`Mã giảm giá ${coupon.code} đã hết lượt sử dụng`);
-        }
-
-        await CouponUsage.create([{
-          coupon_id: coupon._id,
-          user_id: userId || null,
-          order_id: orderId,
-          discount_amount: Number(cInfo.discount_amount || 0),
-        }], { session });
-      }
-    } else if (cInfo.id) {
-      // Must be a Promotion
-      const promoId = toObjectIdIfValid(cInfo.id);
-      const updateResult = await Promotion.updateOne(
-        {
-          _id: promoId,
-          $or: [
-            { usage_limit: null },
-            { $expr: { $lt: ['$usage_count', '$usage_limit'] } },
-            { total_quantity: null },
-            { $expr: { $lt: ['$usage_count', '$total_quantity'] } }
-          ]
-        },
-        { $inc: { usage_count: 1, claimed_count: 1 } },
-        { session },
+    if (cInfo.code || cInfo.id) {
+      const query = cInfo.code ? { code: String(cInfo.code).toUpperCase() } : { _id: toObjectIdIfValid(cInfo.id) };
+      
+      // Acquire exclusive write lock on Coupon
+      const coupon = await Coupon.findOneAndUpdate(
+        query,
+        { $inc: { __v: 0 } },
+        { session, new: true }
       );
 
-      if (updateResult.modifiedCount === 0) {
-        throw new Error(`Khuyến mãi đã hết lượt sử dụng`);
+      if (!coupon) {
+        throw new Error(`Mã giảm giá/Voucher không tồn tại.`);
       }
 
-      await PromotionUsage.create([{
-        promotion_id: promoId,
+      if (!coupon.is_active || coupon.status === 'paused') {
+        throw new Error(`Mã giảm giá ${coupon.code} hiện không hoạt động.`);
+      }
+
+      if (coupon.end_date && new Date() > new Date(coupon.end_date)) {
+        throw new Error(`Mã giảm giá ${coupon.code} đã hết hạn.`);
+      }
+
+      const usedCount = Number(coupon.used_count || 0);
+      const limit = Number(coupon.usage_limit || coupon.total_quantity || 0);
+      if (limit > 0 && usedCount >= limit) {
+        throw new Error(`Mã giảm giá ${coupon.code} đã hết lượt sử dụng.`);
+      }
+
+      if (userId && coupon.usage_per_user) {
+        const userUsageCount = await CouponUsage.countDocuments({ coupon_id: coupon._id, user_id: userId }).session(session);
+        if (userUsageCount >= Number(coupon.usage_per_user)) {
+          throw new Error(`Bạn đã dùng hết lượt sử dụng cho mã giảm giá ${coupon.code}`);
+        }
+      }
+
+      // Check wallet claim state machine transition (claimed -> used)
+      const claim = await CouponClaim.findOne({
+        coupon_id: coupon._id,
+        user_id: userId,
+        status: 'claimed'
+      }).session(session);
+
+      if (coupon.claim_campaign && !claim) {
+        throw new Error(`Mã giảm giá ${coupon.code} cần phải lưu vào ví trước khi sử dụng.`);
+      }
+
+      if (claim) {
+        claim.status = 'used';
+        claim.used_order_id = orderId;
+        await claim.save({ session });
+      }
+
+      // Increment Coupon usage
+      coupon.used_count = (coupon.used_count || 0) + 1;
+      coupon.claimed_count = (coupon.claimed_count || 0) + 1;
+      await coupon.save({ session });
+
+      await CouponUsage.create([{
+        coupon_id: coupon._id,
         user_id: userId || null,
         order_id: orderId,
         discount_amount: Number(cInfo.discount_amount || 0),
@@ -159,6 +181,18 @@ export const create = async (req, res) => {
     user_id: req.body.user_id || req.userId,
   }));
 
+  const userId = req.body.user_id || req.userId;
+  if (!userId) {
+    return res.status(400).json({ success: false, message: 'user_id is required' });
+  }
+
+  // Acquire checkout lock for user to prevent concurrent checkout attempts
+  const userLockKey = `lock:checkout_user:${userId}`;
+  const lockAcquired = await acquireLock(userLockKey, 30); // 30s TTL
+  if (!lockAcquired) {
+    return res.status(409).json({ success: false, message: 'Yêu cầu đặt hàng của bạn đang được xử lý, vui lòng không gửi yêu cầu liên tục.' });
+  }
+
   const idempotencyKey = req.headers['idempotency-key'];
   if (idempotencyKey) {
     try {
@@ -173,11 +207,14 @@ export const create = async (req, res) => {
         if (existingKey) {
           console.log(`[OrderCreate] Idempotency match for key ${idempotencyKey}`);
           if (existingKey.status === 202) {
+            await releaseLock(userLockKey);
             return res.status(409).json({ success: false, message: 'Yêu cầu đang được xử lý (Concurrent request detected).' });
           }
+          await releaseLock(userLockKey);
           return res.status(existingKey.status || 200).json(existingKey.response);
         }
       }
+      await releaseLock(userLockKey);
       return res.status(500).json({ success: false, message: 'Lỗi hệ thống khi kiểm tra Idempotency' });
     }
   }
@@ -193,7 +230,6 @@ export const create = async (req, res) => {
 
   try {
     const {
-      user_id = req.userId,
       branch_id,
       items: rawItems = [],
       order_address = null,
@@ -207,9 +243,7 @@ export const create = async (req, res) => {
       applied_coupon = null
     } = req.body;
 
-    const userId = (req.user?.role_id !== 3 && req.body.user_id) ? req.body.user_id : req.userId;
     const branch_id_val = branch_id;
-    if (!userId) throw new Error("user_id is required");
     const checkoutUser = await User.findById(userId).session(session);
     if (!checkoutUser) {
       throw new Error('User not found for checkout');
@@ -297,6 +331,21 @@ export const create = async (req, res) => {
         await session.abortTransaction();
         session.endSession();
       }
+      // Write checkout failed audit log
+      try {
+        const { logActivity } = await import('../services/auditService.js');
+        await logActivity({
+          userId: userId,
+          userName: checkoutUser.full_name || checkoutUser.username || 'Customer',
+          action: 'CHECKOUT_FAILED',
+          entity: 'order',
+          entityId: null,
+          details: { error: invErr.message, items: items.map(i => ({ branch_product_id: i.branch_product_id, quantity: i.quantity })) },
+          ip: req.ip
+        });
+      } catch (logErr) {
+        console.error('[Audit] Failed to log checkout failure:', logErr.message);
+      }
       return res.status(409).json({ success: false, message: 'Không đủ số lượng tồn kho để đặt hàng.', error: invErr.message });
     }
 
@@ -353,14 +402,15 @@ export const create = async (req, res) => {
       transaction_id: req.body.payment?.transaction_id || null,
     };
 
-    // 🔥 SECURITY FIX: Calculate all totals server-side
+    // 🔥 SECURITY FIX: Calculate all totals server-side (inside transaction session)
     const serverPricing = await calculateCheckoutTotals({
       cartItems: items,
       branchId: branch_id_val,
       couponCode: req.body.coupon_code || null,
       userId: userId,
       productVoucherId: req.body.product_voucher_id || null,
-      shippingVoucherId: req.body.shipping_voucher_id || null
+      shippingVoucherId: req.body.shipping_voucher_id || null,
+      session: session
     });
 
     if (serverPricing.price_changed) {
@@ -433,11 +483,14 @@ export const create = async (req, res) => {
       if (item.hot_deal_id) {
         const dealId = toObjectIdIfValid(item.hot_deal_id);
         const q = Number(item.quantity) || 1;
-        await HotDeal.updateOne(
-          { _id: dealId, remaining_quantity: { $gt: 0 } },
+        const hdResult = await HotDeal.updateOne(
+          { _id: dealId, remaining_quantity: { $gte: q } },
           { $inc: { remaining_quantity: -q, sold_count: q } },
           { session }
         );
+        if (hdResult.modifiedCount === 0) {
+          throw new Error(`Sản phẩm ${item.name || item.product_name} trong chương trình Hot Deal đã hết hoặc không đủ số lượng.`);
+        }
       }
     }
 
@@ -461,6 +514,22 @@ export const create = async (req, res) => {
     }
 
     const responsePayload = { success: true, data: normalizeOrder(order), message: 'Đặt hàng thành công' };
+
+    // Log order creation to AuditLog
+    try {
+      const { logActivity } = await import('../services/auditService.js');
+      await logActivity({
+        userId: userId,
+        userName: checkoutUser.full_name || checkoutUser.username || 'Customer',
+        action: 'CREATE',
+        entity: 'order',
+        entityId: order._id,
+        details: { total_amount: orderData.total_amount },
+        ip: req.ip
+      });
+    } catch (auditErr) {
+      console.error('[Audit] Failed to log order creation:', auditErr.message);
+    }
 
     if (idempotencyKey && session) {
       await IdempotencyKey.updateOne(
@@ -501,6 +570,8 @@ export const create = async (req, res) => {
     console.error('[OrderCreate] ❌ Error:', err.message);
     if (err.errors) console.error('[OrderCreate] Validation Errors:', err.errors);
     return res.status(400).json({ success: false, message: err.message, errors: err.errors });
+  } finally {
+    await releaseLock(userLockKey);
   }
 };
 
@@ -663,8 +734,16 @@ export const detail = async (req, res) => {
 // PUT /api/orders/:id/cancel
 export const cancel = async (req, res) => {
   let session = null;
+  let lockKey = null;
   try {
     if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ success: false, message: 'ID đơn hàng không hợp lệ' });
+
+    // C4: Distributed lock per order to prevent race conditions
+    lockKey = `order_mutation:${req.params.id}`;
+    const locked = await acquireLock(lockKey, 30);
+    if (!locked) {
+      return res.status(409).json({ success: false, message: 'Đơn hàng đang được xử lý bởi yêu cầu khác, vui lòng thử lại.' });
+    }
 
     session = await mongoose.startSession();
     session.startTransaction();
@@ -674,7 +753,6 @@ export const cancel = async (req, res) => {
       await session.abortTransaction(); session.endSession();
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
-    // Regular users can only cancel their own orders
     if (req.user?.role_id === 3 && String(order.user_id) !== String(req.userId)) {
       await session.abortTransaction(); session.endSession();
       return res.status(403).json({ success: false, message: 'Forbidden' });
@@ -686,56 +764,76 @@ export const cancel = async (req, res) => {
     order.status = 'CANCELLED';
     order.tracking.history.push({ status: 'CANCELLED', note: req.body.reason || 'Hủy bởi khách hàng', timestamp: new Date() });
 
-    // 1. Restore stock back to BranchProduct + InventoryBatch
-    await inventoryService.restoreInventoryFromOrder(order.items, session, order._id);
-
-    // 2. Decrement sold_count
-    for (const item of order.items) {
-      try {
-        const bp = await BranchProduct.findById(item.branch_product_id).session(session);
-        if (bp) {
-          bp.sold_count = Math.max(0, (bp.sold_count || 0) - item.quantity);
-          await bp.save({ session });
-          if (bp.product_id) {
-            const p = await Product.findById(bp.product_id).session(session);
-            if (p) {
-              p.sold_count = Math.max(0, (p.sold_count || 0) - item.quantity);
-              await p.save({ session });
+    // 1. Restore inventory (idempotent via flag)
+    if (!order.is_inventory_restored) {
+      await inventoryService.restoreInventoryFromOrder(order.items, session, order._id);
+      for (const item of order.items) {
+        try {
+          const bp = await BranchProduct.findById(item.branch_product_id).session(session);
+          if (bp) {
+            bp.sold_count = Math.max(0, (bp.sold_count || 0) - item.quantity);
+            await bp.save({ session });
+            if (bp.product_id) {
+              const p = await Product.findById(bp.product_id).session(session);
+              if (p) { p.sold_count = Math.max(0, (p.sold_count || 0) - item.quantity); await p.save({ session }); }
             }
           }
-        }
-      } catch (e) { console.warn('[OrderCancel] sold_count revert error:', e.message); }
+        } catch (e) { console.warn('[OrderCancel] sold_count revert error:', e.message); }
+      }
+      order.is_inventory_restored = true;
     }
 
-    // Restore Hot Deal remaining stock if order items were bought under a Hot Deal
-    for (const item of order.items) {
-      if (item.hot_deal_id) {
-        const dealId = toObjectIdIfValid(item.hot_deal_id);
-        const q = Number(item.quantity) || 1;
-        await HotDeal.updateOne(
-          { _id: dealId },
-          { $inc: { remaining_quantity: q, sold_count: -q } },
-          { session }
-        );
+    // 2. Restore Hot Deal remaining stock (idempotent via flag)
+    if (!order.is_hot_deal_restored) {
+      for (const item of order.items) {
+        if (item.hot_deal_id) {
+          const dealId = toObjectIdIfValid(item.hot_deal_id);
+          const q = Number(item.quantity) || 1;
+          await HotDeal.updateOne({ _id: dealId }, { $inc: { remaining_quantity: q, sold_count: -q } }, { session });
+        }
       }
+      order.is_hot_deal_restored = true;
+    }
+
+    // 3. Restore coupon and promotion usages (idempotent via flags)
+    if (!order.is_coupon_restored || !order.is_promotion_restored) {
+      const { restorePromotionsAndCoupons } = await import('../services/orderHardeningService.js');
+      await restorePromotionsAndCoupons(order, session);
+      order.is_coupon_restored = true;
+      order.is_promotion_restored = true;
+    }
+
+    // 4. Reverse loyalty points (idempotent via flag)
+    if (!order.is_points_reversed && order.payment && order.payment.status === 'PAID') {
+      const user = await User.findById(order.user_id).session(session);
+      if (user && order.points_earned > 0) {
+        user.lotte_points = Math.max(0, (user.lotte_points || 0) - order.points_earned);
+        await user.save({ session });
+        await LoyaltyTransaction.create([{ user_id: order.user_id, type: 'adjust', points: -order.points_earned, source: 'order_cancel', description: `Thu hồi điểm do hủy đơn #${order._id}`, order_id: order._id, balance_after: user.lotte_points }], { session });
+      }
+      order.is_points_reversed = true;
     }
 
     await order.save({ session });
 
+    // 5. Audit Log
+    try {
+      const { logActivity } = await import('../services/auditService.js');
+      await logActivity({ userId: req.userId, userName: req.user?.full_name || req.user?.username || 'Customer', action: 'CANCEL', entity: 'order', entityId: order._id, details: { reason: req.body.reason || 'Hủy bởi khách hàng' }, ip: req.ip });
+    } catch (auditErr) {
+      console.error('[Audit] Failed to log order cancellation:', auditErr.message);
+    }
+
     await session.commitTransaction();
     session.endSession();
 
-    await notifyOrderStatusSafely({
-      userId: order.user_id,
-      orderId: String(order._id),
-      status: 'CANCELLED',
-      note: req.body.reason || 'Hủy bởi khách hàng',
-    });
-
+    await notifyOrderStatusSafely({ userId: order.user_id, orderId: String(order._id), status: 'CANCELLED', note: req.body.reason || 'Hủy bởi khách hàng' });
     return res.json({ success: true, data: normalizeOrder(order), message: 'Đã hủy đơn hàng' });
   } catch (err) {
     if (session) { await session.abortTransaction(); session.endSession(); }
     return res.status(500).json({ success: false, message: err.message });
+  } finally {
+    if (lockKey) await releaseLock(lockKey);
   }
 };
 
@@ -766,18 +864,20 @@ const VALID_TRANSITIONS = {
   PROCESSING: ['SHIPPING', 'CANCELLED'],
   SHIPPING: ['DELIVERED'],
   DELIVERED: ['RETURNED'],
-  CANCELLED: [],         // terminal
-  RETURNED: [],         // terminal
+  CANCELLED: ['REFUNDED'],
+  RETURNED: ['REFUNDED'],
+  REFUNDED: [], // terminal
 };
 
 // PUT /api/orders/:id/status
 export const updateStatus = async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ success: false, message: 'ID đơn hàng không hợp lệ' });
+
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
-    // Regular users can only track their own orders
-    if (req.user?.role_id === 3 && String(order.user_id) !== String(req.userId)) {
+    // Regular users can only view status, only admin/staff can update
+    if (req.user?.role_id === 3) {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
     const { status, note, tracking_number, carrier, dispatch_branch, dispatch_branch_name, internal_note } = req.body;
@@ -790,6 +890,8 @@ export const updateStatus = async (req, res) => {
         message: `Không thể chuyển từ "${order.status}" sang "${status}". Trạng thái hợp lệ: ${allowed.join(', ') || 'không có'}`,
       });
     }
+
+    const oldStatus = order.status;
 
     // ── When transitioning to SHIPPING, require shipping data ──
     if (status === 'SHIPPING') {
@@ -835,6 +937,22 @@ export const updateStatus = async (req, res) => {
     order.tracking.history.push(historyEntry);
     await order.save();
 
+    // Write Audit Log
+    try {
+      const { logActivity } = await import('../services/auditService.js');
+      await logActivity({
+        userId: req.userId,
+        userName: req.user?.full_name || req.user?.username || 'Staff',
+        action: 'STATUS_CHANGE',
+        entity: 'order',
+        entityId: order._id,
+        details: { from_status: oldStatus, to_status: status, note: historyEntry.note || '' },
+        ip: req.ip
+      });
+    } catch (auditErr) {
+      console.error('[Audit] Failed to log order status update:', auditErr.message);
+    }
+
     await notifyOrderStatusSafely({
       userId: order.user_id,
       orderId: String(order._id),
@@ -866,66 +984,116 @@ export const assignTracking = async (req, res) => {
 
 // POST /api/orders/:id/refund (admin)
 export const refund = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  let session = null;
+  let lockKey = null;
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ success: false, message: 'ID đơn hàng không hợp lệ' });
+
+    // C4: Distributed lock per order
+    lockKey = `order_mutation:${req.params.id}`;
+    const locked = await acquireLock(lockKey, 30);
+    if (!locked) {
+      return res.status(409).json({ success: false, message: 'Đơn hàng đang được xử lý bởi yêu cầu khác, vui lòng thử lại.' });
+    }
+
+    session = await mongoose.startSession();
+    session.startTransaction();
+
     const order = await Order.findById(req.params.id).session(session);
     if (!order) {
-      await session.abortTransaction();
-      session.endSession();
+      await session.abortTransaction(); session.endSession();
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    // Cập nhật trạng thái
-    order.status = 'RETURNED';
-    order.payment.status = 'REFUNDED';
-    order.tracking.history.push({ status: 'RETURNED', note: req.body.reason || 'Hoàn tiền', by: req.userId, timestamp: new Date() });
-
-    // 1. Hoàn lại số lượng hàng vào kho
-    await inventoryService.restoreInventoryFromOrder(order.items, session);
-
-    // 2. Trả lại tiền vào ví L.Point của User
-    const user = await User.findById(order.user_id).session(session);
-    if (user) {
-      user.lotte_points = (user.lotte_points || 0) + (order.total_amount || 0);
-      await user.save({ session });
+    const allowedRefundStatuses = ['DELIVERED', 'RETURNED', 'CANCELLED'];
+    if (!allowedRefundStatuses.includes(order.status)) {
+      await session.abortTransaction(); session.endSession();
+      return res.status(400).json({ success: false, message: `Không thể hoàn tiền đơn hàng ở trạng thái ${order.status}` });
     }
 
-    // 3. Decrement sold_count
-    for (const item of order.items) {
-      try {
-        const bp = await BranchProduct.findById(item.branch_product_id).session(session);
-        if (bp) {
-          bp.sold_count = Math.max(0, (bp.sold_count || 0) - item.quantity);
-          await bp.save({ session });
-          if (bp.product_id) {
-            const p = await Product.findById(bp.product_id).session(session);
-            if (p) {
-              p.sold_count = Math.max(0, (p.sold_count || 0) - item.quantity);
-              await p.save({ session });
+    const oldStatus = order.status;
+    order.status = 'REFUNDED';
+    order.payment.status = 'REFUNDED';
+    order.tracking.history.push({ status: 'REFUNDED', note: req.body.reason || 'Hoàn tiền', by: req.userId, timestamp: new Date() });
+
+    // 1. Restore inventory (idempotent)
+    if (!order.is_inventory_restored) {
+      await inventoryService.restoreInventoryFromOrder(order.items, session, order._id);
+      for (const item of order.items) {
+        try {
+          const bp = await BranchProduct.findById(item.branch_product_id).session(session);
+          if (bp) {
+            bp.sold_count = Math.max(0, (bp.sold_count || 0) - item.quantity);
+            await bp.save({ session });
+            if (bp.product_id) {
+              const p = await Product.findById(bp.product_id).session(session);
+              if (p) { p.sold_count = Math.max(0, (p.sold_count || 0) - item.quantity); await p.save({ session }); }
             }
           }
+        } catch (e) { console.warn('[OrderRefund] sold_count revert error:', e.message); }
+      }
+      order.is_inventory_restored = true;
+    }
+
+    // 2. Wallet refund (idempotent)
+    if (!order.is_wallet_refunded) {
+      const user = await User.findById(order.user_id).session(session);
+      if (user) {
+        user.wallet_balance = (user.wallet_balance || 0) + (order.total_amount || 0);
+        await user.save({ session });
+      }
+      order.is_wallet_refunded = true;
+    }
+
+    // 3. Reverse loyalty points (idempotent)
+    if (!order.is_points_reversed) {
+      const pointsToDeduct = order.points_earned || 0;
+      if (pointsToDeduct > 0) {
+        const user = await User.findById(order.user_id).session(session);
+        if (user) {
+          user.lotte_points = Math.max(0, (user.lotte_points || 0) - pointsToDeduct);
+          await user.save({ session });
+          await LoyaltyTransaction.create([{ user_id: order.user_id, type: 'adjust', points: -pointsToDeduct, source: 'order_refund', description: `Thu hồi điểm do hoàn tiền đơn #${order._id}`, order_id: order._id, balance_after: user.lotte_points }], { session });
         }
-      } catch (e) { console.warn('[OrderRefund] sold_count revert error:', e.message); }
+      }
+      order.is_points_reversed = true;
+    }
+
+    // 4. Restore Hot Deal (idempotent)
+    if (!order.is_hot_deal_restored) {
+      const { restoreHotDealsForOrderItems } = await import('../services/orderHardeningService.js');
+      await restoreHotDealsForOrderItems(order.items, session);
+      order.is_hot_deal_restored = true;
+    }
+
+    // 5. Restore coupons and promotions (idempotent)
+    if (!order.is_coupon_restored || !order.is_promotion_restored) {
+      const { restorePromotionsAndCoupons } = await import('../services/orderHardeningService.js');
+      await restorePromotionsAndCoupons(order, session);
+      order.is_coupon_restored = true;
+      order.is_promotion_restored = true;
     }
 
     await order.save({ session });
 
+    // 6. Audit Log
+    try {
+      const { logActivity } = await import('../services/auditService.js');
+      await logActivity({ userId: req.userId, userName: req.user?.full_name || req.user?.username || 'Admin', action: 'REFUND', entity: 'order', entityId: order._id, details: { from_status: oldStatus, reason: req.body.reason || 'Hoàn tiền', total_refunded: order.total_amount }, ip: req.ip });
+    } catch (auditErr) {
+      console.error('[Audit] Failed to log order refund:', auditErr.message);
+    }
+
     await session.commitTransaction();
     session.endSession();
 
-    await notifyOrderStatusSafely({
-      userId: order.user_id,
-      orderId: String(order._id),
-      status: 'RETURNED',
-      note: req.body.reason || 'Đã hoàn tiền đơn hàng',
-    });
-
+    await notifyOrderStatusSafely({ userId: order.user_id, orderId: String(order._id), status: 'REFUNDED', note: req.body.reason || 'Đã hoàn tiền đơn hàng' });
     return res.json({ success: true, data: normalizeOrder(order), message: 'Đã hoàn tiền và nhập lại kho' });
   } catch (err) {
-    await session.abortTransaction();
-    session.endSession();
+    if (session) { await session.abortTransaction(); session.endSession(); }
     return res.status(500).json({ success: false, message: err.message });
+  } finally {
+    if (lockKey) await releaseLock(lockKey);
   }
 };
 

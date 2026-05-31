@@ -161,7 +161,7 @@ const getActiveCouponQuery = (now) => ({
     ],
 });
 
-async function getPromotionUsageCountMap(promotionIds, userId) {
+async function getPromotionUsageCountMap(promotionIds, userId, session = null) {
     if (!userId || promotionIds.length === 0) return new Map();
     const rows = await PromotionUsage.aggregate([
         {
@@ -176,7 +176,7 @@ async function getPromotionUsageCountMap(promotionIds, userId) {
                 count: { $sum: 1 },
             },
         },
-    ]);
+    ]).session(session);
 
     const map = new Map();
     for (const row of rows) {
@@ -192,6 +192,7 @@ export async function validateCouponForCart({
     cartItems,
     userId = null,
     now = new Date(),
+    session = null,
 }) {
     const normalizedItems = normalizeCartItems(cartItems);
     const totalQuantity = normalizedItems.reduce((sum, item) => sum + toNumber(item.quantity, 0), 0);
@@ -204,17 +205,17 @@ export async function validateCouponForCart({
         coupon = await Coupon.findOne({
             code: String(code || '').trim().toUpperCase(),
             ...getActiveCouponQuery(now),
-        });
+        }).session(session);
     } else if (voucher_id) {
         coupon = await Coupon.findOne({
             _id: voucher_id,
             ...getActiveCouponQuery(now),
-        });
+        }).session(session);
         if (!coupon) {
             coupon = await Promotion.findOne({
                 _id: voucher_id,
                 ...getActivePromotionQuery(now),
-            });
+            }).session(session);
             isPromotion = true;
         }
     }
@@ -232,7 +233,7 @@ export async function validateCouponForCart({
             return { valid: false, message: 'Khuyến mãi đã hết lượt sử dụng.' };
         }
         if (userId && coupon.usage_per_user) {
-            const usageMap = await getPromotionUsageCountMap([coupon._id], userId);
+            const usageMap = await getPromotionUsageCountMap([coupon._id], userId, session);
             if ((usageMap.get(toIdString(coupon._id)) || 0) >= toNumber(coupon.usage_per_user, 1)) {
                 return { valid: false, message: 'Bạn đã dùng hết lượt cho khuyến mãi này.' };
             }
@@ -246,7 +247,7 @@ export async function validateCouponForCart({
             return { valid: false, message: 'Mã giảm giá đã hết lượt sử dụng.' };
         }
         if (userId && coupon.usage_per_user) {
-            const userUsageCount = await CouponUsage.countDocuments({ coupon_id: coupon._id, user_id: userId });
+            const userUsageCount = await CouponUsage.countDocuments({ coupon_id: coupon._id, user_id: userId }).session(session);
             if (userUsageCount >= toNumber(coupon.usage_per_user, 1)) {
                 return { valid: false, message: 'Bạn đã dùng hết lượt cho mã giảm giá này.' };
             }
@@ -350,6 +351,7 @@ export async function calculateCheckoutTotals(input, branchIdArg, couponCodeArg 
     const productVoucherId = options.productVoucherId || options.product_voucher_id || null;
     const shippingVoucherId = options.shippingVoucherId || options.shipping_voucher_id || null;
     const userId = options.userId || null;
+    const session = options.session || null;
 
     const normalizedItems = normalizeCartItems(options.cartItems || options.items || []);
     if (normalizedItems.length === 0) {
@@ -400,17 +402,17 @@ export async function calculateCheckoutTotals(input, branchIdArg, couponCodeArg 
 
         if (bpId) {
             try {
-                bp = await BranchProduct.findById(bpId).lean();
+                bp = await BranchProduct.findById(bpId).session(session).lean();
                 if (bp) {
-                    prod = await Product.findById(bp.product_id).lean();
+                    prod = await Product.findById(bp.product_id).session(session).lean();
                 }
             } catch (e) {}
         }
 
         if (!bp && item.product_id && branchId) {
             try {
-                bp = await BranchProduct.findOne({ product_id: item.product_id, branch_id: branchId }).lean();
-                prod = await Product.findById(item.product_id).lean();
+                bp = await BranchProduct.findOne({ product_id: item.product_id, branch_id: branchId }).session(session).lean();
+                prod = await Product.findById(item.product_id).session(session).lean();
             } catch (e) {}
         }
 
@@ -433,8 +435,8 @@ export async function calculateCheckoutTotals(input, branchIdArg, couponCodeArg 
     }
 
     const originalSubtotal = normalizedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const activePromotions = await Promotion.find(getActivePromotionQuery(now)).sort({ priority: -1, created_at: -1 });
-    const userUsageMap = await getPromotionUsageCountMap(activePromotions.map((p) => p._id), userId);
+    const activePromotions = await Promotion.find(getActivePromotionQuery(now)).sort({ priority: -1, created_at: -1 }).session(session);
+    const userUsageMap = await getPromotionUsageCountMap(activePromotions.map((p) => p._id), userId, session);
 
     const promotionAccumulator = new Map();
     const lineItems = [];
@@ -613,6 +615,7 @@ export async function calculateCheckoutTotals(input, branchIdArg, couponCodeArg 
             })),
             userId,
             now,
+            session,
         });
 
         if (!couponValidation.valid) {
@@ -637,7 +640,7 @@ export async function calculateCheckoutTotals(input, branchIdArg, couponCodeArg 
     }
 
     if (productVoucherId) {
-        const productVal = await validateCouponForCart({ voucher_id: productVoucherId, branchId, cartItems: lineItems, userId, now });
+        const productVal = await validateCouponForCart({ voucher_id: productVoucherId, branchId, cartItems: lineItems, userId, now, session });
         if (!productVal.valid) {
             productVoucherError = productVal.message;
         } else {
@@ -649,7 +652,7 @@ export async function calculateCheckoutTotals(input, branchIdArg, couponCodeArg 
     }
 
     if (shippingVoucherId) {
-        const shipVal = await validateCouponForCart({ voucher_id: shippingVoucherId, branchId, cartItems: lineItems, userId, now });
+        const shipVal = await validateCouponForCart({ voucher_id: shippingVoucherId, branchId, cartItems: lineItems, userId, now, session });
         if (!shipVal.valid) {
             shippingVoucherError = shipVal.message;
         } else {

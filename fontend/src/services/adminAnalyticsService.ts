@@ -14,11 +14,15 @@ export interface RevenueSeries {
 }
 
 export interface ProductItem {
-  id: number;
+  id: string | number;
+  productId: string;
+  productName: string;
   name: string;
   image: string;
   soldCount: number;
+  quantitySold: number;
   price: number;
+  effectivePrice: number;
 }
 
 export interface BranchPerformance {
@@ -85,8 +89,9 @@ export const adminAnalyticsService = {
       return true;
     });
 
-    // 2. Compute KPIs from filtered orders
-    const totalSales = filteredOrders.reduce((sum: number, o: any) => sum + (Number(o.total_amount) || 0), 0);
+    // 2. Compute KPIs from filtered orders (excluding CANCELLED and REFUNDED for revenue)
+    const revenueOrders = filteredOrders.filter((o: any) => o.status !== 'CANCELLED' && o.status !== 'REFUNDED');
+    const totalSales = revenueOrders.reduce((sum: number, o: any) => sum + (Number(o.total_amount) || 0), 0);
     const totalOrders = filteredOrders.length;
     const totalCustomers = users.filter((u: any) => u.role_id !== 1).length; // Exclude superadmins
     // Mock change % since mockData corresponds mostly to one period
@@ -133,22 +138,28 @@ export const adminAnalyticsService = {
       });
 
     // 5. Compute Top Products
-    // Derive sales directly from data (for now using arbitrary non random calc or just 0s if no logic present)
     const topProducts: ProductItem[] = products
-      .map((p: any) => ({
-        id: Number(p.id) || 0,
-        name: p.name || '',
-        price: p.discount_price || p.original_price || 0,
-        image: Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : '',
-        soldCount: p.sold_count || 0
-      }))
-      .sort((a: any, b: any) => b.soldCount - a.soldCount)
+      .map((p: any) => {
+        const resolvedPrice = p.effective_price ?? p.price ?? p.original_price ?? 0;
+        return {
+          id: p.id || p.product_id || p._id || '',
+          productId: p.id || p.product_id || p._id || '',
+          productName: p.name || '',
+          name: p.name || '',
+          price: resolvedPrice,
+          effectivePrice: resolvedPrice,
+          image: p.image || (Array.isArray(p.images) && p.images.length > 0 ? p.images[0] : ''),
+          soldCount: p.sold_count || 0,
+          quantitySold: p.sold_count || 0
+        };
+      })
+      .sort((a: any, b: any) => b.quantitySold - a.quantitySold)
       .slice(0, 5);
 
     // 6. Branch Performance
-    // Calculate total sales per branch
+    // Calculate total sales per branch (excluding CANCELLED and REFUNDED)
     const branchSales = new Map<number, number>();
-    filteredOrders.forEach((o: any) => {
+    revenueOrders.forEach((o: any) => {
       const bId = Number(o.branch_id);
       if (bId) {
         branchSales.set(bId, (branchSales.get(bId) || 0) + Number(o.total_amount || 0));

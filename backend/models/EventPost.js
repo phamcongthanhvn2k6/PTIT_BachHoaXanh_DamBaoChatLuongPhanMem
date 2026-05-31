@@ -22,7 +22,12 @@ const eventPostSchema = new mongoose.Schema({
   related_post_ids: [Number],
   content_blocks: [mongoose.Schema.Types.Mixed],
   status: String,
-  created_by: Number
+  created_by: Number,
+  branch: { type: String, default: null },
+  banner: { type: String, default: null },
+  promotion_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Promotion', default: null },
+  summary: { type: String, default: '' },
+  description: { type: String, default: '' }
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }, collection: 'event_posts' });
 
 export const EventPost = mongoose.model('EventPost', eventPostSchema);

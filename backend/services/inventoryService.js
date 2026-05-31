@@ -90,6 +90,9 @@ export async function deductInventoryForOrder(branch_id, items, session, orderId
     
       // 1. Áp dụng thuật toán FIFO trên các lô (Batches)
       const result = await deductStockFIFO(bpId, qty, session);
+      if (!result || !result.success) {
+        throw new Error(`Không đủ số lượng tồn kho trong các lô hàng (FIFO) cho sản phẩm nhánh ${bpId}.`);
+      }
       
       // 2. Cập nhật trực tiếp tồn kho tổng (stock) trong bảng BranchProduct
       const BranchProductModel = mongoose.model('BranchProduct');

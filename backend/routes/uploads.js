@@ -15,6 +15,8 @@ import {
   productImageUploadMiddleware,
   productSingleImageUploadMiddleware,
   uploadProductImages,
+  eventImageUploadMiddleware,
+  uploadEventImage,
 } from '../controllers/uploadController.js';
 
 const router = Router();
@@ -25,6 +27,15 @@ const uploadLimiter = rateLimit({
   max: 10,
   message: { success: false, message: 'Quá nhiều yêu cầu upload, vui lòng thử lại sau.' }
 });
+
+router.post('/event-image', auth, admin, uploadLimiter, (req, res, next) => {
+  eventImageUploadMiddleware(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, message: err.message || 'Upload failed' });
+    }
+    return next();
+  });
+}, uploadEventImage);
 
 router.post('/promotion-image', auth, admin, uploadLimiter, (req, res, next) => {
   promotionImageUploadMiddleware(req, res, (err) => {

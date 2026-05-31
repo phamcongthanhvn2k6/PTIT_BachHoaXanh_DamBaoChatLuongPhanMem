@@ -196,6 +196,21 @@ export const create = async (req, res) => {
 
         const promo = await Promotion.create(body);
 
+        try {
+            const { logActivity } = await import('../services/auditService.js');
+            await logActivity({
+                userId: req.userId,
+                userName: req.user?.full_name || req.user?.username || 'Admin',
+                action: 'CREATE',
+                entity: 'promotion',
+                entityId: promo._id,
+                details: { title: promo.title, type: promo.type },
+                ip: req.ip
+            });
+        } catch (auditErr) {
+            console.error('[Audit] Failed to log promotion creation:', auditErr.message);
+        }
+
         if (promo.status === 'active' || promo.status === 'scheduled') {
             try {
                 await broadcastCampaignCreated({
@@ -240,6 +255,21 @@ export const update = async (req, res) => {
         const promo = await Promotion.findByIdAndUpdate(req.params.id, body, { new: true });
         if (!promo) return res.status(404).json({ success: false, message: 'Promotion not found' });
 
+        try {
+            const { logActivity } = await import('../services/auditService.js');
+            await logActivity({
+                userId: req.userId,
+                userName: req.user?.full_name || req.user?.username || 'Admin',
+                action: 'UPDATE',
+                entity: 'promotion',
+                entityId: promo._id,
+                details: { title: promo.title, type: promo.type },
+                ip: req.ip
+            });
+        } catch (auditErr) {
+            console.error('[Audit] Failed to log promotion update:', auditErr.message);
+        }
+
         // Broadcast when promotion transitions from inactive → active
         if (wasInactive && promo.is_active) {
             try {
@@ -265,7 +295,24 @@ export const update = async (req, res) => {
 // DELETE /api/promotions/:id
 export const remove = async (req, res) => {
     try {
+        const promo = await Promotion.findById(req.params.id);
         await Promotion.findByIdAndDelete(req.params.id);
+
+        try {
+            const { logActivity } = await import('../services/auditService.js');
+            await logActivity({
+                userId: req.userId,
+                userName: req.user?.full_name || req.user?.username || 'Admin',
+                action: 'DELETE',
+                entity: 'promotion',
+                entityId: req.params.id,
+                details: { title: promo?.title },
+                ip: req.ip
+            });
+        } catch (auditErr) {
+            console.error('[Audit] Failed to log promotion deletion:', auditErr.message);
+        }
+
         return res.json({ success: true, message: 'Xóa khuyến mãi thành công' });
     } catch (err) {
         return res.status(500).json({ success: false, message: err.message });

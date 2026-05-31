@@ -118,22 +118,32 @@ const applyLineDelta = async ({ branchId, line, deltaQty, userId, refType, refId
     }
   }
 
+  // Resolve branch and product names to comply with StockMovement schema
+  const ProductModel = mongoose.model('Product');
+  const BranchModel = mongoose.model('Branch');
+  const [product, branch] = await Promise.all([
+    ProductModel.findById(line.product_id).session(session),
+    BranchModel.findById(branchId).session(session)
+  ]);
+  const productName = product ? (product.name || product.product_name || '') : (line.product_name || '');
+  const branchName = branch ? (branch.name || '') : '';
+
   await StockMovement.create([
     {
-      branch_product_id: line.branch_product_id,
-      type: deltaQty > 0 ? 'restock' : 'adjustment',
-      quantity: Number(deltaQty),
-      previous_stock: beforeStock,
-      new_stock: nextStock,
-      reason: reason || (deltaQty > 0 ? 'Goods received' : 'Receipt corrected'),
-      performed_by: userId,
-      product_id: line.product_id,
       branch_id: branchId,
-      reference_type: refType,
-      reference_id: refId,
+      branch_name: branchName,
+      product_id: line.product_id,
+      product_name: productName,
+      branch_product_id: line.branch_product_id,
       batch_code: line.batch_code || '',
-      expiry_date: line.expiry_date || null,
-      unit_cost: Number(line.unit_cost || 0),
+      movement_type: deltaQty > 0 ? 'inbound' : 'adjustment',
+      quantity: Math.abs(Number(deltaQty)),
+      before_stock: beforeStock,
+      after_stock: nextStock,
+      reference_type: refType || 'import_receipt',
+      reference_id: refId,
+      created_by: userId,
+      note: reason || (deltaQty > 0 ? 'Goods received' : 'Receipt corrected'),
     },
   ], { session });
 };

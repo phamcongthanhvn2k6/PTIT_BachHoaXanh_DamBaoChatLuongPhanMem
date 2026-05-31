@@ -239,7 +239,35 @@ export const updateSettings = async (req, res) => {
 
 export const updateRole = async (req, res) => {
   try {
-    const user = await User.findByIdAndUpdate(req.params.id, { role_id: req.body.role_id, role: req.body.role }, { new: true }).select('-password_hash -refresh_token');
+    const oldUser = await User.findById(req.params.id);
+    if (!oldUser) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { role_id: req.body.role_id, role: req.body.role, role_key: req.body.role_key || req.body.role },
+      { new: true }
+    ).select('-password_hash -refresh_token');
+
+    try {
+      await logActivity({
+        userId: req.userId,
+        userName: req.user?.full_name || req.user?.username || 'Admin',
+        action: 'ROLE_CHANGE',
+        entity: 'user',
+        entityId: user._id,
+        details: {
+          target_username: user.username,
+          old_role_id: oldUser.role_id,
+          new_role_id: user.role_id,
+          old_role: oldUser.role_key || oldUser.role,
+          new_role: user.role_key || user.role
+        },
+        ip: req.ip,
+      });
+    } catch (auditErr) {
+      console.error('[Audit] Failed to log role change:', auditErr.message);
+    }
+
     return res.json({ success: true, data: user, message: 'Cập nhật phân quyền thành công' });
   } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
 };
