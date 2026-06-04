@@ -12,21 +12,39 @@ export const recipeService = {
     return response.data;
   },
 
-  getRecipeByName: async (name: string) => {
-    const response = await httpClient.get(endpoints.recipes.byName(name));
+  getRecipeByName: async (name: string, branchId?: string) => {
+    const response = await httpClient.get(endpoints.recipes.byName(name), {
+      params: branchId ? { branchId } : undefined
+    });
     return response.data;
   },
 
-  getRecipeById: async (id: string) => {
-    const response = await httpClient.get(endpoints.recipes.detail(id));
+  getRecipeById: async (id: string, branchId?: string) => {
+    const response = await httpClient.get(endpoints.recipes.detail(id), {
+      params: branchId ? { branchId } : undefined
+    });
     return response.data;
   },
 
-  generateRecipe: async (payload: { dishName: string; servings: number; appetite: string }) => {
+  generateRecipe: async (payload: { dishName: string; servings: number; appetite: string; branchId?: string }) => {
     // AI generation can take 15-30 seconds — use extended timeout
     const response = await httpClient.post(endpoints.recipes.generate, payload, {
       timeout: 60000, // 60s timeout for AI generation
+      params: payload.branchId ? { branchId: payload.branchId } : undefined
     });
+    return response.data;
+  },
+
+  previewRecipe: async (payload: { dishName: string; servings: number; appetite: string; branchId?: string }) => {
+    const response = await httpClient.post(endpoints.recipes.preview, payload, {
+      timeout: 60000,
+      params: payload.branchId ? { branchId: payload.branchId } : undefined
+    });
+    return response.data;
+  },
+
+  saveRecipe: async (recipeData: any) => {
+    const response = await httpClient.post(endpoints.recipes.save, recipeData);
     return response.data;
   }
 };

@@ -10,6 +10,7 @@ import { toast } from '../components/Toast/toastEvent';
 import { productService } from '../services/productService';
 import { normalizeCategories, normalizeProductLike } from '../utils/productNormalization';
 import { getProductUrl } from '../utils/productUrl';
+import { formatRating } from '../utils/formatRating';
 
 const Products: React.FC = () => {
   const { t } = useTranslation();
@@ -429,7 +430,7 @@ const Products: React.FC = () => {
                           <div className="flex items-center gap-0.5 text-amber-400">
                             <span className="material-symbols-outlined text-xs fill-1">star</span>
                             <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                              {Number(item.average_rating).toFixed(1)}
+                              {formatRating(item.average_rating)}
                             </span>
                             <span className="text-[10px] text-slate-400">({item.review_count || 0})</span>
                           </div>

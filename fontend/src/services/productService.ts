@@ -145,6 +145,18 @@ export const productService = {
     return normalizeObject(res.data);
   },
 
+  uploadProductImages: async (files: File[]) => {
+    if (!Array.isArray(files) || files.length === 0) return [];
+    const form = new FormData();
+    files.forEach((file) => form.append('images', file));
+    const res = await httpClient.post('/uploads/product-images', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    const payload = res?.data ?? res;
+    const urls = payload?.data?.urls || payload?.urls || [];
+    return Array.isArray(urls) ? urls : [];
+  },
+
   updateProduct: async (id: number | string, payload: any) => {
     const res = await httpClient.put(endpoints.products.update(id), payload);
     return normalizeObject(res.data);

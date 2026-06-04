@@ -1,7 +1,7 @@
 import '../config/loadEnv.js';
 
 const OPENROUTER_API_BASE = 'https://openrouter.ai/api/v1';
-const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash:free';
+const DEFAULT_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
 const TIMEOUT_MS = 60000;
 
 const getApiKeyDebugStr = () => {
@@ -50,14 +50,19 @@ const parseJsonFromText = (text) => {
 };
 
 const FALLBACK_MODELS = [
+  'qwen/qwen3-coder:free',
+  'google/gemma-4-31b-it:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'meta-llama/llama-3.2-3b-instruct:free',
   'nousresearch/hermes-3-llama-3.1-405b:free',
-  'deepseek/deepseek-v4-flash:free',
-  'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
-  'poolside/laguna-xs.2:free'
+  'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free'
 ];
 
 const getModelList = () => {
-  const primary = process.env.OPENROUTER_MODEL || DEFAULT_MODEL;
+  let primary = process.env.OPENROUTER_MODEL || DEFAULT_MODEL;
+  if (primary.includes('deepseek-v4-flash')) {
+    primary = 'qwen/qwen3-coder:free';
+  }
   const list = [primary];
   for (const m of FALLBACK_MODELS) {
     if (!list.includes(m)) {

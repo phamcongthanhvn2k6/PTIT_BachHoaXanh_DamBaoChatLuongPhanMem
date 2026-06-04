@@ -1,8 +1,27 @@
 import Recipe from '../models/Recipe.js';
 import { generateRecipe, enrichRecipe } from '../services/aiService.js';
+import { matchIngredient } from '../services/ingredientMatchingService.js';
 
 const normalizeStr = (str) => {
   return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+};
+
+const attachMatchedProducts = async (recipeObj, branchId) => {
+  if (!recipeObj) return null;
+  const recipe = recipeObj.toObject ? recipeObj.toObject() : recipeObj;
+  if (!recipe.ingredients || !branchId) return recipe;
+
+  const matched = [];
+  for (const ing of recipe.ingredients) {
+    const { match, substitutes } = await matchIngredient(ing.name, branchId);
+    matched.push({
+      ingredient: ing,
+      product: match || null,
+      substitutes: substitutes || []
+    });
+  }
+  recipe.matched_ingredients = matched;
+  return recipe;
 };
 
 // GET /api/recipes
@@ -49,13 +68,40 @@ export const searchRecipes = async (req, res) => {
 // GET /api/recipes/:id
 export const getRecipeById = async (req, res) => {
   try {
-    const recipe = await Recipe.findById(req.params.id);
+    let recipe = await Recipe.findById(req.params.id);
     if (!recipe) return res.status(404).json({ success: false, message: 'Không tìm thấy công thức' });
+
+    if (!isRecipeComplete(recipe)) {
+      console.log(`[RecipeById] Recipe is incomplete (e.g. zero nutrition). Enriching on the fly...`);
+      try {
+        const enriched = await enrichRecipe(recipe.toObject(), recipe.servings || 2, 'normal');
+        if (enriched) {
+          recipe.title = enriched.title || recipe.title;
+          recipe.description = enriched.description || recipe.description;
+          recipe.prep_time = enriched.prep_time || recipe.prep_time;
+          recipe.cook_time = enriched.cook_time || recipe.cook_time;
+          recipe.difficulty = enriched.difficulty || recipe.difficulty;
+          recipe.ingredients = enriched.ingredients || recipe.ingredients;
+          recipe.steps = enriched.steps || recipe.steps;
+          recipe.tips = enriched.tips || recipe.tips;
+          recipe.tags = enriched.tags || recipe.tags;
+          recipe.nutrition = enriched.nutrition || recipe.nutrition;
+          recipe.completeness_status = 'complete';
+          recipe.last_checked_at = new Date();
+          recipe.ai_generated = true;
+        }
+      } catch (err) {
+        console.warn(`[RecipeById] Enrichment failed:`, err.message);
+      }
+    }
 
     recipe.access_count += 1;
     recipe.last_accessed_at = new Date();
     await recipe.save();
-    res.json({ success: true, data: recipe });
+
+    const branchId = req.query.branchId;
+    const finalData = await attachMatchedProducts(recipe, branchId);
+    res.json({ success: true, data: finalData });
   } catch (err) {
     console.error('[RecipeById] Error:', err.message);
     res.status(500).json({ success: false, message: err.message });
@@ -66,13 +112,40 @@ export const getRecipeById = async (req, res) => {
 export const getRecipeByName = async (req, res) => {
   try {
     const norm = normalizeStr(req.params.name);
-    const recipe = await Recipe.findOne({ normalized_name: { $regex: `^${norm}`, $options: 'i' } });
+    let recipe = await Recipe.findOne({ normalized_name: { $regex: `^${norm}`, $options: 'i' } });
 
     if (recipe) {
+      if (!isRecipeComplete(recipe)) {
+        console.log(`[RecipeByName] Recipe is incomplete (e.g. zero nutrition). Enriching on the fly...`);
+        try {
+          const enriched = await enrichRecipe(recipe.toObject(), recipe.servings || 2, 'normal');
+          if (enriched) {
+            recipe.title = enriched.title || recipe.title;
+            recipe.description = enriched.description || recipe.description;
+            recipe.prep_time = enriched.prep_time || recipe.prep_time;
+            recipe.cook_time = enriched.cook_time || recipe.cook_time;
+            recipe.difficulty = enriched.difficulty || recipe.difficulty;
+            recipe.ingredients = enriched.ingredients || recipe.ingredients;
+            recipe.steps = enriched.steps || recipe.steps;
+            recipe.tips = enriched.tips || recipe.tips;
+            recipe.tags = enriched.tags || recipe.tags;
+            recipe.nutrition = enriched.nutrition || recipe.nutrition;
+            recipe.completeness_status = 'complete';
+            recipe.last_checked_at = new Date();
+            recipe.ai_generated = true;
+          }
+        } catch (err) {
+          console.warn(`[RecipeByName] Enrichment failed:`, err.message);
+        }
+      }
+
       recipe.access_count += 1;
       recipe.last_accessed_at = new Date();
       await recipe.save();
-      return res.json({ success: true, data: recipe });
+
+      const branchId = req.query.branchId;
+      const finalData = await attachMatchedProducts(recipe, branchId);
+      return res.json({ success: true, data: finalData });
     }
 
     return res.status(404).json({ success: false, message: 'Không tìm thấy công thức, vui lòng tạo mới.' });
@@ -98,6 +171,15 @@ const isRecipeComplete = (recipe) => {
   if (!Array.isArray(recipe.steps) || recipe.steps.length < 3) return false;
   for (const s of recipe.steps) {
     if (!s.description || String(s.description).trim().length < 25) return false;
+  }
+
+  // Nutrition validation: must have non-zero calories, protein, fat, carbs
+  if (!recipe.nutrition || 
+      (Number(recipe.nutrition.calories || 0) === 0 && 
+       Number(recipe.nutrition.protein || 0) === 0 && 
+       Number(recipe.nutrition.fat || 0) === 0 && 
+       Number(recipe.nutrition.carbs || 0) === 0)) {
+    return false;
   }
 
   return true;
@@ -141,6 +223,7 @@ const scaleRecipe = (recipe, targetServings) => {
 export const generateUserRecipe = async (req, res) => {
   try {
     const { dishName, servings, appetite = 'normal', sourceProductIds = [] } = req.body;
+    const branchId = req.query.branchId || req.body.branchId;
 
     // ── INPUT VALIDATION ──
     if (!dishName || typeof dishName !== 'string' || dishName.trim().length === 0) {
@@ -223,6 +306,7 @@ export const generateUserRecipe = async (req, res) => {
             recipeObj.steps = enriched.steps || recipeObj.steps;
             recipeObj.tips = enriched.tips || recipeObj.tips;
             recipeObj.tags = enriched.tags || recipeObj.tags;
+            recipeObj.nutrition = enriched.nutrition || recipeObj.nutrition;
             recipeObj.completeness_status = 'complete';
             recipeObj.last_checked_at = new Date();
             recipeObj.canonical_key = canonicalKey;
@@ -259,14 +343,15 @@ export const generateUserRecipe = async (req, res) => {
         }
       }
 
-      return res.json({ success: true, data: recipeObj, cached: true });
+      const finalData = await attachMatchedProducts(recipeObj, branchId);
+      return res.json({ success: true, data: finalData, cached: true });
     }
 
     // ── CACHE MISS: Generate completely new recipe ──
     console.log(`[RecipeGenerate] ❌ Cache miss — generating new recipe with AI...`);
     let generatedData = null;
     try {
-      generatedData = await generateRecipe(cleanDishName, srv, cleanAppetite);
+      generatedData = await generateRecipe({ dishName: cleanDishName, servings: srv, appetite: cleanAppetite });
     } catch (aiError) {
       console.error(`[RecipeGenerate] AI service error:`, aiError.message);
       return res.status(503).json({
@@ -297,17 +382,166 @@ export const generateUserRecipe = async (req, res) => {
     try {
       const newRecipe = await Recipe.create(generatedData);
       console.log(`[RecipeGenerate] ✅ SAVED new recipe: "${newRecipe.title}" (id=${newRecipe._id})`);
-      return res.json({ success: true, data: newRecipe, cached: false });
+      const finalData = await attachMatchedProducts(newRecipe, branchId);
+      return res.json({ success: true, data: finalData, cached: false });
     } catch (saveError) {
       if (saveError.code === 11000) {
         // Race condition fallback
         const dup = await Recipe.findOne({ normalized_name: canonicalKey });
-        if (dup) return res.json({ success: true, data: dup, cached: true });
+        if (dup) {
+          const finalData = await attachMatchedProducts(dup, branchId);
+          return res.json({ success: true, data: finalData, cached: true });
+        }
       }
       throw saveError;
     }
   } catch (err) {
     console.error('[RecipeGenerate] Error:', err);
     res.status(500).json({ success: false, message: 'Lỗi hệ thống khi tạo công thức.' });
+  }
+};
+
+// POST /api/recipes/preview
+export const previewUserRecipe = async (req, res) => {
+  try {
+    const { dishName, servings, appetite = 'normal', sourceProductIds = [] } = req.body;
+    const branchId = req.query.branchId || req.body.branchId;
+
+    if (!dishName || typeof dishName !== 'string' || dishName.trim().length === 0) {
+      return res.status(400).json({ success: false, message: 'Vui lòng nhập tên món ăn.' });
+    }
+    if (dishName.trim().length < 2) {
+      return res.status(400).json({ success: false, message: 'Tên món ăn quá ngắn (tối thiểu 2 ký tự).' });
+    }
+    if (dishName.trim().length > 100) {
+      return res.status(400).json({ success: false, message: 'Tên món ăn quá dài (tối đa 100 ký tự).' });
+    }
+    if (servings === undefined || servings === null || isNaN(Number(servings))) {
+      return res.status(400).json({ success: false, message: 'Vui lòng chọn số người ăn (1-10).' });
+    }
+
+    const srv = Math.min(10, Math.max(1, parseInt(servings, 10)));
+    const cleanDishName = dishName.trim();
+    const validAppetites = ['small', 'normal', 'large'];
+    const cleanAppetite = validAppetites.includes(appetite) ? appetite : 'normal';
+    const canonicalKey = normalizeStr(cleanDishName) + '-' + srv + '-' + cleanAppetite;
+
+    console.log(`[RecipePreview] Ephemeral request: "${cleanDishName}" for ${srv} servings`);
+
+    // 1. Exact match lookup in DB
+    let recipeObj = await Recipe.findOne({
+      $or: [
+        { normalized_name: canonicalKey },
+        { canonical_key: canonicalKey },
+        { aliases: canonicalKey }
+      ],
+      status: 'active'
+    });
+
+    if (recipeObj) {
+      console.log(`[RecipePreview] ✅ DB Exact match hit: "${recipeObj.title}"`);
+      const isComplete = isRecipeComplete(recipeObj);
+      if (!isComplete) {
+        console.log(`[RecipePreview] Cached recipe is incomplete. Enriching...`);
+        try {
+          const enriched = await enrichRecipe(recipeObj.toObject(), srv, cleanAppetite);
+          if (enriched) {
+            recipeObj = enriched;
+            recipeObj.canonical_key = canonicalKey;
+            recipeObj.normalized_name = canonicalKey;
+          }
+        } catch (err) {
+          console.warn(`[RecipePreview] Enrichment failed:`, err.message);
+        }
+      }
+      const finalData = await attachMatchedProducts(recipeObj, branchId);
+      return res.json({ success: true, data: finalData, cached: true, isSaved: true });
+    }
+
+    // 2. Similar dish scaling lookup
+    const baseDishKey = normalizeStr(cleanDishName);
+    const similarRecipe = await Recipe.findOne({
+      normalized_name: { $regex: '^' + baseDishKey + '-' },
+      status: 'active'
+    });
+
+    if (similarRecipe) {
+      console.log(`[RecipePreview] 🔄 DB Similar match hit: "${similarRecipe.title}". Scaling...`);
+      let scaled = scaleRecipe(similarRecipe.toObject(), srv);
+      scaled.canonical_key = canonicalKey;
+      scaled.normalized_name = canonicalKey;
+      scaled.source_product_ids = sourceProductIds || scaled.source_product_ids || [];
+      const finalData = await attachMatchedProducts(scaled, branchId);
+      return res.json({ success: true, data: finalData, cached: true, isSaved: false });
+    }
+
+    // 3. AI Generation
+    console.log(`[RecipePreview] ❌ DB Miss. Generating via AI...`);
+    let generatedData = null;
+    try {
+      generatedData = await generateRecipe({ dishName: cleanDishName, servings: srv, appetite: cleanAppetite });
+    } catch (aiError) {
+      console.error(`[RecipePreview] AI generation error:`, aiError.message);
+      return res.status(503).json({
+        success: false,
+        message: 'Dịch vụ AI tạm thời không khả dụng. Vui lòng thử lại sau.'
+      });
+    }
+
+    if (!generatedData) {
+      return res.status(500).json({
+        success: false,
+        message: 'AI không thể tạo công thức cho món ăn này.'
+      });
+    }
+
+    generatedData.normalized_name = canonicalKey;
+    generatedData.canonical_key = canonicalKey;
+    generatedData.servings = srv;
+    generatedData.ai_generated = true;
+    generatedData.source_type = 'ai_generated';
+    generatedData.status = 'active';
+    generatedData.completeness_status = 'complete';
+    generatedData.last_checked_at = new Date();
+    generatedData.source_product_ids = sourceProductIds;
+
+    const finalData = await attachMatchedProducts(generatedData, branchId);
+    return res.json({ success: true, data: finalData, cached: false, isSaved: false });
+  } catch (err) {
+    console.error('[RecipePreview] Error:', err);
+    res.status(500).json({ success: false, message: 'Lỗi hệ thống khi tạo công thức xem trước.' });
+  }
+};
+
+// POST /api/recipes/save
+export const saveUserRecipe = async (req, res) => {
+  try {
+    const recipeData = req.body;
+    if (!recipeData || !recipeData.title || !recipeData.normalized_name) {
+      return res.status(400).json({ success: false, message: 'Dữ liệu công thức không hợp lệ.' });
+    }
+
+    let existing = await Recipe.findOne({ normalized_name: recipeData.normalized_name });
+    if (existing) {
+      return res.json({ success: true, data: existing, message: 'Công thức đã tồn tại trong hệ thống.' });
+    }
+
+    if (req.user) {
+      recipeData.created_by = req.user._id;
+    }
+    recipeData.status = 'active';
+
+    const savedRecipe = await Recipe.create(recipeData);
+    console.log(`[RecipeSave] Saved new recipe to DB: "${savedRecipe.title}" (id=${savedRecipe._id})`);
+    return res.json({ success: true, data: savedRecipe });
+  } catch (err) {
+    if (err.code === 11000) {
+      const dup = await Recipe.findOne({ normalized_name: req.body.normalized_name });
+      if (dup) {
+        return res.json({ success: true, data: dup });
+      }
+    }
+    console.error('[RecipeSave] Error:', err);
+    res.status(500).json({ success: false, message: 'Lỗi hệ thống khi lưu công thức.' });
   }
 };

@@ -19,3 +19,5 @@ export { branchService } from './branchService';
 export { auditService } from './auditService';
 export { bannerService } from './bannerService';
 export { hotDealService } from './hotDealService';
+export { recommendationService } from './recommendationService';
+export { priceWatchService } from './priceWatchService';

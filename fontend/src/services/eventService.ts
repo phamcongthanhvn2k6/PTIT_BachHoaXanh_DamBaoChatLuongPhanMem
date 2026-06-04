@@ -4,7 +4,7 @@ import { dataService } from './dataService';
 export const eventService = {
   getFeaturedEvents: async () => {
     try {
-      const res = await httpClient.get('/events?featured=true&limit=6');
+      const res = await httpClient.get('/events/published');
       return res.data?.data || res.data || [];
     } catch (err) {
       console.error(err);

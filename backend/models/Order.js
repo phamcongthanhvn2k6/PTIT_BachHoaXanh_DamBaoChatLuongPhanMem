@@ -1,5 +1,22 @@
 import mongoose from 'mongoose';
 
+const appliedPromotionSchema = new mongoose.Schema({
+  promotion_id: { type: mongoose.Schema.Types.Mixed, default: null },
+  title: { type: String, default: '' },
+  type: { type: String, default: '' },
+  badge_text: { type: String, default: '' },
+  discount_amount: { type: Number, default: 0 },
+  affected_items: { type: Number, default: 0 },
+}, { _id: false });
+
+const appliedCouponSchema = new mongoose.Schema({
+  coupon_id: { type: mongoose.Schema.Types.Mixed, default: null },
+  code: { type: String, default: '' },
+  title: { type: String, default: '' },
+  type: { type: String, default: '' },
+  discount_amount: { type: Number, default: 0 },
+}, { _id: false });
+
 const orderSchema = new mongoose.Schema({
   user_id: { type: mongoose.Schema.Types.Mixed, required: true },
   items: [{
@@ -75,21 +92,8 @@ const orderSchema = new mongoose.Schema({
     points_earned: { type: Number, default: 0 },
     final_total: { type: Number, default: 0 },
   },
-  applied_promotions: [{
-    promotion_id: mongoose.Schema.Types.Mixed,
-    title: String,
-    type: String,
-    badge_text: String,
-    discount_amount: { type: Number, default: 0 },
-    affected_items: { type: Number, default: 0 },
-  }],
-  applied_coupon: {
-    coupon_id: mongoose.Schema.Types.Mixed,
-    code: String,
-    title: String,
-    type: String,
-    discount_amount: { type: Number, default: 0 },
-  },
+  applied_promotions: [appliedPromotionSchema],
+  applied_coupon: { type: appliedCouponSchema, default: null },
   gift_items: [{
     promotion_id: mongoose.Schema.Types.Mixed,
     product_id: mongoose.Schema.Types.Mixed,
@@ -99,6 +103,7 @@ const orderSchema = new mongoose.Schema({
     is_gift: { type: Boolean, default: true },
   }],
   note: { type: String, default: '' },
+  cancel_reason: { type: String, default: null },
   generated_invoice_url: { type: String, default: null },
   email_notification_status: { type: String, default: 'PENDING', enum: ['PENDING', 'SENDING', 'SENT', 'FAILED', 'SKIPPED'] },
   email_notification_sent_at: { type: Date, default: null },

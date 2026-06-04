@@ -1,8 +1,19 @@
+import mongoose from 'mongoose';
 import StockMovement from '../models/StockMovement.js';
+
+const parseBranchId = (id) => {
+  if (!id) return null;
+  if (id === 'HCM01' || String(id) === '1') return new mongoose.Types.ObjectId('000000000000000000000001');
+  if (mongoose.Types.ObjectId.isValid(id)) return new mongoose.Types.ObjectId(id);
+  return id;
+};
 
 const buildQuery = (req) => {
   const q = {};
-  if (req.query?.branch_id && req.query.branch_id !== 'ALL') q.branch_id = req.query.branch_id;
+  if (req.query?.branch_id && req.query.branch_id !== 'ALL') {
+    const parsed = parseBranchId(req.query.branch_id);
+    if (parsed) q.branch_id = parsed;
+  }
   if (req.query?.product_id) q.product_id = req.query.product_id;
   if (req.query?.branch_product_id) q.branch_product_id = req.query.branch_product_id;
   if (req.query?.type) q.type = req.query.type;

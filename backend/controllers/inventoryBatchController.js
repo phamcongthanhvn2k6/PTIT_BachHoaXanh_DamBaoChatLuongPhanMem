@@ -132,6 +132,21 @@ export const list = async (req, res) => {
     const limit = Math.min(500, Math.max(1, Number(req.query.limit || 50)));
     const query = buildQuery(req);
 
+    if (req.query?.branch_id && req.query.branch_id !== 'ALL') {
+      const parseBranchId = (id) => {
+        if (!id) return null;
+        if (id === 'HCM01' || String(id) === '1') return new mongoose.Types.ObjectId('000000000000000000000001');
+        if (mongoose.Types.ObjectId.isValid(id)) return new mongoose.Types.ObjectId(id);
+        return id;
+      };
+      const parsedBranchId = parseBranchId(req.query.branch_id);
+      if (parsedBranchId) {
+        const bpDocs = await BranchProduct.find({ branch_id: parsedBranchId }).select('_id').lean();
+        const bpIds = bpDocs.map(doc => doc._id);
+        query.branch_product_id = { $in: bpIds };
+      }
+    }
+
     const [total, rawData] = await Promise.all([
       InventoryBatch.countDocuments(query),
       InventoryBatch.find(query)

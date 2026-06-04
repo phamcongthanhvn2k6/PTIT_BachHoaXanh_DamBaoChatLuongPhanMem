@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
+import { generateShortCode, buildProductSlug } from '../utils/slugify.js';
 
 import User from '../models/User.js';
 import Product from '../models/Product.js';
@@ -117,11 +118,17 @@ const run = async () => {
   console.log(`Seeded ${categories.length} categories`);
 
   // Seed Products
-  const products = await Product.insertMany((mock.products || []).map(p => ({
-    _id: makeId(p.id),
-    name: p.name,
-    slug: p.slug || '',
-    description: p.description || '',
+  const products = await Product.insertMany((mock.products || []).map(p => {
+    const prodId = makeId(p.id);
+    const shortCode = p.short_code || generateShortCode(prodId);
+    const slug = p.slug || buildProductSlug(p.name, prodId, shortCode);
+    return {
+      _id: prodId,
+      name: p.name,
+      slug: slug,
+      short_code: shortCode,
+      description: p.description || '',
+
     short_description: Array.isArray(p.short_description) ? p.short_description.join(' ') : String(p.short_description || ''),
     eco_label: p.eco_label ?? null,
     category_id: p.category_id ? makeId(p.category_id) : null,
@@ -152,7 +159,8 @@ const run = async () => {
     related_product_ids: p.related_product_ids || [],
     frequently_bought_together: p.frequently_bought_together || [],
     created_by: p.created_by ? makeId(p.created_by) : null,
-  }))).catch((e) => { console.error('Product seed err:', e.message); return []; });
+    };
+  })).catch((e) => { console.error('Product seed err:', e.message); return []; });
   console.log(`Seeded ${products.length} products`);
 
   // Seed Branches

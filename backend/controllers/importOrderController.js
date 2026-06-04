@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import ImportOrder from '../models/ImportOrder.js';
 import Supplier from '../models/Supplier.js';
+import Branch from '../models/Branch.js';
 import { logActivity } from '../services/auditService.js';
 
 const computeLine = (line) => {
@@ -44,9 +45,19 @@ const nextStatusByItems = (items, fallback = 'ordered') => {
 
 const makeOrderCode = () => `IO-${Date.now().toString(36).toUpperCase()}`;
 
+const parseBranchId = (id) => {
+  if (!id) return null;
+  if (id === 'HCM01' || String(id) === '1') return new mongoose.Types.ObjectId('000000000000000000000001');
+  if (mongoose.Types.ObjectId.isValid(id)) return new mongoose.Types.ObjectId(id);
+  return id;
+};
+
 const buildQuery = (req) => {
   const q = {};
-  if (req.query?.branch_id && req.query.branch_id !== 'ALL') q.branch_id = req.query.branch_id;
+  if (req.query?.branch_id && req.query.branch_id !== 'ALL') {
+    const parsed = parseBranchId(req.query.branch_id);
+    if (parsed) q.branch_id = parsed;
+  }
   if (req.query?.supplier_id) q.supplier_id = req.query.supplier_id;
   if (req.query?.status) q.status = req.query.status;
   if (req.query?.from || req.query?.to) {
@@ -106,12 +117,25 @@ export const create = async (req, res) => {
       return res.status(400).json({ success: false, message: 'items are required' });
     }
 
+    const branch = await Branch.findById(branch_id);
+    if (!branch) return res.status(404).json({ success: false, message: 'Chi nhánh không tồn tại' });
+
     const supplier = await Supplier.findById(supplier_id);
     if (!supplier) return res.status(404).json({ success: false, message: 'Supplier not found' });
 
     const normalizedItems = items.map(computeLine).filter((i) => i.product_id && i.quantity_ordered > 0);
     if (normalizedItems.length === 0) {
       return res.status(400).json({ success: false, message: 'No valid item lines' });
+    }
+
+    const ProductModel = mongoose.model('Product');
+    for (const item of normalizedItems) {
+      const prod = await ProductModel.findById(item.product_id);
+      if (!prod) {
+        return res.status(400).json({ success: false, message: `Sản phẩm với ID ${item.product_id} không tồn tại` });
+      }
+      if (!item.sku) item.sku = prod.sku || '';
+      if (!item.product_name) item.product_name = prod.name || prod.product_name || '';
     }
 
     const amounts = sumAmounts(normalizedItems);
@@ -155,8 +179,12 @@ export const update = async (req, res) => {
     const order = await ImportOrder.findById(req.params.id);
     if (!order) return res.status(404).json({ success: false, message: 'Import order not found' });
 
-    if (['received', 'cancelled'].includes(order.status)) {
-      return res.status(400).json({ success: false, message: `Cannot edit ${order.status} order` });
+    // Enterprise Audit Lock: Only draft orders can be edited
+    if (['ordered', 'partially_received', 'received', 'cancelled'].includes(order.status)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Không thể chỉnh sửa đơn hàng đã duyệt, đã nhận hoặc đã hủy (Trạng thái: ${order.status}). Chỉ được phép sửa đơn Nháp.` 
+      });
     }
 
     const oldData = order.toObject();
@@ -167,7 +195,11 @@ export const update = async (req, res) => {
       order.supplier_id = req.body.supplier_id;
     }
 
-    if (req.body.branch_id) order.branch_id = req.body.branch_id;
+    if (req.body.branch_id) {
+      const branch = await Branch.findById(req.body.branch_id);
+      if (!branch) return res.status(404).json({ success: false, message: 'Chi nhánh không tồn tại' });
+      order.branch_id = req.body.branch_id;
+    }
     if (req.body.expected_date !== undefined) order.expected_date = req.body.expected_date || null;
     if (req.body.note !== undefined) order.note = req.body.note || '';
 
@@ -175,6 +207,15 @@ export const update = async (req, res) => {
       const normalizedItems = req.body.items.map(computeLine).filter((i) => i.product_id && i.quantity_ordered > 0);
       if (normalizedItems.length === 0) {
         return res.status(400).json({ success: false, message: 'No valid item lines' });
+      }
+      const ProductModel = mongoose.model('Product');
+      for (const item of normalizedItems) {
+        const prod = await ProductModel.findById(item.product_id);
+        if (!prod) {
+          return res.status(400).json({ success: false, message: `Sản phẩm với ID ${item.product_id} không tồn tại` });
+        }
+        if (!item.sku) item.sku = prod.sku || '';
+        if (!item.product_name) item.product_name = prod.name || prod.product_name || '';
       }
       order.items = normalizedItems;
     }
@@ -222,16 +263,45 @@ export const updateStatus = async (req, res) => {
     const order = await ImportOrder.findById(req.params.id);
     if (!order) return res.status(404).json({ success: false, message: 'Import order not found' });
 
+    const current = order.status;
+
+    // 1. Unchanged state check
+    if (current === status) {
+      return res.status(400).json({ success: false, message: `Đơn hàng đã ở trạng thái ${status} từ trước.` });
+    }
+
+    // 2. Frozen state check (Received or Cancelled orders are final)
+    if (['received', 'cancelled'].includes(current)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Không thể thay đổi trạng thái của đơn hàng đã ${current === 'received' ? 'hoàn thành nhận hàng' : 'bị hủy'}.` 
+      });
+    }
+
+    // 3. Rollback to Draft check
+    if (status === 'draft') {
+      return res.status(400).json({ success: false, message: 'Không thể chuyển đơn hàng đã xử lý về lại trạng thái Nháp (Draft).' });
+    }
+
+    // 4. Rollback to Ordered check
+    if (status === 'ordered' && ['partially_received', 'received'].includes(current)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Không thể chuyển đơn hàng đã nhận một phần hoặc toàn bộ về trạng thái đã duyệt/đặt hàng.' 
+      });
+    }
+
+    // 5. Cancel received check
+    if (status === 'cancelled' && ['received', 'partially_received'].includes(current)) {
+      return res.status(400).json({ success: false, message: 'Không thể hủy đơn hàng đã nhận hàng.' });
+    }
+
     const oldData = order.toObject();
     order.status = status;
     if (status === 'ordered' && !order.ordered_date) order.ordered_date = new Date();
     if (status === 'received') order.received_date = new Date();
     order.updated_by = req.userId;
     order.timeline.push({ status, note: note || 'Status updated', by: req.userId, at: new Date() });
-
-    if (status === 'cancelled' && ['received'].includes(oldData.status)) {
-      return res.status(400).json({ success: false, message: 'Cannot cancel a received order' });
-    }
 
     if (status === 'received') {
       order.items = (order.items || []).map((line) => ({

@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Component } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store';
 import { createOrder } from '../slices/orderSlice';
-import { clearCart, selectCurrentBranchItems } from '../slices/cartSlice';
+import { clearCart, selectCurrentBranchItems, loadAllBranchCarts } from '../slices/cartSlice';
 import { verifySession } from '../slices/authSlice';
 import { loadLoyaltyTransactions } from '../slices/loyaltySlice';
 import { paymentService } from '../services/paymentService';
 import { orderService } from '../services/orderService';
 import { toast } from '../components/Toast/toastEvent';
+import { dataService } from '../services/dataService';
 import type { Order } from '../types';
 
 const formatMoney = (value?: number | null) => Number(value ?? 0).toLocaleString('vi-VN');
@@ -22,6 +23,15 @@ const Payment: React.FC = () => {
   const [isConfirming, setIsConfirming] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'pending' | 'processing' | 'paid' | 'failed'>('idle');
   const [countdown, setCountdown] = useState<number>(0);
+  const [settings, setSettings] = useState<any>({});
+  const [isWaitingReconciliation, setIsWaitingReconciliation] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false);
+
+  useEffect(() => {
+    dataService.getAdminSettings()
+      .then(setSettings)
+      .catch(() => console.error('Failed to load settings'));
+  }, []);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -112,6 +122,12 @@ const Payment: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (currentUser?.id) {
+      dispatch(loadAllBranchCarts());
+    }
+  }, [currentUser?.id, dispatch]);
+
+  useEffect(() => {
     if (currentUser?.id && providers.length > 0) {
       paymentService.listMethods(currentUser.id).then(methods => {
         const safeMethods = methods || [];
@@ -145,6 +161,137 @@ const Payment: React.FC = () => {
     }
   }, [currentUser?.id, providers, getMethodAvailability]);
 
+  const handleSuccessRedirect = useCallback(async (paidOrder: any, txnData: any, branchId: string) => {
+    sessionStorage.removeItem('lotte_active_transaction_id');
+    sessionStorage.removeItem('lotte_active_order_id');
+    sessionStorage.removeItem('lotte_checkout_payment_state');
+    try {
+       const httpClientModule = await import('../api/httpClient');
+       const endpointModule = await import('../api/endpoints');
+       await httpClientModule.default.post(endpointModule.endpoints.cart.clear, { branch_id: branchId });
+    } catch (e) {
+      console.warn('[Payment] Failed to clear cart via API:', e);
+    }
+
+    dispatch(createOrder(paidOrder));
+    dispatch(clearCart());
+    dispatch(verifySession() as any);
+    dispatch(loadLoyaltyTransactions() as any);
+
+    setPaymentStatus('paid');
+    toast.success("Thanh toán thành công!");
+
+    const orderId = paidOrder?.id || (paidOrder as any)?._id || '';
+    navigate(`/payment/success?order_id=${orderId}`, {
+      state: {
+        order: paidOrder,
+        address,
+        transactionId: txnData?.transaction_id || txnData?._id || txnData?.id || ''
+      }
+    });
+  }, [dispatch, navigate, address]);
+
+  const handleReselectMethod = useCallback(async () => {
+    if (pendingPayment) {
+      const rawTxId = pendingPayment.transaction?._id || pendingPayment.transaction?.id || pendingPayment.transaction?.transaction_id;
+      const txId = String(rawTxId);
+      try {
+        await paymentService.cancelPayment(txId);
+      } catch (err) {
+        console.warn('Failed to cancel payment transaction on backend:', err);
+      }
+    }
+    sessionStorage.removeItem('lotte_active_transaction_id');
+    sessionStorage.removeItem('lotte_active_order_id');
+    setPendingPayment(null);
+    setPaymentStatus('idle');
+    setIsWaitingReconciliation(false);
+  }, [pendingPayment]);
+
+  const rehydrateActivePayment = useCallback(async () => {
+    const activeTxId = sessionStorage.getItem('lotte_active_transaction_id');
+    const activeOrderId = sessionStorage.getItem('lotte_active_order_id');
+
+    if (!activeTxId || !activeOrderId) return;
+
+    try {
+      console.log('[Payment] Rehydrating payment status for Tx:', activeTxId, 'Order:', activeOrderId);
+      const tx = await paymentService.getPaymentStatus(activeTxId);
+      
+      if (!tx) {
+        console.warn('[Payment] Transaction not found on backend');
+        return;
+      }
+
+      const order = await orderService.getDetail(activeOrderId);
+      
+      // Determine if expired
+      const expiredAt = tx.expired_at;
+      const isExpired = expiredAt ? new Date(expiredAt).getTime() <= Date.now() : false;
+
+      if (tx.status === 'COMPLETED' || tx.status === 'PAID') {
+        console.log('[Payment] Active transaction is already paid/completed');
+        
+        const paidOrder: Order = {
+          ...order,
+          payment_method: selectedMethodId,
+          payment_status: 'PAID',
+          status: 'CONFIRMED',
+          points_earned: tx?.points_earned || 0,
+          payment: {
+            method: tx.provider || 'BANK_TRANSFER',
+            transaction_id: tx.transaction_id || activeTxId,
+            status: 'PAID'
+          },
+          updated_at: new Date().toISOString()
+        } as unknown as Order;
+
+        await handleSuccessRedirect(paidOrder, tx, order?.branch_id || currentBranchId);
+      } else if (tx.status === 'FAILED' || tx.status === 'CANCELLED' || tx.status === 'EXPIRED' || isExpired) {
+        console.log('[Payment] Active transaction is failed, cancelled, or expired');
+        sessionStorage.removeItem('lotte_active_transaction_id');
+        sessionStorage.removeItem('lotte_active_order_id');
+        setPendingPayment(null);
+        setPaymentStatus('failed');
+        setIsWaitingReconciliation(false);
+      } else {
+        // Pending state
+        console.log('[Payment] Active transaction is still pending');
+        setPendingPayment({
+          transaction: tx,
+          order: order,
+          isCard: tx.provider !== 'BANK_TRANSFER'
+        });
+        setPaymentStatus('pending');
+        
+        // If order or tx is waiting confirmation/processing, enable reconciliation polling
+        if (tx.status === 'PROCESSING' || order?.payment_status === 'WAITING_CONFIRMATION' || order?.payment?.status === 'WAITING_CONFIRMATION') {
+          setIsWaitingReconciliation(true);
+        }
+      }
+    } catch (err) {
+      console.error('[Payment] Rehydration failed:', err);
+    }
+  }, [currentBranchId, handleSuccessRedirect, selectedMethodId]);
+
+  useEffect(() => {
+    // Run once on mount / route change
+    rehydrateActivePayment();
+
+    // Listen for focus & visibility change to fetch backend status
+    const handleActivity = () => {
+      rehydrateActivePayment();
+    };
+
+    window.addEventListener('focus', handleActivity);
+    document.addEventListener('visibilitychange', handleActivity);
+
+    return () => {
+      window.removeEventListener('focus', handleActivity);
+      document.removeEventListener('visibilitychange', handleActivity);
+    };
+  }, [rehydrateActivePayment, location.key]);
+
   // Countdown timer for QR expiry (15 minutes)
   useEffect(() => {
     if (!pendingPayment) {
@@ -173,6 +320,52 @@ const Payment: React.FC = () => {
     const timer = setInterval(updateCountdown, 1000);
     return () => clearInterval(timer);
   }, [pendingPayment]);
+
+  useEffect(() => {
+    if (!isWaitingReconciliation || !pendingPayment) return;
+
+    const rawTxId = pendingPayment.transaction?._id || pendingPayment.transaction?.id || pendingPayment.transaction?.transaction_id;
+    const txId = String(rawTxId);
+
+    const checkInterval = setInterval(async () => {
+      try {
+        const res = await paymentService.getPaymentStatus(txId);
+        if (res && (res.status === 'COMPLETED' || res.status === 'PAID')) {
+          clearInterval(checkInterval);
+          setIsWaitingReconciliation(false);
+
+          const provider = pendingPayment.transaction?.provider || 'BANK_TRANSFER';
+          const paidOrder: Order = {
+            ...pendingPayment.order,
+            payment_method: selectedMethodId,
+            payment_status: 'PAID',
+            status: 'CONFIRMED',
+            points_earned: res?.points_earned || 0,
+            payment: {
+              method: provider,
+              transaction_id: pendingPayment.transaction?.transaction_id || txId,
+              status: 'PAID'
+            },
+            updated_at: new Date().toISOString()
+          } as unknown as Order;
+
+          await handleSuccessRedirect(paidOrder, pendingPayment.transaction, pendingPayment.order?.branch_id || currentBranchId);
+        } else if (res && (res.status === 'FAILED' || res.status === 'CANCELLED' || res.status === 'EXPIRED')) {
+          clearInterval(checkInterval);
+          setIsWaitingReconciliation(false);
+          sessionStorage.removeItem('lotte_active_transaction_id');
+          sessionStorage.removeItem('lotte_active_order_id');
+          setPendingPayment(null);
+          toast.error(res.status === 'EXPIRED' ? 'Phiên thanh toán đã hết hạn (15 phút). Vui lòng thử lại.' : 'Giao dịch thanh toán bị từ chối hoặc thất bại.');
+          setPaymentStatus('failed');
+        }
+      } catch (err) {
+        console.warn('Error checking payment status:', err);
+      }
+    }, 3000); // Poll every 3 seconds
+
+    return () => clearInterval(checkInterval);
+  }, [isWaitingReconciliation, pendingPayment, selectedMethodId, currentBranchId, handleSuccessRedirect]);
 
   const formatCountdown = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -389,7 +582,7 @@ const Payment: React.FC = () => {
         txnData = await paymentService.processPayment({
           orderId,
           provider,
-          amount: finalTotal,
+          amount: createdOrder?.total_amount || createdOrder?.total || finalTotal,
           methodId: selectedMethodId,
           userId: currentUser?.id || currentUser?._id || '',
           currency: 'VND'
@@ -401,6 +594,10 @@ const Payment: React.FC = () => {
         setPaymentStatus('failed');
         return;
       }
+
+      const isWallet = selectedMethod?.type === 'wallet';
+      const isCard = selectedMethod?.type === 'card';
+      const orderWithId = { ...createdOrder, id: orderId };
 
       if (selectedMethodId === 'cod') {
         const paidOrder: Order = {
@@ -424,16 +621,27 @@ const Payment: React.FC = () => {
       }
 
       if (selectedMethodId === 'qr_transfer') {
-        const orderWithId = { ...createdOrder, id: orderId };
-        setPendingPayment({ transaction: txnData, order: orderWithId });
+        const txId = txnData?._id || txnData?.id || txnData?.transaction_id;
+        sessionStorage.setItem('lotte_active_transaction_id', String(txId));
+        sessionStorage.setItem('lotte_active_order_id', String(orderId));
+        setPendingPayment({ transaction: txnData, order: orderWithId, isCard: false });
         setPaymentStatus('pending');
         setIsProcessing(false);
         return;
       }
 
-      // Direct saved card/wallet flow simulation
-      const txId = txnData?._id || txnData?.id || txnData?.transaction_id;
-      setTimeout(async () => {
+      if (isCard) {
+        const txId = txnData?._id || txnData?.id || txnData?.transaction_id;
+        sessionStorage.setItem('lotte_active_transaction_id', String(txId));
+        sessionStorage.setItem('lotte_active_order_id', String(orderId));
+        setPendingPayment({ transaction: txnData, order: orderWithId, isCard: true });
+        setPaymentStatus('pending');
+        setIsProcessing(false);
+        return;
+      }
+
+      if (isWallet) {
+        const txId = txnData?._id || txnData?.id || txnData?.transaction_id;
         try {
           const confirmResult = await paymentService.confirmPayment(txId);
           const paidOrder: Order = {
@@ -452,12 +660,13 @@ const Payment: React.FC = () => {
 
           await handleSuccessRedirect(paidOrder, txnData, selectedBranchId);
         } catch (confirmErr: any) {
-          console.error("Direct confirm failed:", confirmErr);
-          toast.error("Giao dịch thẻ bị từ chối hoặc không đủ số dư. Vui lòng thử lại.");
+          console.error("Wallet confirm failed:", confirmErr);
+          toast.error("Giao dịch ví thất bại hoặc không đủ số dư. Vui lòng thử lại.");
           setPaymentStatus('failed');
           setIsProcessing(false);
         }
-      }, 2000);
+        return;
+      }
 
     } catch (err: any) {
       console.error("[ORDER ERROR FULL]", err.response?.data || err);
@@ -468,86 +677,94 @@ const Payment: React.FC = () => {
     }
   };
 
-  const handleSuccessRedirect = useCallback(async (paidOrder: any, txnData: any, branchId: string) => {
-    try {
-       const httpClientModule = await import('../api/httpClient');
-       const endpointModule = await import('../api/endpoints');
-       await httpClientModule.default.post(endpointModule.endpoints.cart.clear, { branch_id: branchId });
-    } catch {
-      return;
-    }
-
-    dispatch(createOrder(paidOrder));
-    dispatch(clearCart());
-    dispatch(verifySession() as any);
-    dispatch(loadLoyaltyTransactions() as any);
-
-    setPaymentStatus('paid');
-    toast.success("Thanh toán thành công!");
-
-    const orderId = paidOrder?.id || (paidOrder as any)?._id || '';
-    navigate(`/payment/success?order_id=${orderId}`, {
-      state: {
-        order: paidOrder,
-        address,
-        transactionId: txnData?.transaction_id || txnData?._id || txnData?.id || ''
-      }
-    });
-  }, [dispatch, navigate, address]);
 
   const handleUserConfirmPayment = async () => {
     if (!pendingPayment) return;
     setIsConfirming(true);
-    setPaymentStatus('processing');
 
     try {
       const rawTxId = pendingPayment.transaction?._id || pendingPayment.transaction?.id || pendingPayment.transaction?.transaction_id;
       const txId = rawTxId && String(rawTxId) !== 'undefined' ? String(rawTxId) : '';
-      
-      const rawOrderId = pendingPayment.order?.id || pendingPayment.order?._id || pendingPayment.transaction?.order_id;
-      const orderId = rawOrderId && String(rawOrderId) !== 'undefined' ? String(rawOrderId) : '';
-
-      console.log('[Payment] handleUserConfirmPayment — txId:', txId, 'orderId:', orderId);
 
       if (!txId || txId === 'undefined' || txId === 'null') {
         toast.error('Không tìm thấy mã giao dịch hợp lệ. Vui lòng thử lại.');
         setIsConfirming(false);
-        setPaymentStatus('pending');
         return;
       }
 
-      // Simulate a realistic verification delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      const confirmResult = await paymentService.confirmPayment(txId);
-      const provider = pendingPayment.transaction?.provider || 'BANK_TRANSFER';
-      const paidOrder: Order = {
-        ...pendingPayment.order,
-        payment_method: selectedMethodId,
-        payment_status: 'PAID',
-        status: 'CONFIRMED',
-        points_earned: confirmResult?.points_earned || 0,
-        payment: {
-          method: provider,
-          transaction_id: pendingPayment.transaction?.transaction_id || txId,
-          status: 'PAID'
-        },
-        updated_at: new Date().toISOString()
-      } as unknown as Order;
-
-      await handleSuccessRedirect(paidOrder, pendingPayment.transaction, pendingPayment.order?.branch_id || currentBranchId);
-    } catch(err: any) {
-      console.error("Confirm failed:", err);
-      toast.error(err?.response?.data?.message || 'Không thể xác nhận thanh toán. Vui lòng thử lại.');
-      setPaymentStatus('pending');
+      await paymentService.verifyPayment(txId);
+      setIsWaitingReconciliation(true);
+      toast.success("Yêu cầu xác nhận thanh toán đã được gửi đi. Hệ thống đang tiến hành đối soát.");
+    } catch (err: any) {
+      console.error("Verification request failed:", err);
+      toast.error(err?.response?.data?.message || 'Không thể gửi yêu cầu xác nhận. Vui lòng thử lại.');
     } finally {
       setIsConfirming(false);
+    }
+  };
+
+  const handleSandboxSimulation = async (simulatedStatus: 'COMPLETED' | 'FAILED') => {
+    if (!pendingPayment) return;
+    const rawTxId = pendingPayment.transaction?._id || pendingPayment.transaction?.id || pendingPayment.transaction?.transaction_id;
+    const txId = String(rawTxId);
+
+    setIsSimulating(true);
+    try {
+      const res = await paymentService.sandboxSimulatePayment(txId, simulatedStatus);
+      if (simulatedStatus === 'COMPLETED') {
+        const provider = pendingPayment.transaction?.provider || 'BANK_TRANSFER';
+        const paidOrder: Order = {
+          ...pendingPayment.order,
+          payment_method: selectedMethodId,
+          payment_status: 'PAID',
+          status: 'CONFIRMED',
+          points_earned: res?.points_earned || 0,
+          payment: {
+            method: provider,
+            transaction_id: pendingPayment.transaction?.transaction_id || txId,
+            status: 'PAID'
+          },
+          updated_at: new Date().toISOString()
+        } as unknown as Order;
+
+        await handleSuccessRedirect(paidOrder, pendingPayment.transaction, pendingPayment.order?.branch_id || currentBranchId);
+      } else {
+        toast.error('Mô phỏng giao dịch thanh toán thất bại.');
+        sessionStorage.removeItem('lotte_active_transaction_id');
+        sessionStorage.removeItem('lotte_active_order_id');
+        setPendingPayment(null);
+        setPaymentStatus('failed');
+      }
+    } catch (err: any) {
+      console.error('Sandbox simulation failed:', err);
+      toast.error(err?.response?.data?.message || 'Lỗi mô phỏng sandbox.');
+    } finally {
+      setIsSimulating(false);
     }
   };
 
   // ============================================================
   // RENDER: No order state
   // ============================================================
+  if (settings?.maintenance_mode) {
+    return (
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center bg-background-light dark:bg-background-dark font-display flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="bg-gradient-to-br from-amber-50 to-orange-100 dark:from-amber-950/20 dark:to-orange-950/20 p-8 rounded-3xl border border-orange-200 dark:border-orange-900 max-w-lg shadow-xl shadow-orange-500/5">
+          <span className="material-symbols-outlined text-6xl text-orange-500 mb-4 animate-bounce">construction</span>
+          <h2 className="text-2xl font-black mb-4 text-orange-950 dark:text-orange-300 uppercase tracking-wide">
+            {t('common.maintenanceTitle') || 'Hệ Thống Đang Bảo Trì'}
+          </h2>
+          <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed text-sm">
+            {t('common.maintenanceMessage') || 'Để đảm bảo trải nghiệm tốt nhất và nâng cấp hệ thống, Lotte Mart Storefront hiện đang tạm dừng nhận đơn hàng. Chúng tôi sẽ trở lại trong thời gian sớm nhất.'}
+          </p>
+          <button onClick={() => navigate('/home')} className="bg-primary text-white px-8 py-3 rounded-xl font-bold hover:opacity-90 transition-opacity">
+            {t('common.backToHome') || 'Về Trang Chủ'}
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   if (!location.state && !getPersistedState()) {
     return (
       <div className="p-10 text-center flex flex-col items-center justify-center min-h-[50vh]">
@@ -563,6 +780,7 @@ const Payment: React.FC = () => {
   // RENDER: QR Payment Screen (pendingPayment state)
   // ============================================================
   if (pendingPayment) {
+    const isCard = pendingPayment.isCard;
     const qrData = pendingPayment.transaction?.qrData;
     const amount = qrData?.amount || pendingPayment.transaction?.amount || total;
     const txnId = pendingPayment.transaction?.transaction_id || '';
@@ -574,7 +792,7 @@ const Payment: React.FC = () => {
         {/* Header */}
         <header className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-6 py-5 bg-white dark:bg-slate-900 sticky top-0 z-10">
           <div className="flex items-center gap-3">
-            <button onClick={() => { setPendingPayment(null); setPaymentStatus('idle'); }} className="flex items-center justify-center rounded-full h-9 w-9 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition -ml-1">
+            <button onClick={handleReselectMethod} className="flex items-center justify-center rounded-full h-9 w-9 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition -ml-1">
               <span className="material-symbols-outlined text-xl">arrow_back</span>
             </button>
             <h2 className="text-lg font-bold tracking-tight">{t('payment.title')}</h2>
@@ -600,7 +818,7 @@ const Payment: React.FC = () => {
               <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm animate-pulse">
                 2
               </div>
-              <span className="text-[10px] font-bold text-primary mt-1">{t('payment.stepTransfer')}</span>
+              <span className="text-[10px] font-bold text-primary mt-1">{isCard ? 'Xác thực thẻ' : t('payment.stepTransfer')}</span>
             </div>
             <div className="flex-1 h-0.5 bg-slate-200 dark:bg-slate-700 mx-2"></div>
             <div className="flex flex-col items-center">
@@ -611,101 +829,210 @@ const Payment: React.FC = () => {
             </div>
           </div>
 
-          {/* Title */}
-          <div className="mb-6">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4">
-              <span className="material-symbols-outlined text-4xl text-primary">qr_code_2</span>
-            </div>
-            <h3 className="text-xl font-black mb-1">{t('payment.scanQR')}</h3>
-            <p className="text-slate-500 text-sm">{t('payment.scanDesc')}</p>
-          </div>
+          {isCard ? (
+            /* Card payment mock layout */
+            <div className="w-full flex flex-col items-center">
+              <div className="mb-6">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-500/10 mb-4">
+                  <span className="material-symbols-outlined text-4xl text-blue-500">credit_card</span>
+                </div>
+                <h3 className="text-xl font-black mb-1">Xác thực cổng thanh toán thẻ</h3>
+                <p className="text-slate-500 text-sm">Vui lòng kiểm tra thông tin và xác nhận giao dịch thẻ của bạn</p>
+              </div>
 
-          {/* QR Code */}
-          <div className={`bg-white p-5 rounded-2xl border-2 ${isExpired ? 'border-red-200 opacity-50' : 'border-primary/20'} shadow-lg shadow-primary/5 mb-6 inline-block relative`}>
-            <img
-              src={qrData?.qrUrl || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`LOTTE_MART|${txnId}|${amount}`)}`}
-              alt="QR Code thanh toán"
-              className="w-[220px] h-[220px] md:w-[260px] md:h-[260px] mx-auto object-contain"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`LOTTE_MART|${txnId}|${amount}`)}`;
-              }}
-            />
-            {isExpired && (
-              <div className="absolute inset-0 bg-white/80 flex items-center justify-center rounded-2xl">
-                <div className="text-center">
-                  <span className="material-symbols-outlined text-4xl text-red-500 mb-2">timer_off</span>
-                  <p className="text-red-600 font-bold text-sm">{t('payment.expired')}</p>
+              {/* Visa/MasterCard card visualization */}
+              <div className="w-full max-w-[320px] h-[190px] rounded-2xl bg-gradient-to-br from-slate-800 to-slate-950 p-6 text-white text-left shadow-xl mb-6 flex flex-col justify-between relative overflow-hidden">
+                <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-slate-700/10 rounded-full blur-2xl"></div>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Lotte Mart Enterprise</p>
+                    <h4 className="text-lg font-black italic tracking-tighter mt-1">VISA CARD</h4>
+                  </div>
+                  <span className="material-symbols-outlined text-3xl opacity-75">contactless</span>
+                </div>
+                <div>
+                  <p className="text-lg font-mono tracking-widest">•••• •••• •••• {pendingPayment.transaction?.metadata?.last4 || '4321'}</p>
+                </div>
+                <div className="flex justify-between items-end">
+                  <div>
+                    <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Chủ thẻ</p>
+                    <p className="text-xs font-bold font-mono tracking-wide">{pendingPayment.transaction?.metadata?.holder_name || 'LOTTE MEMBER'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Số tiền</p>
+                    <p className="text-sm font-black text-primary-light">{formatMoney(amount)}đ</p>
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
 
-          {/* Payment Info Card */}
-          <div className="w-full bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-700 text-left mb-6 shadow-sm">
-            <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100 dark:border-slate-700">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-lg">account_balance</span>
-                <span className="font-bold text-sm text-slate-700 dark:text-slate-200 uppercase tracking-wider">{t('payment.transferInfo')}</span>
+              {/* Status Warning Tag */}
+              <div className="w-full bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-xl p-3.5 text-left mb-6 flex gap-3">
+                <span className="material-symbols-outlined text-amber-500 shrink-0">warning</span>
+                <p className="text-xs text-amber-800 dark:text-amber-400 leading-relaxed font-semibold">
+                  Cổng thanh toán thẻ đang ở trạng thái <strong>Sandbox / Mô phỏng</strong>. Quý khách vui lòng bấm nút "Xác nhận đã thanh toán" hoặc sử dụng bảng điều khiển giả lập bên dưới để phê duyệt.
+                </p>
               </div>
-              <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-black text-[10px] uppercase rounded tracking-wider">
-                {t('payment.transferStatusPending')}
-              </span>
-            </div>
 
-            <div className="space-y-3">
-              <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-slate-700">
-                <span className="text-slate-500 text-sm">{t('payment.bank')}</span>
-                <span className="font-bold text-sm">{qrData?.bank || qrData?.accountName || 'MB Bank'}</span>
-              </div>
-              <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-slate-700">
-                <span className="text-slate-500 text-sm">{t('payment.accountHolder')}</span>
-                <span className="font-bold text-sm">{qrData?.accountName || 'CONG TY TNHH LOTTE MART VN'}</span>
-              </div>
-              
-              <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-slate-700">
-                <span className="text-slate-500 text-sm">{t('payment.accountNumber')}</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-sm text-primary tracking-wider">{qrData?.accountNumber || '0851000386868'}</span>
-                  <button 
-                    onClick={() => handleCopyText(qrData?.accountNumber || '0851000386868', t('payment.accountNumber'))}
-                    className="p-1 text-slate-400 hover:text-primary transition flex items-center"
-                    title={t('payment.copy')}
-                  >
-                    <span className="material-symbols-outlined text-base">content_copy</span>
-                  </button>
-                </div>
-              </div>
-              
-              <div className="flex justify-between items-start py-1 border-b border-slate-100 dark:border-slate-700">
-                <span className="text-slate-500 text-sm shrink-0">{t('payment.transferContent')}</span>
-                <div className="flex items-center gap-2 ml-4">
-                  <span className="font-bold font-mono text-xs bg-slate-100 dark:bg-slate-700 px-2.5 py-1 rounded-lg tracking-widest text-right break-all">
-                    {qrData?.description || txnId}
+              {/* Card info specifications */}
+              <div className="w-full bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-700 text-left mb-6 shadow-sm">
+                <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100 dark:border-slate-700">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary text-lg">credit_card</span>
+                    <span className="font-bold text-sm text-slate-700 dark:text-slate-200 uppercase tracking-wider">Chi tiết giao dịch</span>
+                  </div>
+                  <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-black text-[10px] uppercase rounded tracking-wider">
+                    Chờ xác thực
                   </span>
-                  <button 
-                    onClick={() => handleCopyText(qrData?.description || txnId, t('payment.transferContent'))}
-                    className="p-1 text-slate-400 hover:text-primary transition flex items-center shrink-0"
-                    title={t('payment.copy')}
-                  >
-                    <span className="material-symbols-outlined text-base">content_copy</span>
-                  </button>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-slate-700">
+                    <span className="text-slate-500 text-sm">Mã giao dịch</span>
+                    <span className="font-bold font-mono text-xs">{txnId}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-slate-700">
+                    <span className="text-slate-500 text-sm">Phương thức</span>
+                    <span className="font-bold text-sm">Thẻ tín dụng (Saved Visa)</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-slate-500 text-sm font-semibold">Tổng thanh toán</span>
+                    <span className="font-black text-xl text-primary">{formatMoney(amount)}đ</span>
+                  </div>
                 </div>
               </div>
-              
-              <div className="flex justify-between items-center pt-2">
-                <span className="text-slate-500 text-sm font-semibold">{t('payment.amount')}</span>
-                <span className="font-black text-xl text-primary">{formatMoney(amount)}đ</span>
+            </div>
+          ) : (
+            /* QR Code payment layout */
+            <div className="w-full flex flex-col items-center">
+              <div className="mb-6">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-4">
+                  <span className="material-symbols-outlined text-4xl text-primary">qr_code_2</span>
+                </div>
+                <h3 className="text-xl font-black mb-1">{t('payment.scanQR')}</h3>
+                <p className="text-slate-500 text-sm">{t('payment.scanDesc')}</p>
               </div>
+
+              <div className={`bg-white p-5 rounded-2xl border-2 ${isExpired ? 'border-red-200 opacity-50' : 'border-primary/20'} shadow-lg shadow-primary/5 mb-6 inline-block relative`}>
+                <img
+                  src={qrData?.qrUrl || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`LOTTE_MART|${txnId}|${amount}`)}`}
+                  alt="QR Code thanh toán"
+                  className="w-[220px] h-[220px] md:w-[260px] md:h-[260px] mx-auto object-contain"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`LOTTE_MART|${txnId}|${amount}`)}`;
+                  }}
+                />
+                {isExpired && (
+                  <div className="absolute inset-0 bg-white/80 flex items-center justify-center rounded-2xl">
+                    <div className="text-center">
+                      <span className="material-symbols-outlined text-4xl text-red-500 mb-2">timer_off</span>
+                      <p className="text-red-600 font-bold text-sm">{t('payment.expired')}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="w-full bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-700 text-left mb-6 shadow-sm">
+                <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100 dark:border-slate-700">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary text-lg">account_balance</span>
+                    <span className="font-bold text-sm text-slate-700 dark:text-slate-200 uppercase tracking-wider">{t('payment.transferInfo')}</span>
+                  </div>
+                  <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 font-black text-[10px] uppercase rounded tracking-wider">
+                    {t('payment.transferStatusPending')}
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-slate-700">
+                    <span className="text-slate-500 text-sm">{t('payment.bank')}</span>
+                    <span className="font-bold text-sm">{qrData?.bank || qrData?.accountName || 'MB Bank'}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-slate-700">
+                    <span className="text-slate-500 text-sm">{t('payment.accountHolder')}</span>
+                    <span className="font-bold text-sm">{qrData?.accountName || 'CONG TY TNHH LOTTE MART VN'}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center py-1 border-b border-slate-100 dark:border-slate-700">
+                    <span className="text-slate-500 text-sm">{t('payment.accountNumber')}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-sm text-primary tracking-wider">{qrData?.accountNumber || '0851000386868'}</span>
+                      <button 
+                        onClick={() => handleCopyText(qrData?.accountNumber || '0851000386868', t('payment.accountNumber'))}
+                        className="p-1 text-slate-400 hover:text-primary transition flex items-center"
+                        title={t('payment.copy')}
+                      >
+                        <span className="material-symbols-outlined text-base">content_copy</span>
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between items-start py-1 border-b border-slate-100 dark:border-slate-700">
+                    <span className="text-slate-500 text-sm shrink-0">{t('payment.transferContent')}</span>
+                    <div className="flex items-center gap-2 ml-4">
+                      <span className="font-bold font-mono text-xs bg-slate-100 dark:bg-slate-700 px-2.5 py-1 rounded-lg tracking-widest text-right break-all">
+                        {qrData?.description || txnId}
+                      </span>
+                      <button 
+                        onClick={() => handleCopyText(qrData?.description || txnId, t('payment.transferContent'))}
+                        className="p-1 text-slate-400 hover:text-primary transition flex items-center shrink-0"
+                        title={t('payment.copy')}
+                      >
+                        <span className="material-symbols-outlined text-base">content_copy</span>
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-slate-500 text-sm font-semibold">{t('payment.amount')}</span>
+                    <span className="font-black text-xl text-primary">{formatMoney(amount)}đ</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Reconciliation Polling State Indicator */}
+          {isWaitingReconciliation && (
+            <div className="w-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-center gap-3 mb-4 animate-pulse">
+              <span className="material-symbols-outlined text-blue-500 animate-spin">autorenew</span>
+              <div className="text-left">
+                <p className="text-blue-800 dark:text-blue-300 font-bold text-sm">Đang đối soát thanh toán...</p>
+                <p className="text-blue-600 dark:text-blue-400 text-xs">Hệ thống đang tự động liên kết để xác minh giao dịch. Vui lòng không đóng trang này.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Sandbox Simulation Panel */}
+          <div className="w-full bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-4 mb-4 text-left">
+            <div className="flex items-center gap-2 mb-2 text-slate-700 dark:text-slate-200 font-bold text-xs uppercase tracking-wider">
+              <span className="material-symbols-outlined text-sm text-slate-500">developer_mode</span>
+              <span>Bảng Giả Lập Sandbox</span>
+            </div>
+            <p className="text-slate-500 text-[10px] mb-3">Mô phỏng phản hồi từ ngân hàng hoặc cổng thanh toán quốc tế trong môi trường phát triển.</p>
+            <div className="flex gap-2">
+              <button
+                disabled={isSimulating}
+                onClick={() => handleSandboxSimulation('COMPLETED')}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold py-2 rounded text-xs transition"
+              >
+                Simulate Success
+              </button>
+              <button
+                disabled={isSimulating}
+                onClick={() => handleSandboxSimulation('FAILED')}
+                className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-2 rounded text-xs transition"
+              >
+                Simulate Failure
+              </button>
             </div>
           </div>
 
-          {/* Status indicator */}
+          {/* Legacy or confirming indicator */}
           {isConfirming && (
             <div className="w-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-center gap-3 mb-4">
               <span className="material-symbols-outlined text-blue-500 animate-spin">autorenew</span>
               <div className="text-left">
                 <p className="text-blue-800 dark:text-blue-300 font-bold text-sm">{t('payment.confirming')}</p>
-                <p className="text-blue-600 dark:text-blue-400 text-xs">Hệ thống đang đối soát dữ liệu ngân hàng</p>
+                <p className="text-blue-600 dark:text-blue-400 text-xs">Hệ thống đang gửi yêu cầu xác thực dữ liệu...</p>
               </div>
             </div>
           )}
@@ -714,7 +1041,7 @@ const Payment: React.FC = () => {
           <div className="w-full space-y-3">
             <button
               onClick={handleUserConfirmPayment}
-              disabled={isConfirming || isExpired}
+              disabled={isConfirming || isExpired || isWaitingReconciliation}
               className="w-full bg-primary text-white font-black py-4 rounded-xl shadow-lg shadow-primary/20 hover:bg-red-700 active:scale-[0.98] transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
             >
               {isConfirming ? (
@@ -723,6 +1050,9 @@ const Payment: React.FC = () => {
               ) : isExpired ? (
                 <>
                   <span className="material-symbols-outlined">timer_off</span>Giao dịch đã hết hạn</>
+              ) : isWaitingReconciliation ? (
+                <>
+                  <span className="material-symbols-outlined animate-bounce">autorenew</span>Đang chờ đối soát...</>
               ) : (
                 <>
                   <span className="material-symbols-outlined">check_circle</span>{t('payment.iPaid')}</>
@@ -730,8 +1060,8 @@ const Payment: React.FC = () => {
             </button>
 
             <button
-              onClick={() => { setPendingPayment(null); setPaymentStatus('idle'); }}
-              disabled={isConfirming}
+              onClick={handleReselectMethod}
+              disabled={isConfirming || isWaitingReconciliation}
               className="w-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold py-3.5 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition disabled:opacity-50"
             >{t('payment.reselectMethod')}</button>
           </div>
@@ -778,6 +1108,16 @@ const Payment: React.FC = () => {
       )}
 
       <div className="p-6">
+
+        {paymentStatus === 'failed' && (
+          <div className="mb-6 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-xl p-4 flex gap-3 text-left">
+            <span className="material-symbols-outlined text-red-500 shrink-0">error</span>
+            <div>
+              <p className="text-red-800 dark:text-red-400 font-bold text-sm">Thanh toán thất bại hoặc đã bị hủy</p>
+              <p className="text-red-600 dark:text-red-500 text-xs">Giao dịch của bạn không thể hoàn tất hoặc đã bị hủy bỏ. Vui lòng thử lại bằng cách chọn phương thức thanh toán.</p>
+            </div>
+          </div>
+        )}
 
         {/* Order Summary Banner */}
         <div className="mb-6 bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col gap-4">
@@ -940,3 +1280,62 @@ const Payment: React.FC = () => {
 };
 
 export default Payment;
+
+// ============================================================
+// ERROR BOUNDARY — prevents white screen on any render crash
+// ============================================================
+class PaymentErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[PaymentErrorBoundary] Caught render error:', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="max-w-[560px] mx-auto mt-10 p-8 bg-white dark:bg-slate-900 rounded-2xl border border-red-200 dark:border-red-900 shadow-xl text-center">
+          <span className="material-symbols-outlined text-5xl text-red-500 mb-4 block">error</span>
+          <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 mb-2">Đã xảy ra lỗi thanh toán</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
+            Trang thanh toán gặp sự cố không mong muốn. Đơn hàng của bạn chưa bị ảnh hưởng.
+          </p>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => window.location.href = '/cart'}
+              className="px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-200 transition"
+            >Về Giỏ Hàng</button>
+            <button
+              onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
+              className="px-6 py-3 bg-primary text-white rounded-xl font-bold hover:opacity-90 transition"
+            >Thử Lại</button>
+          </div>
+          {process.env.NODE_ENV === 'development' && this.state.error && (
+            <pre className="mt-6 p-3 bg-red-50 dark:bg-red-950/20 rounded-lg text-xs text-red-700 dark:text-red-400 text-left overflow-auto max-h-40">
+              {this.state.error.message}\n{this.state.error.stack}
+            </pre>
+          )}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export function PaymentPage() {
+  return (
+    <PaymentErrorBoundary>
+      <Payment />
+    </PaymentErrorBoundary>
+  );
+}

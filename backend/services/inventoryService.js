@@ -34,9 +34,13 @@ const InventoryBatch =
 export async function deductStockFIFO(branchProductId, qty, session = null) {
   if (qty <= 0) return { success: true, consumed: [], remaining: 0 };
 
+  const normalizedId = mongoose.Types.ObjectId.isValid(branchProductId)
+    ? new mongoose.Types.ObjectId(branchProductId)
+    : branchProductId;
+
   // Get all batches ordered by exp_date ASC (soonest first), then by received_date ASC
   const batches = await InventoryBatch.find({
-    branch_product_id: branchProductId,
+    branch_product_id: normalizedId,
     quantity: { $gt: 0 },
   }).sort({ exp_date: 1, received_date: 1 }).session(session);
 
@@ -88,31 +92,33 @@ export async function deductInventoryForOrder(branch_id, items, session, orderId
       const qty = Number(item.quantity) || 1;
       if (!bpId) continue;
     
-      // 1. Áp dụng thuật toán FIFO trên các lô (Batches)
-      const result = await deductStockFIFO(bpId, qty, session);
-      if (!result || !result.success) {
-        throw new Error(`Không đủ số lượng tồn kho trong các lô hàng (FIFO) cho sản phẩm nhánh ${bpId}.`);
-      }
-      
-      // 2. Cập nhật trực tiếp tồn kho tổng (stock) trong bảng BranchProduct
       const BranchProductModel = mongoose.model('BranchProduct');
       const bp = await BranchProductModel.findById(bpId).session(session);
       if (!bp) {
         throw new Error(`Không tìm thấy sản phẩm nhánh ${bpId}`);
       }
+
+      const ProductModel = mongoose.model('Product');
+      const p = await ProductModel.findById(bp.product_id).session(session);
+      const productName = p ? (p.name || p.product_name) : (bp.name || 'Sản phẩm');
+
+      // 1. Áp dụng thuật toán FIFO trên các lô (Batches)
+      const result = await deductStockFIFO(bpId, qty, session);
+      if (!result || !result.success) {
+        throw new Error(`Sản phẩm "${productName}" không đủ số lượng tồn kho trong các lô hàng (FIFO) (yêu cầu: ${qty}).`);
+      }
+      
+      // 2. Cập nhật trực tiếp tồn kho tổng (stock) trong bảng BranchProduct
       const currentStock = Number(bp.stock) || 0;
       if (currentStock < qty) {
-        throw new Error(`Sản phẩm ${bp.name || bpId} chỉ còn ${currentStock} sản phẩm trong kho (yêu cầu: ${qty})`);
+        throw new Error(`Sản phẩm "${productName}" chỉ còn ${currentStock} sản phẩm trong kho (yêu cầu: ${qty})`);
       }
       const beforeStock = currentStock;
       const afterStock = currentStock - qty;
       bp.stock = afterStock;
       await bp.save({ session });
 
-      // Resolve product details
-      const ProductModel = mongoose.model('Product');
-      const p = await ProductModel.findById(bp.product_id).session(session);
-      const productName = p ? (p.name || p.product_name) : (bp.name || '');
+      // Resolve product details (already resolved above)
 
       // Create Stock Movement Ledger entry
       const StockMovementModel = mongoose.model('StockMovement');
@@ -162,8 +168,12 @@ export async function restoreInventoryFromOrder(items, session, orderId = null) 
     
     let resolvedBatchCode = '';
 
+    const normalizedId = mongoose.Types.ObjectId.isValid(bpId)
+      ? new mongoose.Types.ObjectId(bpId)
+      : bpId;
+
     // 1. Restore InventoryBatch (FIFO restore to most recent batch)
-    const recentBatch = await InventoryBatch.findOne({ branch_product_id: bpId }).sort({ exp_date: -1 }).session(session);
+    const recentBatch = await InventoryBatch.findOne({ branch_product_id: normalizedId }).sort({ exp_date: -1 }).session(session);
     
     if (recentBatch) {
       recentBatch.quantity += qty;
@@ -172,7 +182,7 @@ export async function restoreInventoryFromOrder(items, session, orderId = null) 
     } else {
       resolvedBatchCode = `RETURN-${Date.now().toString(36).toUpperCase()}`;
       await InventoryBatch.create([{
-        branch_product_id: bpId,
+        branch_product_id: normalizedId,
         batch_code: resolvedBatchCode,
         quantity: qty,
         exp_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1))
@@ -223,8 +233,12 @@ export async function restoreInventoryFromOrder(items, session, orderId = null) 
  * Add stock via a new batch (e.g. incoming goods receipt).
  */
 export async function addStockBatch({ branchProductId, qty, expDate, costPrice, supplierId, purchaseOrderId, batchCode }) {
+  const normalizedId = mongoose.Types.ObjectId.isValid(branchProductId)
+    ? new mongoose.Types.ObjectId(branchProductId)
+    : branchProductId;
+
   const batch = await InventoryBatch.create({
-    branch_product_id: branchProductId,
+    branch_product_id: normalizedId,
     batch_code: batchCode || `BATCH-${Date.now().toString(36).toUpperCase()}`,
     quantity: qty,
     exp_date: expDate || null,

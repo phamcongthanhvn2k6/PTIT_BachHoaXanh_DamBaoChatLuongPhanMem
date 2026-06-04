@@ -11,7 +11,6 @@ const roleSchema = new mongoose.Schema({
   is_active: { type: Boolean, default: true },
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
 
-roleSchema.index({ key: 1 });
 roleSchema.index({ role_id: 1 });
 
 const Role = mongoose.models.Role || mongoose.model('Role', roleSchema);

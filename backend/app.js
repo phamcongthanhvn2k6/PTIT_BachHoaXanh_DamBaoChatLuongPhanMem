@@ -45,6 +45,8 @@ import importReceiptRoutes from './routes/importReceipts.js';
 import uploadRoutes from './routes/uploads.js';
 import recipeRoutes from './routes/recipes.js';
 import questionRoutes from './routes/questions.js';
+import recommendationRoutes from './routes/recommendations.js';
+import priceWatchRoutes from './routes/priceWatch.js';
 
 // Enterprise Modules
 import supplierRoutes from './routes/suppliers.js';
@@ -63,6 +65,7 @@ import { setupSwagger } from './config/swagger.js';
 import { seedDefaultFlags } from './services/featureFlagService.js';
 import { startBackupScheduler } from './services/backupScheduler.js';
 import { startReconciliationScheduler } from './services/reconciliationService.js';
+import { startPaymentTimeoutScheduler } from './services/paymentTimeoutService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -90,6 +93,7 @@ seedDefaultFlags().catch((err) => {
 
 startBackupScheduler();
 startReconciliationScheduler();
+startPaymentTimeoutScheduler();
 
 // Middleware
 app.use(helmet({
@@ -120,6 +124,7 @@ app.use((req, res, next) => {
 import { cacheMiddleware } from './middlewares/cacheMiddleware.js';
 import { trackPerformance } from './middlewares/metricsMiddleware.js';
 import { dbCircuitBreakerMiddleware } from './middlewares/dbCircuitBreaker.js';
+import { maintenanceGuard } from './middlewares/maintenanceGuard.js';
 
 // Request ID & Logging Middleware
 app.use((req, res, next) => {
@@ -165,32 +170,19 @@ app.get('/uploads/:category/:filename', serveFile);
 setupSwagger(app);
 
 // Rate limiters
-const smartKeyGenerator = (req) => {
-  // Normalize IPv6-mapped IPv4 addresses (::ffff:127.0.0.1 → 127.0.0.1)
-  let ip = req.ip || req.connection?.remoteAddress || 'unknown';
-  if (ip.startsWith('::ffff:')) ip = ip.slice(7);
-  const userAgent = (req.headers['user-agent'] || 'unknown').replace(/\s/g, '').substring(0, 20);
-  const tokenPart = req.headers.authorization ? req.headers.authorization.substring(0, 30) : 'guest';
-  return `${ip}-${userAgent}-${tokenPart}`;
-};
-
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 50,
-  keyGenerator: smartKeyGenerator,
   standardHeaders: true,
   legacyHeaders: false,
-  validate: { xForwardedForHeader: false }, // allow custom keyGenerator without IPv6 validation error
   message: { success: false, message: 'Quá nhiều yêu cầu, vui lòng thử lại sau.' }
 });
 
 const orderLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
-  keyGenerator: smartKeyGenerator,
   standardHeaders: true,
   legacyHeaders: false,
-  validate: { xForwardedForHeader: false },
   message: { success: false, message: 'Quá nhiều yêu cầu, vui lòng thử lại sau.' }
 });
 
@@ -199,8 +191,8 @@ const apiRouter = express.Router();
 apiRouter.use('/auth', authLimiter, authRoutes);
 apiRouter.use('/products', productRoutes);
 apiRouter.use('/categories', categoryRoutes);
-apiRouter.use('/cart', cartRoutes);
-apiRouter.use('/orders', orderLimiter, orderRoutes);
+apiRouter.use('/cart', maintenanceGuard, cartRoutes);
+apiRouter.use('/orders', orderLimiter, maintenanceGuard, orderRoutes);
 apiRouter.use('/reviews', reviewRoutes);
 apiRouter.use('/support', supportRoutes);
 apiRouter.use('/notifications', notificationRoutes);
@@ -209,16 +201,16 @@ apiRouter.use('/addresses', addressRoutes);
 apiRouter.use('/branches', branchRoutes);
 apiRouter.use('/branch-products', branchProductRoutes);
 apiRouter.use('/promotions', promotionRoutes);
-apiRouter.use('/coupons', orderLimiter, couponRoutes);
+apiRouter.use('/coupons', orderLimiter, maintenanceGuard, couponRoutes);
 apiRouter.use('/events', eventRoutes);
 apiRouter.use('/loyalty', loyaltyRoutes);
-apiRouter.use('/payments', paymentRoutes);
-apiRouter.use('/checkout', checkoutRoutes);
+apiRouter.use('/payments', maintenanceGuard, paymentRoutes);
+apiRouter.use('/checkout', maintenanceGuard, checkoutRoutes);
 apiRouter.use('/banners', bannerRoutes);
 apiRouter.use('/compare', compareRoutes);
 apiRouter.use('/wishlist', wishlistRoutes);
 apiRouter.use('/view-history', viewHistoryRoutes);
-apiRouter.use('/return-requests', returnRequestRoutes);
+apiRouter.use('/return-requests', maintenanceGuard, returnRequestRoutes);
 apiRouter.use('/admin', adminRoutes);
 apiRouter.use('/roles', roleRoutes);
 apiRouter.use('/permissions', permissionRoutes);
@@ -229,6 +221,8 @@ apiRouter.use('/import-receipts', importReceiptRoutes);
 apiRouter.use('/uploads', uploadRoutes);
 apiRouter.use('/recipes', recipeRoutes);
 apiRouter.use('/questions', questionRoutes);
+apiRouter.use('/recommendations', recommendationRoutes);
+apiRouter.use('/price-watch', priceWatchRoutes);
 
 apiRouter.use('/suppliers', supplierRoutes);
 apiRouter.use('/purchase-orders', purchaseOrderRoutes);
@@ -236,6 +230,30 @@ apiRouter.use('/inventory-batches', inventoryBatchRoutes);
 apiRouter.use('/stock-takes', stockTakeRoutes);
 apiRouter.use('/internal-requisitions', reqRoutes);
 apiRouter.use('/flash-deals', flashDealRoutes);
+
+// Maintenance Status public endpoint (no auth required)
+apiRouter.get('/system/maintenance-status', async (req, res) => {
+  try {
+    const { AdminSetting, AuditLog } = await import('./models/Misc.js');
+    const setting = await AdminSetting.findOne({ key: 'maintenance_mode' });
+    const isMaintenance = setting ? !!setting.value : false;
+
+    const lastLog = await AuditLog.findOne({
+      entity: 'admin_setting',
+      entityId: 'maintenance_mode',
+      action: 'UPDATE'
+    }).sort({ created_at: -1 }).lean();
+
+    return res.json({
+      maintenance: isMaintenance,
+      updated_at: lastLog ? lastLog.created_at : (setting?.updatedAt || new Date().toISOString()),
+      updated_by: lastLog ? (lastLog.user_name || 'System') : 'System',
+      environment: process.env.NODE_ENV || 'production'
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 // Mount with versioning
 app.use('/api/v1', apiRouter);

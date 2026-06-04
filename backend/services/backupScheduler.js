@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════
 import cron from 'node-cron';
 import { performBackup, cleanupOldBackups } from '../scripts/backupMongoDB.js';
+import { checkMaintenanceMode } from '../middlewares/maintenanceGuard.js';
 
 let schedulerStarted = false;
 
@@ -13,6 +14,12 @@ export function startBackupScheduler() {
 
   // Run daily at 02:00 AM server time
   cron.schedule('0 2 * * *', async () => {
+    const { canRunDuringMaintenance } = await import('../utils/schedulerPolicy.js');
+    const allowed = await canRunDuringMaintenance('backup');
+    if (!allowed) {
+      console.warn('[BACKUP] Scheduled daily backup skipped because it is blocked during maintenance.');
+      return;
+    }
     console.log('[BACKUP] Starting scheduled daily backup...');
     try {
       await performBackup();

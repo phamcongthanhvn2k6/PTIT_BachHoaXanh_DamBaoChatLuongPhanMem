@@ -26,6 +26,13 @@ export const useBranchData = () => {
       // so effective_price/pricing_source/active_hot_deal are authoritative.
       const resolvedPrice = Number((branchProduct as any).effective_price ?? branchProduct.price ?? 0);
       const resolvedOriginal = Number((branchProduct as any).original_price ?? branchProduct.original_price ?? product.original_price ?? resolvedPrice);
+      // Derive a safe primary image from all possible sources
+      const safeImage = (product as any).image
+        || (Array.isArray((product as any).images) && (product as any).images.length > 0 ? (product as any).images[0] : null)
+        || (product as any).thumbnail
+        || (branchProduct as any).image
+        || '';
+
       return {
         ...product,
         price: resolvedPrice,
@@ -39,7 +46,8 @@ export const useBranchData = () => {
         is_new: branchProduct.is_new || false,
         is_best_seller: branchProduct.is_best_seller || false,
         branch_product_id: branchProduct.id || (branchProduct as any)._id,
-        branchProduct
+        branchProduct,
+        image: safeImage,
       };
     }).filter(Boolean);
   }, [products, branchProductsData]);

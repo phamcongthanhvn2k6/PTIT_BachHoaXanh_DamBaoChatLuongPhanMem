@@ -4,7 +4,7 @@ import { slugify, buildProductSlug, generateShortCode } from '../utils/slugify.j
 const productSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   slug: { type: String, default: '', index: true },
-  short_code: { type: String, default: '', unique: true, sparse: true, index: true },
+  short_code: { type: String, unique: true, sparse: true, index: true },
   description: { type: String, default: '' },
   short_description: { type: String, default: '' },
   eco_label: { type: mongoose.Schema.Types.Mixed, default: null },

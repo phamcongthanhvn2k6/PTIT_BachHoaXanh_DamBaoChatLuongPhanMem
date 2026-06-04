@@ -7,6 +7,7 @@ import { queueOrderSuccessEmail } from '../services/orderEmailService.js';
 import { isValidVietnamPhone, normalizeVietnamPhone } from '../utils/validatePhone.js';
 import { notifyOrderStatusChanged, notifyPointsEarned, notifyPaymentSuccess, notifyPaymentFailed } from '../services/userNotificationService.js';
 import inventoryService from '../services/inventoryService.js';
+import { expireSinglePayment } from '../services/paymentTimeoutService.js';
 
 // ─── Membership tier helper ───
 const MEMBERSHIP_TIERS = [
@@ -291,14 +292,14 @@ export const confirm = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Không tìm thấy giao dịch thanh toán' });
     }
 
-    // Prevent double-confirm or confirmation of failed/cancelled transactions
-    if (tx.status === 'FAILED' || tx.status === 'CANCELLED') {
-      console.log('[PaymentController] Cannot confirm failed or cancelled transaction:', txId);
+    // Prevent double-confirm or confirmation of failed/cancelled/expired transactions
+    if (tx.status === 'FAILED' || tx.status === 'CANCELLED' || tx.status === 'EXPIRED') {
+      console.log('[PaymentController] Cannot confirm failed, cancelled, or expired transaction:', txId);
       if (session) {
         await session.abortTransaction();
         session.endSession();
       }
-      return res.status(400).json({ success: false, message: 'Không thể thanh toán giao dịch đã thất bại hoặc đã hủy' });
+      return res.status(400).json({ success: false, message: 'Không thể thanh toán giao dịch đã thất bại, đã hủy hoặc đã hết hạn' });
     }
 
     if (tx.status === 'COMPLETED' || tx.status === 'PAID') {
@@ -330,10 +331,11 @@ export const confirm = async (req, res) => {
 
     // Check expiry
     if (tx.expired_at && new Date() > tx.expired_at) {
-      tx.status = 'FAILED';
-      await tx.save({ session });
-      await session.commitTransaction();
-      session.endSession();
+      await expireSinglePayment(tx, session);
+      if (session) {
+        await session.commitTransaction();
+        session.endSession();
+      }
       return res.status(400).json({ success: false, message: 'Phiên thanh toán đã hết hạn. Vui lòng tạo giao dịch mới.' });
     }
 
@@ -344,6 +346,20 @@ export const confirm = async (req, res) => {
       if (pm && pm.type === 'wallet') {
         isWalletPayment = true;
       }
+    }
+
+    // Check role authorization for confirmation
+    const isAdmin = req.user && req.user.role_key !== 'customer';
+    const isSandbox = req.isSandboxSimulation === true;
+    if (!isWalletPayment && !isAdmin && !isSandbox) {
+      if (session) {
+        await session.abortTransaction();
+        session.endSession();
+      }
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền xác nhận giao dịch này thủ công. Chỉ ví điện tử được tự động đối soát, hoặc cần được phê duyệt bởi quản trị viên.'
+      });
     }
 
     if (isWalletPayment) {
@@ -372,9 +388,9 @@ export const confirm = async (req, res) => {
 
     // Update order status and payment info
     const orderIdStr = tx.order_id ? String(tx.order_id) : '';
-    const hasValidOrderId = orderIdStr 
-      && orderIdStr !== 'undefined' 
-      && orderIdStr !== 'null' 
+    const hasValidOrderId = orderIdStr
+      && orderIdStr !== 'undefined'
+      && orderIdStr !== 'null'
       && orderIdStr.length > 0
       && mongoose.isValidObjectId(orderIdStr);
 
@@ -404,14 +420,15 @@ export const confirm = async (req, res) => {
 
         // CRITICAL: Amount validation
         if (tx.amount < orderTotalAmount) {
-          throw new Error('Số tiền thanh toán không khớp với tổng đơn hàng');
+          console.error(`[PaymentController] ❌ Amount validation failed for order ${orderIdStr}: transaction amount (${tx.amount}) is less than order total amount (${orderTotalAmount})`);
+          throw new Error(`Số tiền thanh toán không khớp với tổng đơn hàng (Giao dịch: ${tx.amount}đ, Đơn hàng: ${orderTotalAmount}đ)`);
         }
 
         // Calculate loyalty points: 10,000 VND = 1 point
         pointsEarned = Math.floor(orderTotalAmount / 10000);
         order.points_earned = pointsEarned;
         await order.save({ session });
-        
+
         // Log order confirmation to AuditLog inside session
         try {
           const { logActivity } = await import('../services/auditService.js');
@@ -454,7 +471,7 @@ export const confirm = async (req, res) => {
     // Award loyalty points — with dedup by order_id
     const userIdStr = tx.user_id ? String(tx.user_id) : '';
     const hasValidUserId = userIdStr && userIdStr !== 'undefined' && userIdStr !== 'null' && mongoose.isValidObjectId(userIdStr);
-    
+
     if (pointsEarned > 0 && hasValidUserId) {
       let alreadyAwarded = false;
       if (tx.order_id) {
@@ -506,8 +523,8 @@ export const confirm = async (req, res) => {
             console.warn('[PaymentController] loyalty notification failed:', notifyErr.message);
           }
 
-          console.log('[PaymentController] Awarded', pointsEarned, 'points to user:', user._id, 
-            'new balance:', user.lotte_points, 
+          console.log('[PaymentController] Awarded', pointsEarned, 'points to user:', user._id,
+            'new balance:', user.lotte_points,
             'tier:', oldTier, '→', newTier);
         }
       }
@@ -540,11 +557,17 @@ export const confirm = async (req, res) => {
       message: 'Thanh toán đã được xác nhận thành công',
     });
   } catch (err) {
+    console.error('[PaymentController] ❌ confirm execution failed! Error Stack:', err.stack);
+    console.error('[PaymentController] ❌ Details - Transaction ID:', req.params.id, 'Simulate flag:', req.isSandboxSimulation);
     if (session) {
-      try { await session.abortTransaction(); } catch (e) {}
+      try {
+        console.log('[PaymentController] Aborting mongoose transaction...');
+        await session.abortTransaction();
+      } catch (e) {
+        console.error('[PaymentController] Failed to abort mongoose transaction:', e.message);
+      }
       session.endSession();
     }
-    console.error('[PaymentController] confirm error:', err);
     return res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -616,8 +639,17 @@ export const fail = async (req, res) => {
 
     return res.json({ success: true, data: tx, message: 'Giao dịch đã được đánh dấu thất bại' });
   } catch (err) {
-    if (session) { await session.abortTransaction(); session.endSession(); }
-    console.error('[PaymentController] fail error:', err);
+    console.error('[PaymentController] ❌ fail execution failed! Error Stack:', err.stack);
+    console.error('[PaymentController] ❌ Details - Transaction ID:', req.params.id);
+    if (session) {
+      try {
+        console.log('[PaymentController] Aborting mongoose transaction during fail...');
+        await session.abortTransaction();
+      } catch (e) {
+        console.error('[PaymentController] Failed to abort mongoose transaction during fail:', e.message);
+      }
+      session.endSession();
+    }
     return res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -668,6 +700,95 @@ export const updateProviders = async (req, res) => {
 export const status = async (req, res) => {
   try {
     const tx = await PaymentTransaction.findById(req.params.id);
-    return tx ? res.json({ success: true, data: tx }) : res.status(404).json({ success: false, message: 'Not found' });
+    if (!tx) return res.status(404).json({ success: false, message: 'Not found' });
+    
+    // Dynamically expire if query hits an expired pending transaction
+    if (['PENDING', 'PROCESSING', 'WAITING_CONFIRMATION'].includes(tx.status) && tx.expired_at && new Date() > tx.expired_at) {
+      await expireSinglePayment(tx);
+    }
+    
+    return res.json({ success: true, data: tx });
   } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
+};
+
+export const requestCheck = async (req, res) => {
+  try {
+    const tx = await PaymentTransaction.findById(req.params.id);
+    if (!tx) return res.status(404).json({ success: false, message: 'Không tìm thấy giao dịch' });
+
+    // Enforce ownership: only the owner (or admin) can request verification
+    if (String(tx.user_id) !== String(req.userId) && req.user?.role_key === 'customer') {
+      return res.status(403).json({ success: false, message: 'Bạn không có quyền thực hiện hành động này' });
+    }
+
+    if (tx.status !== 'PENDING') {
+      return res.status(400).json({ success: false, message: `Trạng thái giao dịch không hợp lệ để đối soát: ${tx.status}` });
+    }
+
+    tx.status = 'PROCESSING';
+    await tx.save();
+
+    if (tx.order_id) {
+      const order = await Order.findById(tx.order_id);
+      if (order) {
+        order.payment_status = 'WAITING_CONFIRMATION';
+        if (order.payment) {
+          order.payment.status = 'WAITING_CONFIRMATION';
+        }
+        await order.save();
+      }
+    }
+
+    return res.json({ success: true, data: tx, message: 'Yêu cầu đối soát đang được xử lý' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const sandboxSimulate = async (req, res) => {
+  try {
+    const { status: simulatedStatus } = req.body;
+    if (!['COMPLETED', 'FAILED'].includes(simulatedStatus)) {
+      return res.status(400).json({ success: false, message: 'Simulated status must be COMPLETED or FAILED' });
+    }
+
+    req.isSandboxSimulation = true;
+    if (simulatedStatus === 'COMPLETED') {
+      return confirm(req, res);
+    } else {
+      req.body.reason = 'Sandbox Simulated Failure';
+      return fail(req, res);
+    }
+  } catch (err) {
+    console.error('[PaymentController] ❌ sandboxSimulate execution failed! Error Stack:', err.stack);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const bankWebhook = async (req, res) => {
+  try {
+    const webhookToken = process.env.PAYMENT_WEBHOOK_TOKEN || 'LotteMartWebhookSecret2026';
+    const tokenHeader = req.headers.authorization;
+    if (!tokenHeader || !tokenHeader.startsWith('Bearer ') || tokenHeader.split(' ')[1] !== webhookToken) {
+      return res.status(401).json({ success: false, message: 'Unauthorized webhook call' });
+    }
+
+    const { transaction_id, status: webhookStatus } = req.body;
+    const tx = await PaymentTransaction.findOne({ transaction_id });
+    if (!tx) {
+      return res.status(404).json({ success: false, message: 'Giao dịch không tồn tại' });
+    }
+
+    req.params.id = tx._id.toString();
+    req.isSandboxSimulation = true; // Webhook is authorized to perform state transition
+
+    if (webhookStatus === 'COMPLETED') {
+      return confirm(req, res);
+    } else {
+      req.body.reason = 'Webhook reported transaction failure';
+      return fail(req, res);
+    }
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };

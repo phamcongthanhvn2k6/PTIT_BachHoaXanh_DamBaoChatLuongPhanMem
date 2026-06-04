@@ -26,7 +26,7 @@ import Register from './pages/Register.tsx';
 import LoginSuccess from './pages/LoginSuccess.tsx';
 import Cart from './pages/Cart.tsx';
 import Checkout from './pages/Checkout.tsx';
-import Payment from './pages/Payment.tsx';
+import PaymentRaw, { PaymentPage } from './pages/Payment.tsx';
 import PaymentSuccess from './pages/PaymentSuccess.tsx';
 import PaymentFailed from './pages/PaymentFailed.tsx';
 import Orders from './pages/Orders.tsx';
@@ -152,14 +152,39 @@ function App() {
             link.href = `${clean}?v=${Date.now()}`;
             document.head.appendChild(link);
           }
+        }
+      }).catch(() => {});
 
-          if (settings.maintenance_mode === true || settings.maintenance_mode === 'true') {
-            setMaintenanceMode(true);
-          }
+      dataService.getMaintenanceStatus().then(status => {
+        if (status && (status.maintenance === true || status.maintenance === 'true')) {
+          setMaintenanceMode(true);
         }
       }).catch(() => {});
     });
   }, [dispatch, i18n.language]);
+
+  // Handle Socket.IO connection for realtime maintenance status updates
+  useEffect(() => {
+    if (isAdminRoute) return;
+
+    const handleMaintenanceOn = () => {
+      console.log('[Socket] Received maintenance:on');
+      setMaintenanceMode(true);
+    };
+
+    const handleMaintenanceOff = () => {
+      console.log('[Socket] Received maintenance:off');
+      setMaintenanceMode(false);
+    };
+
+    socket.on('maintenance:on', handleMaintenanceOn);
+    socket.on('maintenance:off', handleMaintenanceOff);
+
+    return () => {
+      socket.off('maintenance:on', handleMaintenanceOn);
+      socket.off('maintenance:off', handleMaintenanceOff);
+    };
+  }, [isAdminRoute]);
 
   useEffect(() => {
     if (isAdminRoute) {
@@ -269,7 +294,7 @@ function App() {
         
         {/* Checkout Flow */}
         <Route path="/checkout/*" element={<AuthGuard><Checkout /></AuthGuard>} />
-        <Route path="/payment" element={<AuthGuard><Payment /></AuthGuard>} />
+        <Route path="/payment" element={<AuthGuard><PaymentPage /></AuthGuard>} />
         <Route path="/payment/success" element={<AuthGuard><PaymentSuccess /></AuthGuard>} />
         <Route path="/payment/fail" element={<AuthGuard><PaymentFailed /></AuthGuard>} />
 

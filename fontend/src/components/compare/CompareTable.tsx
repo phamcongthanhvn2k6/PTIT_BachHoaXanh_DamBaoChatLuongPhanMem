@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatRating } from '../../utils/formatRating';
 import type { CompareProduct } from '../../types/product';
 
 interface CompareTableProps {
@@ -79,8 +80,8 @@ const CompareTable: React.FC<CompareTableProps> = ({ products }) => {
     {
       key: 'rating',
       label: 'Đánh giá',
-      render: (p: CompareProduct) => <span>{(p.average_rating ?? p.rating) != null ? `${Number(p.average_rating ?? p.rating).toFixed(1)} / 5` : 'Chưa có'}</span>,
-      value: (p: CompareProduct) => ((p.average_rating ?? p.rating) != null ? Number(p.average_rating ?? p.rating).toFixed(1) : 'Chưa có'),
+      render: (p: CompareProduct) => <span>{(p.average_rating ?? p.rating) != null ? `${formatRating(p.average_rating ?? p.rating)} / 5` : 'Chưa có'}</span>,
+      value: (p: CompareProduct) => ((p.average_rating ?? p.rating) != null ? formatRating(p.average_rating ?? p.rating) : 'Chưa có'),
     },
     {
       key: 'review_count',

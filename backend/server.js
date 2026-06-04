@@ -56,6 +56,14 @@ const start = async () => {
     console.warn('[startup] MongoDB is not connected. Server will continue in degraded mode.');
   }
 
+  console.log('[startup] Initializing Queue Service...');
+  try {
+    const { initQueueService } = await import('./services/queueService.js');
+    await initQueueService();
+  } catch (err) {
+    console.warn('[startup] Queue Service initialization failed:', err.message);
+  }
+
   console.log('[startup] Creating HTTP server...');
   const server = http.createServer(app);
 

@@ -38,7 +38,14 @@ const RecipeSchema = new mongoose.Schema({
   aliases: [{ type: String }],
   completeness_status: { type: String, enum: ['complete', 'incomplete'], default: 'complete' },
   last_checked_at: { type: Date, default: Date.now },
-  source_product_ids: [{ type: String }]
+  source_product_ids: [{ type: String }],
+  nutrition: {
+    calories: { type: Number, default: 0 },
+    protein: { type: Number, default: 0 },
+    fat: { type: Number, default: 0 },
+    carbs: { type: Number, default: 0 },
+    fiber: { type: Number, default: 0 }
+  }
 }, { timestamps: true });
 
 RecipeSchema.pre('save', function(next) {

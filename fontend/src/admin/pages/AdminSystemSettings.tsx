@@ -30,6 +30,7 @@ const AdminSystemSettings: React.FC = () => {
   const settingsRef = useRef<any>({});
   const [uploadingFavicon, setUploadingFavicon] = useState(false);
   const [isDraggingFavicon, setIsDraggingFavicon] = useState(false);
+  const [togglingMaintenance, setTogglingMaintenance] = useState(false);
   const faviconInputRef = useRef<HTMLInputElement>(null);
 
   // Keep ref in sync so async callbacks always read the latest value
@@ -100,6 +101,52 @@ const AdminSystemSettings: React.FC = () => {
   const handleSettingChange = (name: string, value: any) => {
     setSettings((prev: any) => ({ ...prev, [name]: value }));
     setHasChanges(true);
+  };
+
+  const handleMaintenanceToggle = async () => {
+    if (togglingMaintenance) return;
+    const nextVal = !settings.maintenance_mode;
+    
+    const confirmMsg = nextVal 
+      ? t('adminSettings.confirmMaintenanceOn') || 'Xác nhận BẬT chế độ bảo trì? Hệ thống sẽ ngừng nhận đơn hàng từ khách hàng.'
+      : t('adminSettings.confirmMaintenanceOff') || 'Xác nhận TẮT chế độ bảo trì? Khách hàng có thể mua sắm bình thường.';
+      
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      setTogglingMaintenance(true);
+      
+      const payload: Record<string, any> = { 
+        maintenance_mode: nextVal 
+      };
+      
+      if (nextVal) {
+        payload.maintenance_mode_start_at = new Date().toISOString();
+        payload.maintenance_mode_reason = 'Scheduled system upgrade';
+        payload.maintenance_mode_message = 'Hệ thống đang bảo trì định kỳ để nâng cấp. Vui lòng quay lại sau.';
+      }
+      
+      await dataService.updateAdminSettings(payload);
+      
+      setSettings((prev: any) => ({ 
+        ...prev, 
+        maintenance_mode: nextVal,
+        ...(nextVal ? {
+          maintenance_mode_start_at: payload.maintenance_mode_start_at,
+          maintenance_mode_reason: payload.maintenance_mode_reason,
+          maintenance_mode_message: payload.maintenance_mode_message
+        } : {})
+      }));
+      
+      toast.success(nextVal 
+        ? t('adminSettings.maintenanceOnSuccess') || 'Đã kích hoạt chế độ bảo trì thành công!'
+        : t('adminSettings.maintenanceOffSuccess') || 'Đã tắt chế độ bảo trì thành công!'
+      );
+    } catch (err: any) {
+      toast.error((t('adminSettings.maintenanceToggleError') || 'Không thể thay đổi chế độ bảo trì: ') + (err?.response?.data?.message || err.message));
+    } finally {
+      setTogglingMaintenance(false);
+    }
   };
 
   const saveSettings = async () => {
@@ -351,12 +398,14 @@ const AdminSystemSettings: React.FC = () => {
           {/* ── Right Sidebar ── */}
           <div className="col-span-12 lg:col-span-4 space-y-6">
             {/* Maintenance Toggle */}
-            <div className={`p-6 rounded-2xl border transition-colors ${settings.maintenance_mode ? 'bg-orange-50 border-orange-200 shadow-lg shadow-orange-500/10' : 'bg-surface-container-high/50 border-transparent'}`}>
+            <div className={`p-6 rounded-2xl border transition-all duration-300 ${togglingMaintenance ? 'opacity-70 scale-[0.98]' : ''} ${settings.maintenance_mode ? 'bg-orange-50 border-orange-200 shadow-lg shadow-orange-500/10' : 'bg-surface-container-high/50 border-transparent'}`}>
               <div className="flex items-center gap-3 mb-5">
-                <span className={`material-symbols-outlined text-2xl ${settings.maintenance_mode ? 'text-orange-500' : 'text-slate-400'}`}>construction</span>
+                <span className={`material-symbols-outlined text-2xl ${togglingMaintenance ? 'animate-spin text-orange-500' : settings.maintenance_mode ? 'text-orange-500' : 'text-slate-400'}`}>
+                  {togglingMaintenance ? 'progress_activity' : 'construction'}
+                </span>
                 <h4 className="text-[11px] font-black uppercase tracking-[0.15em] text-on-surface opacity-60">{t('adminSettings.maintenanceMode')}</h4>
               </div>
-              <div className="flex items-center justify-between cursor-pointer" onClick={() => handleSettingChange('maintenance_mode', !settings.maintenance_mode)}>
+              <div className={`flex items-center justify-between ${togglingMaintenance ? 'cursor-not-allowed' : 'cursor-pointer'}`} onClick={handleMaintenanceToggle}>
                 <div>
                   <p className={`text-sm font-bold ${settings.maintenance_mode ? 'text-orange-900' : 'text-on-surface'}`}>{t('adminSettings.maintenanceToggle')}</p>
                   <p className="text-[10px] text-secondary mt-1 max-w-[200px] leading-relaxed">{t('adminSettings.maintenanceDesc')}</p>

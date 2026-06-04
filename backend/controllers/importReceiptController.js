@@ -59,6 +59,14 @@ const ensureBranchProduct = async ({ branchId, productId, branchProductId, sessi
 
 const createBatch = async ({ line, importOrderId, receiptId, supplierId, session }) => {
   const batchCode = line.batch_code || `LOT-${Date.now().toString(36).toUpperCase()}`;
+  let supplierName = '';
+  if (supplierId) {
+    const supplier = await Supplier.findById(supplierId).session(session);
+    if (supplier) {
+      supplierName = supplier.name || '';
+    }
+  }
+
   const [batch] = await InventoryBatch.create([
     {
       branch_product_id: line.branch_product_id,
@@ -68,6 +76,7 @@ const createBatch = async ({ line, importOrderId, receiptId, supplierId, session
       received_date: new Date(),
       cost_price: Number(line.unit_cost || 0),
       supplier_id: supplierId || null,
+      supplier_name: supplierName,
       purchase_order_id: importOrderId,
       import_receipt_id: receiptId,
     },
@@ -148,9 +157,19 @@ const applyLineDelta = async ({ branchId, line, deltaQty, userId, refType, refId
   ], { session });
 };
 
+const parseBranchId = (id) => {
+  if (!id) return null;
+  if (id === 'HCM01' || String(id) === '1') return new mongoose.Types.ObjectId('000000000000000000000001');
+  if (mongoose.Types.ObjectId.isValid(id)) return new mongoose.Types.ObjectId(id);
+  return id;
+};
+
 const buildQuery = (req) => {
   const q = {};
-  if (req.query?.branch_id && req.query.branch_id !== 'ALL') q.branch_id = req.query.branch_id;
+  if (req.query?.branch_id && req.query.branch_id !== 'ALL') {
+    const parsed = parseBranchId(req.query.branch_id);
+    if (parsed) q.branch_id = parsed;
+  }
   if (req.query?.supplier_id) q.supplier_id = req.query.supplier_id;
   if (req.query?.import_order_id) q.import_order_id = req.query.import_order_id;
   if (req.query?.status) q.status = req.query.status;
@@ -221,11 +240,30 @@ export const create = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Import order not found' });
     }
 
-    // ERP Integrity: Prevent receiving cancelled Purchase Orders
+    // ERP Integrity: Prevent receiving against cancelled or fully received Purchase Orders
     if (importOrder.status === 'cancelled') {
       await session.abortTransaction();
       session.endSession();
       return res.status(400).json({ success: false, message: 'Không thể nhận hàng cho Đơn mua hàng đã bị hủy (Cancelled PO)' });
+    }
+    if (importOrder.status === 'received') {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: 'Đơn mua hàng đã hoàn thành nhập kho (Received PO), không thể tạo thêm phiếu nhận hàng.' });
+    }
+
+    // ERP Integrity: Ensure branch matches PO branch
+    if (String(branch_id) !== String(importOrder.branch_id)) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: 'Chi nhánh của Phiếu nhận hàng phải trùng khớp với chi nhánh của Đơn mua hàng (Branch mismatch).' });
+    }
+
+    // ERP Integrity: Ensure supplier matches PO supplier
+    if (supplier_id && String(supplier_id) !== String(importOrder.supplier_id)) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ success: false, message: 'Nhà cung cấp của Phiếu nhận hàng phải trùng khớp với nhà cung cấp của Đơn mua hàng (Supplier mismatch).' });
     }
 
     const supplierId = supplier_id || importOrder.supplier_id;

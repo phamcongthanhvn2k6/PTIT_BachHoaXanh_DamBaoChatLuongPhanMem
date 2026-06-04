@@ -8,7 +8,6 @@ const permissionSchema = new mongoose.Schema({
   is_active: { type: Boolean, default: true },
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
 
-permissionSchema.index({ key: 1 });
 permissionSchema.index({ group: 1, key: 1 });
 
 const Permission = mongoose.models.Permission || mongoose.model('Permission', permissionSchema);

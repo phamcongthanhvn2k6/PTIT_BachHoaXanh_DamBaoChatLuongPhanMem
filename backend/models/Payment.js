@@ -23,7 +23,7 @@ const paymentTransactionSchema = new mongoose.Schema({
   transaction_id: { type: String, default: '' },
   amount: { type: Number, default: 0 },
   currency: { type: String, default: 'VND' },
-  status: { type: String, default: 'PENDING', enum: ['PENDING', 'PROCESSING', 'COMPLETED', 'PAID', 'FAILED', 'CANCELLED'] },
+  status: { type: String, default: 'PENDING', enum: ['DRAFT', 'PENDING', 'PROCESSING', 'WAITING_CONFIRMATION', 'AUTHORIZED', 'COMPLETED', 'PAID', 'FAILED', 'CANCELLED', 'EXPIRED', 'REFUNDED'] },
   qr_data: {
     bank: { type: String, default: '' },
     account_name: { type: String, default: '' },

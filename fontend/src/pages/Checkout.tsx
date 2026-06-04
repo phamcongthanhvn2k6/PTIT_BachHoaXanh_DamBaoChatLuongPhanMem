@@ -39,8 +39,8 @@ const getCouponLifecycle = (coupon: any) => {
 const Checkout: React.FC = () => {
   const { t } = useTranslation();
   const [selectedDelivery, setSelectedDelivery] = useState<'fast' | 'standard'>('fast');
-  const { data: addresses, status: addrStatus } = useAppSelector(state => state.address);
-  const { appliedCoupon, status: cartStatus } = useAppSelector(state => state.cart);
+  const { data: addresses } = useAppSelector(state => state.address);
+  const { appliedCoupon } = useAppSelector(state => state.cart);
   const { user } = useAppSelector(state => state.auth);
   const currentUserId = user?._id || user?.id || null;
   const dispatch = useAppDispatch();
@@ -92,14 +92,12 @@ const Checkout: React.FC = () => {
   });
 
   useEffect(() => {
-    if (currentUserId && addrStatus === 'idle') {
+    if (currentUserId) {
       dispatch(loadAddresses());
-    }
-    if (currentUserId && cartStatus === 'idle') {
       dispatch(loadAllBranchCarts());
     }
     dataService.getAdminSettings().then(setSettings).catch(()=>console.error('Failed to load settings'));
-  }, [currentUserId, addrStatus, cartStatus, dispatch]);
+  }, [currentUserId, dispatch]);
 
   // Sync selected address if not set
   useEffect(() => {
@@ -326,19 +324,21 @@ const Checkout: React.FC = () => {
       return false;
     }
 
-    // For buy_now source, skip stock/availability check since item was just selected
-    if (checkoutSource !== 'buy_now') {
-      const hasUnavailableItem = items.some((item: any) => {
-        const bp = item?.branchProduct;
-        const qty = safeParseNumber(item?.quantity, 0);
-        if (!bp || bp.is_available === false || !bp.product || bp.product.is_active === false) return true;
-        return safeParseNumber(bp.stock, 0) < qty;
-      });
+    const hasUnavailableItem = items.some((item: any) => {
+      const bp = item?.branchProduct;
+      const qty = safeParseNumber(item?.quantity, 0);
+      if (!bp || bp.is_available === false || !bp.product || bp.product.is_active === false) return true;
+      
+      const bpAvailableQty = bp.available_quantity !== undefined 
+        ? bp.available_quantity 
+        : Math.max(0, bp.stock - (bp.reserved_quantity || 0));
+        
+      return bpAvailableQty < qty;
+    });
 
-      if (hasUnavailableItem) {
-        toast.error('Có sản phẩm đã hết hàng hoặc ngừng kinh doanh tại chi nhánh hiện tại.');
-        return false;
-      }
+    if (hasUnavailableItem) {
+      toast.error('Có sản phẩm đã hết hàng hoặc không đủ số lượng tồn kho tại chi nhánh hiện tại.');
+      return false;
     }
 
     return true;
@@ -480,6 +480,25 @@ const Checkout: React.FC = () => {
         setIsSubmittingAddress(false);
     }
   };
+
+  if (settings?.maintenance_mode) {
+    return (
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center bg-background-light dark:bg-background-dark font-display flex flex-col items-center justify-center min-h-[60vh]">
+        <div className="bg-gradient-to-br from-amber-50 to-orange-100 dark:from-amber-950/20 dark:to-orange-950/20 p-8 rounded-3xl border border-orange-200 dark:border-orange-900 max-w-lg shadow-xl shadow-orange-500/5">
+          <span className="material-symbols-outlined text-6xl text-orange-500 mb-4 animate-bounce">construction</span>
+          <h2 className="text-2xl font-black mb-4 text-orange-950 dark:text-orange-300 uppercase tracking-wide">
+            {t('common.maintenanceTitle') || 'Hệ Thống Đang Bảo Trì'}
+          </h2>
+          <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed text-sm">
+            {t('common.maintenanceMessage') || 'Để đảm bảo trải nghiệm tốt nhất và nâng cấp hệ thống, Lotte Mart Storefront hiện đang tạm dừng nhận đơn hàng. Chúng tôi sẽ trở lại trong thời gian sớm nhất.'}
+          </p>
+          <button onClick={() => navigate('/home')} className="bg-primary text-white px-8 py-3 rounded-xl font-bold hover:opacity-90 transition-opacity">
+            {t('common.backToHome') || 'Về Trang Chủ'}
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   if (items.length === 0 && checkoutSource !== 'buy_now') {
     return (
@@ -661,7 +680,12 @@ const Checkout: React.FC = () => {
             <div className="bg-white dark:bg-slate-800 rounded-xl border border-primary/10 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
               {items.map((item) => {
                 const bp = item.branchProduct;
-                const isOutOfStock = bp && Number(bp.stock) < Number(item.quantity);
+                const bpAvailableQty = bp 
+                  ? (bp.available_quantity !== undefined 
+                      ? bp.available_quantity 
+                      : Math.max(0, bp.stock - (bp.reserved_quantity || 0)))
+                  : 0;
+                const isOutOfStock = bp && bpAvailableQty < Number(item.quantity);
                 const isInactive = !bp || bp.is_available === false || !bp.product || bp.product.is_active === false;
                 
                 const productName = bp?.product?.name || item.product_name || 'Sản phẩm không rõ';
@@ -695,7 +719,7 @@ const Checkout: React.FC = () => {
                       </div>
                       <p className="text-sm text-slate-500 mt-1">
                         SL: {safeParseNumber(item.quantity, 1)}
-                        {isOutOfStock && <span className="ml-2 text-red-500 font-bold text-xs bg-red-100 px-2 py-0.5 rounded">Vượt Tồn: {bp?.stock || 0}</span>}
+                        {isOutOfStock && <span className="ml-2 text-red-500 font-bold text-xs bg-red-100 px-2 py-0.5 rounded">Vượt Tồn: {bpAvailableQty}</span>}
                         {isInactive && <span className="ml-2 text-red-500 font-bold text-xs bg-red-100 px-2 py-0.5 rounded">Ngừng kinh doanh</span>}
                       </p>
                       {promoItem && promoItem.applied_promotion && (

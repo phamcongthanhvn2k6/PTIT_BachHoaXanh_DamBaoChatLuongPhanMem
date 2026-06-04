@@ -42,6 +42,13 @@ export const mapEventToContract = (event) => {
     status: resolveEventStatus(obj),
     branch: obj.branch || obj.branch_id || null,
     isFeatured: obj.isFeatured || obj.is_featured || false,
+    isTopFeatured: obj.isTopFeatured !== undefined ? obj.isTopFeatured : (obj.is_top_featured || false),
+    featuredPriority: obj.featuredPriority !== undefined ? Number(obj.featuredPriority) : (obj.featured_priority || 0),
+    featuredOrder: obj.featuredOrder !== undefined ? Number(obj.featuredOrder) : (obj.featured_order || 0),
+    heroTitleOverride: obj.heroTitleOverride !== undefined ? obj.heroTitleOverride : (obj.hero_title_override || ''),
+    heroExcerptOverride: obj.heroExcerptOverride !== undefined ? obj.heroExcerptOverride : (obj.hero_excerpt_override || ''),
+    heroImageOverride: obj.heroImageOverride !== undefined ? obj.heroImageOverride : (obj.hero_image_override || ''),
+    readTime: obj.readTime !== undefined ? Number(obj.readTime) : (obj.read_time || 5),
   };
   
   return {
@@ -89,7 +96,7 @@ export const list = async (req, res) => {
     
     if (featured === 'true') filter.is_featured = true;
 
-    let query = EventPost.find(filter).sort('-published_at');
+    let query = EventPost.find(filter).sort('-is_top_featured -is_featured -featured_priority -published_at');
 
     if (limit) {
       const skip = page ? (Number(page) - 1) * Number(limit) : 0;
@@ -115,7 +122,7 @@ export const published = async (req, res) => {
         { $or: [{ end_date: null }, { end_date: { $gte: now } }] }
       ]
     };
-    const data = await EventPost.find(filter).sort('-published_at');
+    const data = await EventPost.find(filter).sort('-is_top_featured -is_featured -featured_priority -published_at');
     const mappedData = data.map(ev => mapEventToContract(ev));
     return res.json({ success: true, data: mappedData });
   } catch (err) {
@@ -135,7 +142,7 @@ export const featured = async (req, res) => {
         { $or: [{ end_date: null }, { end_date: { $gte: now } }] }
       ]
     };
-    const data = await EventPost.find(filter).sort('-published_at');
+    const data = await EventPost.find(filter).sort('-is_top_featured -is_featured -featured_priority -published_at');
     const mappedData = data.map(ev => mapEventToContract(ev));
     return res.json({ success: true, data: mappedData });
   } catch (err) {
@@ -182,6 +189,13 @@ export const create = async (req, res) => {
     if (req.body.startDate) req.body.start_date = req.body.startDate;
     if (req.body.endDate) req.body.end_date = req.body.endDate;
     if (req.body.isFeatured !== undefined) req.body.is_featured = req.body.isFeatured;
+    if (req.body.isTopFeatured !== undefined) req.body.is_top_featured = req.body.isTopFeatured;
+    if (req.body.featuredPriority !== undefined) req.body.featured_priority = Number(req.body.featuredPriority) || 0;
+    if (req.body.featuredOrder !== undefined) req.body.featured_order = Number(req.body.featuredOrder) || 0;
+    if (req.body.heroTitleOverride !== undefined) req.body.hero_title_override = req.body.heroTitleOverride;
+    if (req.body.heroExcerptOverride !== undefined) req.body.hero_excerpt_override = req.body.heroExcerptOverride;
+    if (req.body.heroImageOverride !== undefined) req.body.hero_image_override = req.body.heroImageOverride;
+    if (req.body.readTime !== undefined) req.body.read_time = Number(req.body.readTime) || 5;
     if (req.body.image) req.body.thumbnail = req.body.image;
     if (req.body.summary) req.body.excerpt = req.body.summary;
     if (req.body.description) req.body.content_blocks = [{ type: 'text', text: req.body.description }];
@@ -191,7 +205,22 @@ export const create = async (req, res) => {
     req.body.is_published = computedStatus === 'published';
     req.body.published_at = req.body.is_published ? new Date() : null;
 
+    if (req.body.is_top_featured) {
+      if (!req.body.is_published || computedStatus !== 'published') {
+        return res.status(400).json({ success: false, message: 'Top featured event must be active and published.' });
+      }
+      const hasImage = req.body.thumbnail || req.body.hero_image_override;
+      const hasSummary = req.body.summary || req.body.excerpt || req.body.hero_excerpt_override;
+      const hasDescription = req.body.description || (req.body.content_blocks && req.body.content_blocks.length > 0);
+      if (!title || !hasImage || !hasSummary || !hasDescription) {
+        return res.status(400).json({ success: false, message: 'Top featured event must have a title, summary, thumbnail/image, and description/content.' });
+      }
+    }
+
     const ev = await EventPost.create(req.body);
+    if (ev.is_top_featured) {
+      await EventPost.updateMany({ _id: { $ne: ev._id } }, { is_top_featured: false });
+    }
     return res.status(201).json({ success: true, data: mapEventToContract(ev) });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -218,6 +247,13 @@ export const update = async (req, res) => {
     if (req.body.startDate !== undefined) req.body.start_date = req.body.startDate;
     if (req.body.endDate !== undefined) req.body.end_date = req.body.endDate;
     if (req.body.isFeatured !== undefined) req.body.is_featured = req.body.isFeatured;
+    if (req.body.isTopFeatured !== undefined) req.body.is_top_featured = req.body.isTopFeatured;
+    if (req.body.featuredPriority !== undefined) req.body.featured_priority = Number(req.body.featuredPriority) || 0;
+    if (req.body.featuredOrder !== undefined) req.body.featured_order = Number(req.body.featuredOrder) || 0;
+    if (req.body.heroTitleOverride !== undefined) req.body.hero_title_override = req.body.heroTitleOverride;
+    if (req.body.heroExcerptOverride !== undefined) req.body.hero_excerpt_override = req.body.heroExcerptOverride;
+    if (req.body.heroImageOverride !== undefined) req.body.hero_image_override = req.body.heroImageOverride;
+    if (req.body.readTime !== undefined) req.body.read_time = Number(req.body.readTime) || 5;
     if (req.body.image !== undefined) req.body.thumbnail = req.body.image;
     if (req.body.summary !== undefined) req.body.excerpt = req.body.summary;
     if (req.body.description !== undefined) req.body.content_blocks = [{ type: 'text', text: req.body.description }];
@@ -231,7 +267,22 @@ export const update = async (req, res) => {
       req.body.published_at = new Date();
     }
 
+    if (req.body.is_top_featured) {
+      if (!req.body.is_published || computedStatus !== 'published') {
+        return res.status(400).json({ success: false, message: 'Top featured event must be active and published.' });
+      }
+      const hasImage = tempObj.thumbnail || tempObj.hero_image_override;
+      const hasSummary = tempObj.summary || tempObj.excerpt || tempObj.hero_excerpt_override;
+      const hasDescription = tempObj.description || (tempObj.content_blocks && tempObj.content_blocks.length > 0);
+      if (!tempObj.title || !hasImage || !hasSummary || !hasDescription) {
+        return res.status(400).json({ success: false, message: 'Top featured event must have a title, summary, thumbnail/image, and description/content.' });
+      }
+    }
+
     const updated = await EventPost.findByIdAndUpdate(idParam, req.body, { new: true });
+    if (updated.is_top_featured) {
+      await EventPost.updateMany({ _id: { $ne: updated._id } }, { is_top_featured: false });
+    }
     return res.json({ success: true, data: mapEventToContract(updated) });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

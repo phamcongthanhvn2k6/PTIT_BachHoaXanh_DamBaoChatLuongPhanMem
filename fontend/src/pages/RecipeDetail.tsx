@@ -8,6 +8,72 @@ import { addToCartAsync } from '../slices/cartSlice';
 import { useAuthRedirect } from '../hooks/useAuthRedirect';
 import { toast } from '../components/Toast/toastEvent';
 
+const RecipeSkeleton: React.FC<{ isSubSkeleton?: boolean }> = ({ isSubSkeleton = false }) => {
+  return (
+    <div className={`max-w-5xl mx-auto ${isSubSkeleton ? '' : 'px-4 sm:px-6 py-8'} animate-pulse`}>
+      {!isSubSkeleton && (
+        <div className="h-6 w-24 bg-slate-200 dark:bg-slate-700 rounded mb-6"></div>
+      )}
+
+      {!isSubSkeleton && (
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 mb-6 flex flex-wrap gap-4">
+          <div className="flex-1 min-w-[200px] h-12 bg-slate-250 dark:bg-slate-700 rounded-lg"></div>
+          <div className="w-28 h-12 bg-slate-250 dark:bg-slate-700 rounded-lg"></div>
+          <div className="w-36 h-12 bg-slate-250 dark:bg-slate-700 rounded-lg"></div>
+          <div className="w-24 h-12 bg-slate-250 dark:bg-slate-700 rounded-lg"></div>
+        </div>
+      )}
+
+      <div className="bg-white dark:bg-slate-800 rounded-3xl overflow-hidden shadow-xl border border-slate-100 dark:border-slate-700">
+        <div className="h-64 bg-slate-200 dark:bg-slate-700"></div>
+
+        <div className="p-6 md:p-10">
+          <div className="h-10 w-2/3 bg-slate-200 dark:bg-slate-700 rounded-lg mb-4"></div>
+          <div className="h-4 w-full bg-slate-200 dark:bg-slate-700 rounded mb-2"></div>
+          <div className="h-4 w-5/6 bg-slate-200 dark:bg-slate-700 rounded mb-6"></div>
+
+          <div className="bg-slate-50 dark:bg-slate-800/80 rounded-2xl p-6 border border-slate-100 dark:border-slate-700 mb-8">
+            <div className="h-4 w-32 bg-slate-200 dark:bg-slate-700 rounded mb-4"></div>
+            <div className="grid grid-cols-5 gap-4">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-16 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-4 mb-10">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="w-36 h-16 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+            <div className="lg:col-span-5 space-y-4">
+              <div className="h-6 w-40 bg-slate-200 dark:bg-slate-700 rounded-lg mb-4"></div>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-20 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
+              ))}
+            </div>
+            <div className="lg:col-span-7 space-y-6">
+              <div className="h-6 w-48 bg-slate-200 dark:bg-slate-700 rounded-lg mb-6"></div>
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex gap-4">
+                  <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 shrink-0"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-6 w-1/3 bg-slate-200 dark:bg-slate-700 rounded"></div>
+                    <div className="h-4 w-full bg-slate-200 dark:bg-slate-700 rounded"></div>
+                    <div className="h-4 w-5/6 bg-slate-200 dark:bg-slate-700 rounded"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const RecipeDetail: React.FC = () => {
   const { t } = useTranslation();
   const { name } = useParams<{ name: string }>();
@@ -19,6 +85,8 @@ const RecipeDetail: React.FC = () => {
 
   const [recipe, setRecipe] = useState<any>(null);
   const [isCached, setIsCached] = useState<boolean | null>(null);
+  const [isSaved, setIsSaved] = useState<boolean>(true);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,10 +97,46 @@ const RecipeDetail: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
+  const triggerPreviewGeneration = async (dishNameVal: string) => {
+    setGenerating(true);
+    setError(null);
+    try {
+      const res = await recipeService.previewRecipe({
+        dishName: dishNameVal,
+        servings: servings || 2,
+        appetite: appetite || 'normal',
+        branchId: currentBranchId || undefined
+      });
+      if (res.success && res.data) {
+        setRecipe(res.data);
+        setIsCached(res.cached ?? false);
+        setIsSaved(res.isSaved ?? false);
+        setShowForm(false);
+        if (res.cached && res.isSaved) {
+          toast.success(`✅ ${t('recipe.foundCached')}`);
+        } else {
+          toast.success(`🧑‍🍳 ${t('recipe.generateSuccess')}`);
+        }
+      } else {
+        setError(res.message || t('recipe.generateFailed'));
+        setShowForm(true);
+      }
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || t('recipe.connectError');
+      setError(msg);
+      setShowForm(true);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   // On mount: if URL has a name param, try to fetch from DB
   useEffect(() => {
     if (!name) {
       setShowForm(true);
+      setRecipe(null);
+      setIsCached(null);
+      setIsSaved(true);
       return;
     }
     const decoded = decodeURIComponent(name).replace(/-/g, ' ');
@@ -42,18 +146,20 @@ const RecipeDetail: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const res = await recipeService.getRecipeByName(name);
+        const res = await recipeService.getRecipeByName(name, currentBranchId || undefined);
         if (res.success && res.data) {
           setRecipe(res.data);
           setIsCached(res.cached ?? true);
+          setIsSaved(true);
           setServings(res.data.servings || 2);
           setShowForm(false);
         } else {
-          setShowForm(true);
+          // If 404/not found, generate preview immediately
+          await triggerPreviewGeneration(decoded);
         }
       } catch (err: any) {
         if (err?.response?.status === 404) {
-          setShowForm(true);
+          await triggerPreviewGeneration(decoded);
         } else {
           setError(err?.response?.data?.message || err?.message || t('common.systemError'));
         }
@@ -62,7 +168,7 @@ const RecipeDetail: React.FC = () => {
       }
     };
     fetchRecipe();
-  }, [name]);
+  }, [name, currentBranchId]);
 
   const handleGenerate = async () => {
     const trimmed = dishName.trim();
@@ -79,38 +185,43 @@ const RecipeDetail: React.FC = () => {
       return;
     }
 
-    setGenerating(true);
-    setError(null);
-    try {
-      const res = await recipeService.generateRecipe({
-        dishName: trimmed,
-        servings,
-        appetite
-      });
-      if (res.success && res.data) {
-        setRecipe(res.data);
-        setIsCached(res.cached ?? false);
-        setShowForm(false);
-        toast.success(res.cached ? `✅ ${t('recipe.foundCached')}` : `🧑‍🍳 ${t('recipe.generateSuccess')}`);
-      } else {
-        setError(res.message || t('recipe.generateFailed'));
-      }
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || t('recipe.connectError');
-      setError(msg);
-    } finally {
-      setGenerating(false);
+    const slug = trimmed.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    if (name === slug) {
+      await triggerPreviewGeneration(trimmed);
+    } else {
+      navigate(`/recipes/${slug}`);
     }
   };
 
-  // Match ingredients to store products
+  const handleSave = async () => {
+    if (!recipe) return;
+    setIsSaving(true);
+    try {
+      const res = await recipeService.saveRecipe(recipe);
+      if (res.success) {
+        setIsSaved(true);
+        toast.success(t('recipe.saveSuccess'));
+      } else {
+        toast.error(res.message || t('recipe.saveFailed'));
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || t('recipe.saveFailed'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Match ingredients to store products (Backend-authoritative with client fallback)
   const matchedIngredients = React.useMemo(() => {
+    if (recipe?.matched_ingredients && recipe.matched_ingredients.length > 0) {
+      return recipe.matched_ingredients;
+    }
     if (!recipe?.ingredients) return [];
     return recipe.ingredients.map((ing: any) => {
       const match = (availableProducts || []).find((p: any) =>
         p?.name?.toLowerCase().includes(ing.name.toLowerCase())
       );
-      return { ingredient: ing, product: match || null };
+      return { ingredient: ing, product: match || null, substitutes: [] };
     });
   }, [recipe, availableProducts]);
 
@@ -143,12 +254,7 @@ const RecipeDetail: React.FC = () => {
 
   // ── LOADING STATE ──
   if (loading) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-        <div className="animate-spin w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full mx-auto mb-4"></div>
-        <h2 className="text-xl font-bold text-slate-700">{t('recipe.findingRecipe')}</h2>
-      </div>
-    );
+    return <RecipeSkeleton />;
   }
 
   // ── ERROR STATE (fatal, no recipe, not in generation flow) ──
@@ -264,20 +370,23 @@ const RecipeDetail: React.FC = () => {
 
       {/* ── GENERATING OVERLAY ── */}
       {generating && (
-        <div className="text-center py-16">
-          <div className="relative mx-auto w-20 h-20 mb-6">
-            <div className="absolute inset-0 animate-spin border-4 border-indigo-200 border-t-indigo-600 rounded-full"></div>
-            <div className="absolute inset-2 animate-spin border-4 border-purple-200 border-b-purple-600 rounded-full" style={{animationDirection: 'reverse', animationDuration: '1.5s'}}></div>
-            <span className="absolute inset-0 flex items-center justify-center text-2xl">🧑‍🍳</span>
-          </div>
-          <h2 className="text-2xl font-bold text-slate-700 dark:text-slate-200 mb-2">{t('recipe.aiGeneratingTitle')}</h2>
-          <p className="text-slate-500 dark:text-slate-400" dangerouslySetInnerHTML={{ __html: t('recipe.analyzing', { dishName, servings }) }}></p>
-          <p className="text-slate-400 text-sm mt-2">{t('recipe.timeEstimate')}</p>
-          <div className="mt-6 max-w-xs mx-auto">
-            <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 rounded-full animate-pulse" style={{width: '60%', animation: 'pulse 2s ease-in-out infinite'}}></div>
+        <div className="space-y-8">
+          <div className="bg-indigo-50/50 dark:bg-indigo-950/10 border border-indigo-100 dark:border-indigo-900/40 rounded-3xl p-8 text-center max-w-2xl mx-auto shadow-sm">
+            <div className="relative mx-auto w-20 h-20 mb-6">
+              <div className="absolute inset-0 animate-spin border-4 border-indigo-200 border-t-indigo-600 rounded-full"></div>
+              <div className="absolute inset-2 animate-spin border-4 border-purple-200 border-b-purple-600 rounded-full" style={{animationDirection: 'reverse', animationDuration: '1.5s'}}></div>
+              <span className="absolute inset-0 flex items-center justify-center text-2xl">🧑‍🍳</span>
+            </div>
+            <h2 className="text-2xl font-bold text-slate-700 dark:text-slate-200 mb-2">{t('recipe.aiGeneratingTitle')}</h2>
+            <p className="text-slate-500 dark:text-slate-400" dangerouslySetInnerHTML={{ __html: t('recipe.analyzing', { dishName, servings }) }}></p>
+            <p className="text-slate-400 text-sm mt-2">{t('recipe.timeEstimate')}</p>
+            <div className="mt-6 max-w-xs mx-auto">
+              <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 rounded-full animate-pulse" style={{width: '60%', animation: 'pulse 2s ease-in-out infinite'}}></div>
+              </div>
             </div>
           </div>
+          <RecipeSkeleton isSubSkeleton={true} />
         </div>
       )}
 
@@ -295,23 +404,58 @@ const RecipeDetail: React.FC = () => {
               </div>
             )}
             <div className="absolute top-4 right-4 flex gap-2">
-              {isCached ? (
-                <span className="bg-green-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
-                  <span className="material-symbols-outlined !text-sm">database</span> {t('recipe.sourceCacheBadge', 'Saved Recipe')}
+              {isSaved ? (
+                <span className="bg-green-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg shadow-green-600/25">
+                  <span className="material-symbols-outlined !text-sm">check_circle</span> {t('recipe.savedBadge')}
                 </span>
               ) : (
-                <span className="bg-indigo-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
-                  <span className="material-symbols-outlined !text-sm">smart_toy</span> {t('recipe.sourceAiBadge', 'AI Generated')}
+                <span className="bg-indigo-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg shadow-indigo-600/25">
+                  <span className="material-symbols-outlined !text-sm">smart_toy</span> {t('recipe.sourceAiBadge')}
                 </span>
               )}
             </div>
-            {/* Gradient overlay for text readability */}
             <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-white dark:from-slate-800 to-transparent"></div>
           </div>
 
           <div className="p-6 md:p-10">
-            <h1 className="text-3xl md:text-4xl font-black text-slate-900 dark:text-white mb-3">{recipe.title}</h1>
-            {recipe.description && <p className="text-slate-600 dark:text-slate-300 text-lg mb-8 leading-relaxed">{recipe.description}</p>}
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+              <h1 className="text-3xl md:text-4xl font-black text-slate-900 dark:text-white">{recipe.title}</h1>
+              {!isSaved && (
+                <button
+                  id="recipe-save-btn"
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="self-start md:self-auto bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-green-600/20 transition-all active:scale-[0.98] disabled:bg-slate-400"
+                >
+                  <span className="material-symbols-outlined !text-base">{isSaving ? 'sync' : 'save'}</span>
+                  {isSaving ? t('common.saving') : t('recipe.saveBtn')}
+                </button>
+              )}
+            </div>
+            {recipe.description && <p className="text-slate-600 dark:text-slate-300 text-lg mb-6 leading-relaxed">{recipe.description}</p>}
+
+            {/* Nutrition facts breakdown */}
+            {recipe.nutrition && (
+              <div className="bg-slate-50 dark:bg-slate-800/80 rounded-2xl p-4 border border-slate-100 dark:border-slate-700 mb-8">
+                <h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">
+                  {t('recipe.nutritionPerServing', 'Dinh dưỡng mỗi khẩu phần')}
+                </h3>
+                <div className="grid grid-cols-5 gap-2 text-center">
+                  {[
+                    { label: t('recipe.calories', 'Calories'), value: `${recipe.nutrition.calories} kcal`, color: 'text-rose-600 bg-rose-50 dark:bg-rose-950/20' },
+                    { label: t('recipe.protein', 'Đạm'), value: `${recipe.nutrition.protein}g`, color: 'text-amber-600 bg-amber-50 dark:bg-amber-950/20' },
+                    { label: t('recipe.fat', 'Béo'), value: `${recipe.nutrition.fat}g`, color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/20' },
+                    { label: t('recipe.carbs', 'Carbs'), value: `${recipe.nutrition.carbs}g`, color: 'text-purple-600 bg-purple-50 dark:bg-purple-950/20' },
+                    { label: t('recipe.fiber', 'Xơ'), value: `${recipe.nutrition.fiber}g`, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20' }
+                  ].map((nut, i) => (
+                    <div key={i} className={`p-2 rounded-xl ${nut.color} border border-transparent`}>
+                      <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5">{nut.label}</p>
+                      <p className="text-xs font-black">{nut.value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Info cards */}
             <div className="flex flex-wrap gap-4 mb-10">
@@ -374,9 +518,31 @@ const RecipeDetail: React.FC = () => {
                             </button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2 bg-orange-50 dark:bg-orange-900/10 p-2 rounded-lg border border-orange-100 dark:border-orange-800">
-                            <span className="material-symbols-outlined text-orange-400 !text-sm">info</span>
-                            <span className="text-xs text-orange-600 dark:text-orange-400">{t('recipe.notAvailable')}</span>
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center gap-2 bg-orange-50/75 dark:bg-orange-950/20 p-2 rounded-lg border border-orange-100 dark:border-orange-900/40">
+                              <span className="material-symbols-outlined text-orange-400 !text-sm">info</span>
+                              <span className="text-xs text-orange-600 dark:text-orange-400">{t('recipe.notAvailable')}</span>
+                            </div>
+                            {/* Smart substitutes list */}
+                            {m.substitutes && m.substitutes.length > 0 && (
+                              <div className="mt-1 bg-slate-100/50 dark:bg-slate-900/30 p-2 rounded-lg border border-dashed border-slate-200 dark:border-slate-700">
+                                <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 mb-1.5 uppercase tracking-wide">💡 Gợi ý thay thế:</p>
+                                <div className="space-y-1.5">
+                                  {m.substitutes.slice(0, 3).map((sub: any) => (
+                                    <div key={sub._id} className="flex items-center gap-2 bg-white dark:bg-slate-700 p-1.5 rounded border border-slate-100 dark:border-slate-750 shadow-sm">
+                                      <img src={sub.images?.[0] || sub.thumbnail || ''} alt="" className="w-6 h-6 rounded object-cover" />
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-[10px] font-bold text-slate-700 dark:text-slate-200 truncate">{sub.name}</p>
+                                        <p className="text-[10px] font-black text-rose-600">{formatPrice(sub.price)}₫</p>
+                                      </div>
+                                      <button onClick={() => addToCart(sub)} className="w-6 h-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded flex items-center justify-center transition-colors">
+                                        <span className="material-symbols-outlined !text-[10px]">add</span>
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

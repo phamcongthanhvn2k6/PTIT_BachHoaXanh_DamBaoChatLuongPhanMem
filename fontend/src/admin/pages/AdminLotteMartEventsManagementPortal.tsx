@@ -23,6 +23,17 @@ interface EventPost {
   status: string; // "draft" | "published" | "archived" | "scheduled" | "expired"
   created_at: string;
   updated_at: string;
+  is_top_featured?: boolean;
+  isTopFeatured?: boolean;
+  readTime?: number;
+  heroTitleOverride?: string;
+  heroExcerptOverride?: string;
+  heroImageOverride?: string;
+  hero_override?: {
+    title?: string;
+    excerpt?: string;
+    image?: string;
+  };
 }
 
 interface EventCategory {
@@ -76,6 +87,11 @@ const AdminLotteMartEventsManagementPortal: React.FC = () => {
   const [editFeatured, setEditFeatured] = useState(false);
   const [editStatus, setEditStatus] = useState<"draft" | "published" | "archived">("draft");
   const [editThumbnail, setEditThumbnail] = useState("");
+  const [editIsTopFeatured, setEditIsTopFeatured] = useState(false);
+  const [editHeroTitleOverride, setEditHeroTitleOverride] = useState("");
+  const [editHeroExcerptOverride, setEditHeroExcerptOverride] = useState("");
+  const [editHeroImageOverride, setEditHeroImageOverride] = useState("");
+  const [editReadTime, setEditReadTime] = useState(5);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -143,6 +159,14 @@ const AdminLotteMartEventsManagementPortal: React.FC = () => {
     setEditFeatured(ev.is_featured || false);
     setEditStatus((ev.status as any) || "draft");
     setEditThumbnail(ev.thumbnail || "");
+    
+    // New properties
+    setEditIsTopFeatured(ev.isTopFeatured || ev.is_top_featured || false);
+    setEditHeroTitleOverride(ev.heroTitleOverride || ev.hero_override?.title || "");
+    setEditHeroExcerptOverride(ev.heroExcerptOverride || ev.hero_override?.excerpt || "");
+    setEditHeroImageOverride(ev.heroImageOverride || ev.hero_override?.image || "");
+    setEditReadTime(ev.readTime || ev.read_time || 5);
+    
     setShowCreateForm(false);
   }, []);
 
@@ -158,6 +182,14 @@ const AdminLotteMartEventsManagementPortal: React.FC = () => {
     setEditFeatured(false);
     setEditStatus("draft");
     setEditThumbnail("");
+    
+    // Reset new properties
+    setEditIsTopFeatured(false);
+    setEditHeroTitleOverride("");
+    setEditHeroExcerptOverride("");
+    setEditHeroImageOverride("");
+    setEditReadTime(5);
+    
     setShowCreateForm(true);
   };
 
@@ -169,8 +201,16 @@ const AdminLotteMartEventsManagementPortal: React.FC = () => {
       showToastMsg("Ngày kết thúc phải sau ngày bắt đầu");
       return false;
     }
+    if (editIsTopFeatured && editStatus !== "published") {
+      showToastMsg("Sự kiện Tiêu điểm (Hero Spotlight) bắt buộc phải hiển thị ở trạng thái Đã xuất bản");
+      return false;
+    }
+    if (editIsTopFeatured && !editThumbnail && !editHeroImageOverride) {
+      showToastMsg("Sự kiện Tiêu điểm bắt buộc phải có hình ảnh (Thumbnail hoặc Ảnh ghi đè)");
+      return false;
+    }
     return true;
-  }, [editTitle, editCategoryId, editStartDate, editEndDate, showToastMsg]);
+  }, [editTitle, editCategoryId, editStartDate, editEndDate, editIsTopFeatured, editStatus, editThumbnail, editHeroImageOverride, showToastMsg]);
 
   const constructPayload = useCallback(() => ({
     title: editTitle.trim(),
@@ -181,10 +221,15 @@ const AdminLotteMartEventsManagementPortal: React.FC = () => {
     start_date: editStartDate,
     end_date: editEndDate,
     is_featured: editFeatured,
+    isTopFeatured: editIsTopFeatured,
+    heroTitleOverride: editHeroTitleOverride.trim(),
+    heroExcerptOverride: editHeroExcerptOverride.trim(),
+    heroImageOverride: editHeroImageOverride.trim(),
+    readTime: editReadTime,
     status: editStatus,
     is_published: editStatus === "published",
     thumbnail: editThumbnail,
-  }), [editTitle, editCategoryId, editTags, editExcerpt, editStartDate, editEndDate, editFeatured, editStatus, editThumbnail]);
+  }), [editTitle, editCategoryId, editTags, editExcerpt, editStartDate, editEndDate, editFeatured, editIsTopFeatured, editHeroTitleOverride, editHeroExcerptOverride, editHeroImageOverride, editReadTime, editStatus, editThumbnail]);
 
   // ─── Create Event ───
   const handleCreate = useCallback(async () => {
@@ -215,10 +260,17 @@ const AdminLotteMartEventsManagementPortal: React.FC = () => {
       if (editStatus === "published" && selectedEvent.status !== "published") {
         payload.published_at = new Date().toISOString();
       }
-      // Auto-disable featured if going to draft/archived (non-published events can't be featured on user page)
-      if (editStatus !== "published" && editFeatured) {
-        payload.is_featured = false;
-        setEditFeatured(false);
+      // Auto-disable featured/top-featured if going to draft/archived (non-published events can't be featured on user page)
+      if (editStatus !== "published") {
+        if (editFeatured) {
+          payload.is_featured = false;
+          setEditFeatured(false);
+        }
+        if (editIsTopFeatured) {
+          payload.isTopFeatured = false;
+          payload.is_top_featured = false;
+          setEditIsTopFeatured(false);
+        }
       }
       await dataService.updateEventPost(selectedEvent.id, payload);
       await loadData();
@@ -230,7 +282,7 @@ const AdminLotteMartEventsManagementPortal: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  }, [selectedEvent, validateForm, constructPayload, editStatus, editFeatured, loadData, showToastMsg]);
+  }, [selectedEvent, validateForm, constructPayload, editStatus, editFeatured, editIsTopFeatured, loadData, showToastMsg]);
 
   // ─── Direct Delete Event ───
   const handleDeleteEvent = useCallback(async (id: string | number) => {
@@ -899,6 +951,94 @@ const AdminLotteMartEventsManagementPortal: React.FC = () => {
                     <div className={`absolute top-[2px] w-5 h-5 bg-white rounded-full shadow transition-all ${editFeatured ? "left-[22px]" : "left-[2px]"}`}></div>
                   </div>
                 </div>
+
+                {/* Toggle Top Featured */}
+                <div
+                  className="flex items-center justify-between p-4 rounded-xl border cursor-pointer select-none transition-all mt-4"
+                  style={{ background: editIsTopFeatured ? "rgba(220, 38, 38, 0.05)" : "rgba(248, 250, 252, 1)", borderColor: editIsTopFeatured ? "rgba(220, 38, 38, 0.2)" : "rgba(226, 232, 240, 1)" }}
+                  onClick={() => {
+                    setEditIsTopFeatured(prev => {
+                      const next = !prev;
+                      if (next) {
+                        setEditFeatured(true);
+                        setEditStatus("published");
+                      }
+                      return next;
+                    });
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1", color: editIsTopFeatured ? "#dc2626" : "#94a3b8" }}>campaign</span>
+                    <div>
+                      <span className={`text-sm font-bold block ${editIsTopFeatured ? "text-red-650" : "text-slate-500"}`}>Đánh dấu Tiêu điểm (Spotlight Hero)</span>
+                      <span className="text-[10px] text-slate-400">Hiển thị nổi bật nhất ở đầu trang sự kiện (Chỉ duy nhất 1 bài viết)</span>
+                    </div>
+                  </div>
+                  <div className={`w-11 h-6 rounded-full relative transition-colors ${editIsTopFeatured ? "bg-red-600" : "bg-slate-300"}`}>
+                    <div className={`absolute top-[2px] w-5 h-5 bg-white rounded-full shadow transition-all ${editIsTopFeatured ? "left-[22px]" : "left-[2px]"}`}></div>
+                  </div>
+                </div>
+
+                {/* Read Time Input */}
+                <div className="mt-4">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Thời gian đọc (phút)</label>
+                  <input
+                    className="w-full bg-surface-container-low border border-transparent rounded-xl px-4 py-2.5 text-sm focus:bg-white focus:border-primary/20 focus:ring-2 focus:ring-primary/10 outline-none transition-all"
+                    type="number"
+                    min={1}
+                    value={editReadTime}
+                    onChange={e => setEditReadTime(Math.max(1, Number(e.target.value) || 1))}
+                    placeholder="Thời gian đọc ước tính..."
+                  />
+                </div>
+
+                {/* Hero Overrides Card */}
+                {editIsTopFeatured && (
+                  <div className="bg-red-50/20 dark:bg-red-950/10 p-5 rounded-2xl border border-red-100 dark:border-red-900/50 space-y-4 animate-in slide-in-from-top-2 mt-4">
+                    <h5 className="text-xs font-bold text-red-650 dark:text-red-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px]">edit_note</span>
+                      Ghi đè nội dung Hero (Tùy chọn)
+                    </h5>
+                    <p className="text-[10px] text-slate-450 dark:text-slate-400 leading-relaxed">
+                      Các trường này cho phép thay đổi thông tin hiển thị riêng trên banner tiêu điểm mà không ảnh hưởng tới nội dung bài viết gốc.
+                    </p>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tiêu đề Hero ghi đè</label>
+                        <input
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-red-500/20 outline-none transition-all"
+                          type="text"
+                          value={editHeroTitleOverride}
+                          onChange={e => setEditHeroTitleOverride(e.target.value)}
+                          placeholder="Bỏ trống để dùng tiêu đề gốc..."
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tóm tắt Hero ghi đè</label>
+                        <textarea
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-red-500/20 outline-none resize-none transition-all"
+                          rows={3}
+                          value={editHeroExcerptOverride}
+                          onChange={e => setEditHeroExcerptOverride(e.target.value)}
+                          placeholder="Bỏ trống để dùng mô tả ngắn gốc..."
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-1">Ảnh Hero ghi đè (URL)</label>
+                        <input
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-red-500/20 outline-none transition-all"
+                          type="text"
+                          value={editHeroImageOverride}
+                          onChange={e => setEditHeroImageOverride(e.target.value)}
+                          placeholder="Bỏ trống để dùng ảnh gốc..."
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="pt-6 flex flex-col gap-3 border-t border-surface-container mt-6">
                   {showCreateForm ? (

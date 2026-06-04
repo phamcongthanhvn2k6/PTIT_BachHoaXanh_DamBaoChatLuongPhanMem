@@ -193,8 +193,29 @@ export const sendNotificationSettingsEmail = async (user, changedSettings) => {
   return sendMail({ to: user.email, subject, text, html });
 };
 
+export const sendPriceDropEmail = async ({ email, username, productName, oldPrice, newPrice, link }) => {
+  if (!email) return { skipped: true };
+  const subject = `[Lotte Mart] Giam gia san pham ${productName}!`;
+  const text = `San pham ${productName} ban dang theo doi da giam gia tu ${Number(oldPrice).toLocaleString('vi-VN')}d xuong con ${Number(newPrice).toLocaleString('vi-VN')}d.`;
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;max-width:640px;margin:0 auto;">
+      <h2 style="color:#dc2626;">San pham ban quan tam da giam gia!</h2>
+      <p>Xin chao ${username || 'Quy khach'},</p>
+      <p>San pham <b>${productName}</b> ma ban dang theo doi vua giam gia manh:</p>
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px;margin-bottom:16px;">
+        <p><b>Gia cu:</b> <del style="color:#6b7280;">${Number(oldPrice).toLocaleString('vi-VN')}d</del></p>
+        <p><b>Gia moi cuc soc:</b> <b style="color:#dc2626;font-size:18px;">${Number(newPrice).toLocaleString('vi-VN')}d</b></p>
+      </div>
+      <p><a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}${link}" style="background:#dc2626;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold;">Mua Ngay</a></p>
+      <p style="margin-top:20px;color:#4b5563;font-size:13px;">Lotte Mart han hanh duoc phuc vu quy khach.</p>
+    </div>
+  `;
+  return sendMail({ to: email, subject, text, html });
+};
+
 export default {
   sendOtpEmail,
   sendOrderSuccessEmail,
   sendNotificationSettingsEmail,
+  sendPriceDropEmail,
 };

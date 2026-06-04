@@ -1330,31 +1330,26 @@ const AdminProductManagement: React.FC = () => {
                           }
                           try {
                             setIsProcessing(true);
-                            const formData = new FormData();
+                            const filesArray: File[] = [];
                             for (let i = 0; i < files.length; i++) {
                               if (files[i].size > 5 * 1024 * 1024) {
                                 toast.error(`Ảnh "${files[i].name}" vượt quá 5MB`);
                                 continue;
                               }
-                              formData.append('images', files[i]);
+                              filesArray.push(files[i]);
                             }
-                            const token = localStorage.getItem('access_token') || sessionStorage.getItem('token');
-                            const res = await fetch('http://localhost:3001/api/uploads/product-images', {
-                              method: 'POST',
-                              body: formData,
-                              headers: token ? { Authorization: `Bearer ${token}` } : {},
-                            });
-                            const result = await res.json();
-                            if (result.success && result.data?.urls) {
-                              const newImages = [...currentImages, ...result.data.urls];
+                            if (filesArray.length === 0) return;
+                            const urls = await productService.uploadProductImages(filesArray);
+                            if (urls.length > 0) {
+                              const newImages = [...currentImages, ...urls];
                               setEditItem((prev: any) => ({
                                 ...prev,
                                 images: newImages,
                                 thumbnail: prev.thumbnail || newImages[0] || '',
                               }));
-                              toast.success(`Đã tải lên ${result.data.urls.length} ảnh thành công`);
+                              toast.success(`Đã tải lên ${urls.length} ảnh thành công`);
                             } else {
-                              throw new Error(result.message || 'Upload failed');
+                              throw new Error('Upload failed');
                             }
                           } catch (err: any) {
                             toast.error(err.message || 'Lỗi tải ảnh lên');

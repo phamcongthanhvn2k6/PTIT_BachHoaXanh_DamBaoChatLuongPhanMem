@@ -916,6 +916,9 @@ export const dataService = {
     await httpClient.post(endpoints.adminSettings.reset).catch(() => {});
     return true;
   },
+  getMaintenanceStatus: async (): Promise<any> => {
+    return safeObj(httpClient.get(endpoints.system.maintenanceStatus));
+  },
 
   // ═══════════════════════════════════════════════
   // NOTIFICATION TEMPLATES

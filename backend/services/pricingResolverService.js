@@ -8,6 +8,90 @@ const asArray = (value) => (Array.isArray(value) ? value : []);
 const buildIdSet = (arr) => new Set(asArray(arr).map((item) => toIdString(item)));
 const isInSet = (set, value) => set.has(toIdString(value));
 
+// Module-level cache to prevent N+1 query storms
+const pricingCache = {
+  activePromotions: null,
+  activeHotDeals: null,
+  timestamp: 0
+};
+const CACHE_TTL_MS = 5000; // 5 seconds TTL
+
+const bpPromises = new Map();
+
+async function getCachedPromotionsAndDeals(now) {
+  const curTime = Date.now();
+  if (pricingCache.activePromotions && pricingCache.activeHotDeals && (curTime - pricingCache.timestamp < CACHE_TTL_MS)) {
+    return {
+      activePromotions: pricingCache.activePromotions,
+      activeHotDeals: pricingCache.activeHotDeals
+    };
+  }
+
+  try {
+    const [promos, deals] = await Promise.all([
+      Promotion.find({
+        is_active: true,
+        status: 'active',
+        $and: [
+          { $or: [{ start_date: null }, { start_date: { $lte: now } }] },
+          { $or: [{ end_date: null }, { end_date: { $gte: now } }] }
+        ]
+      }).sort({ priority: -1 }).lean(),
+      HotDeal.find({
+        is_active: true,
+        status: 'active',
+        $and: [
+          { $or: [{ start_date: null }, { start_date: { $lte: now } }] },
+          { $or: [{ end_date: null }, { end_date: { $gte: now } }] }
+        ]
+      }).lean()
+    ]);
+
+    pricingCache.activePromotions = promos;
+    pricingCache.activeHotDeals = deals;
+    pricingCache.timestamp = curTime;
+
+    return { activePromotions: promos, activeHotDeals: deals };
+  } catch (e) {
+    console.error('[PricingResolverCache] Error loading pricing rules:', e.message);
+    return {
+      activePromotions: pricingCache.activePromotions || [],
+      activeHotDeals: pricingCache.activeHotDeals || []
+    };
+  }
+}
+
+function getCachedBranchProduct(pId, bId) {
+  const cacheKey = `${pId}_${bId}`;
+  const curTime = Date.now();
+  
+  if (bpPromises.has(cacheKey)) {
+    const entry = bpPromises.get(cacheKey);
+    if (curTime - entry.timestamp < CACHE_TTL_MS) {
+      return entry.promise;
+    }
+  }
+  
+  const promise = (async () => {
+    try {
+      const query = {
+        product_id: { $in: [pId, new mongoose.Types.ObjectId(pId)] }
+      };
+      if (bId) {
+        query.branch_id = mongoose.Types.ObjectId.isValid(bId)
+          ? { $in: [bId, new mongoose.Types.ObjectId(bId)] }
+          : bId;
+      }
+      return await BranchProduct.findOne(query).lean();
+    } catch (e) {
+      return null;
+    }
+  })();
+  
+  bpPromises.set(cacheKey, { promise, timestamp: curTime });
+  return promise;
+}
+
 const isScopedToItem = (ruleLike, product, branchId) => {
   const excludedProducts = buildIdSet(ruleLike.excluded_product_ids);
   const excludedCategories = buildIdSet(ruleLike.excluded_category_ids);
@@ -97,67 +181,15 @@ export async function resolveEffectivePrice(product, branchProduct = null, branc
   // Fallback branch product lookup if not passed
   if (!bp && mongoose.Types.ObjectId.isValid(pId)) {
     try {
-      const bpQuery = {
-        product_id: { $in: [pId, new mongoose.Types.ObjectId(pId)] }
-      };
-      if (bId) {
-        bpQuery.branch_id = mongoose.Types.ObjectId.isValid(bId)
-          ? { $in: [bId, new mongoose.Types.ObjectId(bId)] }
-          : bId;
-      }
-      const foundBp = await BranchProduct.findOne(bpQuery).lean();
-      if (foundBp) bp = foundBp;
+      bp = await getCachedBranchProduct(pId, bId);
     } catch (e) {}
   }
 
-  // 1. Check Active Hot Deals (pre-loaded or query)
+  // 1. Check Active Hot Deals (pre-loaded or query/cache)
   let activeDeals = options.preloadedHotDeals;
   if (!activeDeals) {
-    const dealQuery = {
-      is_active: true,
-      status: 'active',
-      $and: [
-        { $or: [{ start_date: null }, { start_date: { $lte: now } }] },
-        { $or: [{ end_date: null }, { end_date: { $gte: now } }] }
-      ]
-    };
-    if (bp) {
-      const bpIds = [String(bp._id || bp.id)];
-      if (mongoose.Types.ObjectId.isValid(bp._id || bp.id)) {
-        bpIds.push(new mongoose.Types.ObjectId(bp._id || bp.id));
-      }
-      const prodIds = [pId];
-      if (mongoose.Types.ObjectId.isValid(pId)) {
-        prodIds.push(new mongoose.Types.ObjectId(pId));
-      }
-      const branchIds = bId ? [bId] : [];
-      if (bId && mongoose.Types.ObjectId.isValid(bId)) {
-        branchIds.push(new mongoose.Types.ObjectId(bId));
-      }
-
-      dealQuery.$or = [
-        { branch_product_id: { $in: bpIds } },
-        { product_id: { $in: prodIds }, branch_id: bId ? { $in: branchIds } : null }
-      ];
-    } else {
-      const prodIds = [pId];
-      if (mongoose.Types.ObjectId.isValid(pId)) {
-        prodIds.push(new mongoose.Types.ObjectId(pId));
-      }
-      dealQuery.product_id = { $in: prodIds };
-      if (bId) {
-        const branchIds = [bId];
-        if (mongoose.Types.ObjectId.isValid(bId)) {
-          branchIds.push(new mongoose.Types.ObjectId(bId));
-        }
-        dealQuery.branch_id = { $in: branchIds };
-      }
-    }
-    try {
-      activeDeals = await HotDeal.find(dealQuery).lean();
-    } catch (e) {
-      activeDeals = [];
-    }
+    const cached = await getCachedPromotionsAndDeals(now);
+    activeDeals = cached.activeHotDeals;
   }
 
   // Filter deals matching this product and branch, and having remaining stock
@@ -196,21 +228,11 @@ export async function resolveEffectivePrice(product, branchProduct = null, branc
     };
   }
 
-  // 2. Check Active Promotions (pre-loaded or query)
+  // 2. Check Active Promotions (pre-loaded or query/cache)
   let activePromotions = options.preloadedPromotions;
   if (!activePromotions) {
-    try {
-      activePromotions = await Promotion.find({
-        is_active: true,
-        status: 'active',
-        $and: [
-          { $or: [{ start_date: null }, { start_date: { $lte: now } }] },
-          { $or: [{ end_date: null }, { end_date: { $gte: now } }] }
-        ]
-      }).sort({ priority: -1 }).lean();
-    } catch (e) {
-      activePromotions = [];
-    }
+    const cached = await getCachedPromotionsAndDeals(now);
+    activePromotions = cached.activePromotions;
   }
 
   const basePrice = Number(bp ? bp.price : prod.price || 0);
@@ -288,15 +310,31 @@ export async function resolveProductPricing(product, branchProduct = null, branc
   let activePromotion = null;
   
   if (pricing.hotDealId) {
-    try {
-      activeHotDeal = await HotDeal.findById(pricing.hotDealId).lean();
-    } catch (e) {}
+    if (options.preloadedHotDeals) {
+      activeHotDeal = options.preloadedHotDeals.find(d => String(d._id || d.id) === String(pricing.hotDealId)) || null;
+    }
+    if (!activeHotDeal && pricingCache.activeHotDeals) {
+      activeHotDeal = pricingCache.activeHotDeals.find(d => String(d._id || d.id) === String(pricing.hotDealId)) || null;
+    }
+    if (!activeHotDeal) {
+      try {
+        activeHotDeal = await HotDeal.findById(pricing.hotDealId).lean();
+      } catch (e) {}
+    }
   }
   
   if (pricing.promotionId) {
-    try {
-      activePromotion = await Promotion.findById(pricing.promotionId).lean();
-    } catch (e) {}
+    if (options.preloadedPromotions) {
+      activePromotion = options.preloadedPromotions.find(p => String(p._id || p.id) === String(pricing.promotionId)) || null;
+    }
+    if (!activePromotion && pricingCache.activePromotions) {
+      activePromotion = pricingCache.activePromotions.find(p => String(p._id || p.id) === String(pricing.promotionId)) || null;
+    }
+    if (!activePromotion) {
+      try {
+        activePromotion = await Promotion.findById(pricing.promotionId).lean();
+      } catch (e) {}
+    }
   }
   
   let pricingSourceUpper = 'BASE_PRICE';

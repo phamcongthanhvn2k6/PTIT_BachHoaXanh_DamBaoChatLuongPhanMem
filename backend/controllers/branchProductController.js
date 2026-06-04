@@ -3,6 +3,8 @@ import BranchProduct from '../models/BranchProduct.js';
 import StockMovement from '../models/StockMovement.js';
 import Product from '../models/Product.js';
 import { resolveProductPricing } from '../services/pricingResolverService.js';
+import { HotDeal } from '../models/Misc.js';
+import Promotion from '../models/Promotion.js';
 
 const parseBranchId = (id) => {
   if (!id) return null;
@@ -57,8 +59,43 @@ export const list = async (req, res) => {
       const parsedPid = parseProductIdFilter(req.query.product_id);
       if (parsedPid) filter.product_id = parsedPid;
     }
+    if (req.query.supplier_id) {
+      const parsedSupplierId = parseProductIdFilter(req.query.supplier_id);
+      if (parsedSupplierId) filter.supplier_id = parsedSupplierId;
+    }
 
-    const bps = await BranchProduct.find(filter).lean();
+    if (req.query.search) {
+      const rx = { $regex: String(req.query.search).trim(), $options: 'i' };
+      // Search global products by name, brand, barcode, SKU
+      const ProductModel = mongoose.model('Product');
+      const matchedProducts = await ProductModel.find({
+        $or: [
+          { name: rx },
+          { product_name: rx },
+          { brand: rx },
+          { sku: rx },
+          { barcode: rx }
+        ]
+      }).select('_id').lean();
+      
+      const matchedProductIds = matchedProducts.map(p => p._id);
+      
+      filter.$or = [
+        { sku: rx },
+        { category_name: rx },
+        { supplier_name: rx },
+        { product_id: { $in: matchedProductIds } }
+      ];
+    }
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 0;
+
+    let bpsQuery = BranchProduct.find(filter);
+    if (limit > 0) {
+      bpsQuery = bpsQuery.skip((page - 1) * limit).limit(limit);
+    }
+    const bps = await bpsQuery.lean();
 
     // Populate product data
     const productIds = [...new Set(bps.map(bp => bp.product_id))];
@@ -121,6 +158,26 @@ export const list = async (req, res) => {
 
     const now = new Date();
 
+    // Preload active hot deals and promotions to prevent N+1 query storm
+    const [preloadedHotDeals, preloadedPromotions] = await Promise.all([
+      HotDeal.find({
+        is_active: true,
+        status: 'active',
+        $and: [
+          { $or: [{ start_date: null }, { start_date: { $lte: now } }] },
+          { $or: [{ end_date: null }, { end_date: { $gte: now } }] }
+        ]
+      }).lean(),
+      Promotion.find({
+        is_active: true,
+        status: 'active',
+        $and: [
+          { $or: [{ start_date: null }, { start_date: { $lte: now } }] },
+          { $or: [{ end_date: null }, { end_date: { $gte: now } }] }
+        ]
+      }).sort({ priority: -1 }).lean()
+    ]);
+
     const data = await Promise.all(bps.map(async (bp) => {
       const obj = { ...bp, id: bp._id };
       const prod = productMap[String(bp.product_id)] || null;
@@ -141,7 +198,11 @@ export const list = async (req, res) => {
         obj.sku = pickNonEmpty(bp.sku, prod.sku, obj.sku);
         obj.master_id = pickNonEmpty(bp.master_id, prod.master_id, obj.master_id);
 
-        const resolvedPricing = await resolveProductPricing(prod, bp, bp.branch_id, { now });
+        const resolvedPricing = await resolveProductPricing(prod, bp, bp.branch_id, {
+          now,
+          preloadedHotDeals,
+          preloadedPromotions
+        });
         obj.price = resolvedPricing.effective_price;
         obj.original_price = resolvedPricing.original_price;
         obj.discount_percent = resolvedPricing.discount_percent;
@@ -239,6 +300,23 @@ export const detail = async (req, res) => {
 };
 
 const processBranchProductData = (data) => {
+  const normalizeId = (id) => {
+    if (!id) return null;
+    const idStr = String(id).trim();
+    if (/^[0-9a-fA-F]{24}$/.test(idStr)) {
+      return new mongoose.Types.ObjectId(idStr);
+    }
+    if (/^\d+$/.test(idStr)) {
+      return Number(idStr);
+    }
+    return id;
+  };
+
+  if (data.product_id) data.product_id = normalizeId(data.product_id);
+  if (data.branch_id) data.branch_id = parseBranchId(data.branch_id);
+  if (data.category_id) data.category_id = normalizeId(data.category_id);
+  if (data.supplier_id) data.supplier_id = normalizeId(data.supplier_id);
+
   if (data.expiry_date) {
     const expDate = new Date(data.expiry_date);
     const now = new Date();
@@ -273,7 +351,20 @@ export const update = async (req, res) => {
     delete body.quantity_on_hand;
     delete body.reserved_quantity;
     delete body.available_quantity;
-    return res.json({ success: true, data: await BranchProduct.findByIdAndUpdate(req.params.id, body, { new: true }) }); 
+
+    const oldBp = await BranchProduct.findById(req.params.id);
+    if (!oldBp) {
+      return res.status(404).json({ success: false, message: 'BranchProduct not found' });
+    }
+    const oldPrice = oldBp.price;
+
+    const updatedBp = await BranchProduct.findByIdAndUpdate(req.params.id, body, { new: true });
+    if (updatedBp && updatedBp.price !== oldPrice) {
+      import('../services/priceWatchService.js').then(({ handlePriceChange }) => {
+        handlePriceChange(updatedBp._id, oldPrice, updatedBp.price);
+      }).catch(err => console.error('Failed to import priceWatchService:', err.message));
+    }
+    return res.json({ success: true, data: updatedBp }); 
   }
   catch (err) { return res.status(500).json({ success: false, message: err.message }); }
 };

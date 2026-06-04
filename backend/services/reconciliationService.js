@@ -8,11 +8,13 @@ import { PromotionUsage } from '../models/PromotionUsage.js';
 import User from '../models/User.js';
 import { LoyaltyTransaction } from '../models/Loyalty.js';
 import logger from '../utils/logger.js';
+import { checkMaintenanceMode } from '../middlewares/maintenanceGuard.js';
 
 let schedulerStarted = false;
 
 export async function runReconciliationAudit() {
-  console.log('[RECONCILIATION] Starting data integrity reconciliation audit...');
+  const isMaintenance = await checkMaintenanceMode();
+  console.log(`[RECONCILIATION] Starting data integrity reconciliation audit. [Maintenance Mode: ${isMaintenance ? 'ACTIVE' : 'INACTIVE'}]`);
   const discrepancies = [];
 
   try {
@@ -147,6 +149,12 @@ export function startReconciliationScheduler() {
   // Run daily at 03:00 AM server time
   cron.schedule('0 3 * * *', async () => {
     try {
+      const { canRunDuringMaintenance } = await import('../utils/schedulerPolicy.js');
+      const allowed = await canRunDuringMaintenance('reconciliation');
+      if (!allowed) {
+        console.warn('[RECONCILIATION] Scheduled reconciliation skipped because it is blocked during maintenance.');
+        return;
+      }
       await runReconciliationAudit();
     } catch (err) {
       console.error('[RECONCILIATION] Scheduled reconciliation failed:', err.message);

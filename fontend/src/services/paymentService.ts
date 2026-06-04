@@ -33,8 +33,26 @@ export const paymentService = {
     return body?.data ?? body;
   },
 
+  verifyPayment: async (transactionId: string) => {
+    const res = await httpClient.post(`/payments/${transactionId}/verify`, {});
+    const body = res?.data ?? res;
+    return body?.data ?? body;
+  },
+
+  sandboxSimulatePayment: async (transactionId: string, status: 'COMPLETED' | 'FAILED') => {
+    const res = await httpClient.post(`/payments/${transactionId}/sandbox-simulate`, { status });
+    const body = res?.data ?? res;
+    return body?.data ?? body;
+  },
+
   getPaymentStatus: async (transactionId: string) => {
     const res = await httpClient.get(`/payments/${transactionId}/status`);
+    const body = res?.data ?? res;
+    return body?.data ?? body;
+  },
+
+  cancelPayment: async (transactionId: string) => {
+    const res = await httpClient.post(`/payments/${transactionId}/cancel`, {});
     const body = res?.data ?? res;
     return body?.data ?? body;
   },

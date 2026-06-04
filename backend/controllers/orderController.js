@@ -34,6 +34,77 @@ const toObjectIdIfValid = (id) => {
   return id;
 };
 
+const sanitizeAppliedPromotions = (promotions) => {
+  if (!promotions) return [];
+  let parsed = promotions;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch (e) {
+      console.warn('[OrderController] Failed to parse stringified promotions:', e.message);
+      return [];
+    }
+  }
+  if (Array.isArray(parsed)) {
+    if (parsed.length === 1 && typeof parsed[0] === 'string' && parsed[0].trim().startsWith('[')) {
+      try {
+        parsed = JSON.parse(parsed[0]);
+      } catch (e) {
+        console.warn('[OrderController] Failed to parse nested stringified array:', e.message);
+      }
+    }
+    if (Array.isArray(parsed)) {
+      return parsed.map((promo) => {
+        if (!promo) return null;
+        let p = promo;
+        if (typeof p === 'string') {
+          try {
+            p = JSON.parse(p);
+          } catch (e) {
+            return null;
+          }
+        }
+        if (p && typeof p === 'object') {
+          return {
+            promotion_id: p.promotion_id || p._id || p.id || null,
+            title: String(p.title || ''),
+            type: String(p.type || ''),
+            badge_text: String(p.badge_text || ''),
+            discount_amount: Number(p.discount_amount) || 0,
+            affected_items: Number(p.affected_items) || 0,
+          };
+        }
+        return null;
+      }).filter(Boolean);
+    }
+  }
+  return [];
+};
+
+const sanitizeAppliedCoupon = (coupon) => {
+  if (!coupon) return null;
+  let parsed = coupon;
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch (e) {
+      console.warn('[OrderController] Failed to parse stringified coupon:', e.message);
+      return null;
+    }
+  }
+  if (parsed && typeof parsed === 'object') {
+    return {
+      coupon_id: parsed.coupon_id || parsed._id || parsed.id || null,
+      code: String(parsed.code || ''),
+      title: String(parsed.title || ''),
+      type: String(parsed.type || ''),
+      discount_amount: Number(parsed.discount_amount) || 0,
+    };
+  }
+  return null;
+};
+
+
 const notifyOrderStatusSafely = async ({ userId, orderId, status, note = '' }) => {
   try {
     await notifyOrderStatusChanged({ userId, orderId, status, note });
@@ -346,7 +417,7 @@ export const create = async (req, res) => {
       } catch (logErr) {
         console.error('[Audit] Failed to log checkout failure:', logErr.message);
       }
-      return res.status(409).json({ success: false, message: 'Không đủ số lượng tồn kho để đặt hàng.', error: invErr.message });
+      return res.status(409).json({ success: false, message: invErr.message || 'Không đủ số lượng tồn kho để đặt hàng.', error: invErr.message });
     }
 
     // ── 3. Resolve product_id and snapshot metadata for each item from BranchProduct/Product ──
@@ -406,10 +477,10 @@ export const create = async (req, res) => {
     const serverPricing = await calculateCheckoutTotals({
       cartItems: items,
       branchId: branch_id_val,
-      couponCode: req.body.coupon_code || null,
+      couponCode: req.body.coupon_code || (req.body.applied_coupon && req.body.applied_coupon.code) || null,
       userId: userId,
-      productVoucherId: req.body.product_voucher_id || null,
-      shippingVoucherId: req.body.shipping_voucher_id || null,
+      productVoucherId: req.body.product_voucher_id || (req.body.product_voucher_applied && (req.body.product_voucher_applied._id || req.body.product_voucher_applied.id)) || null,
+      shippingVoucherId: req.body.shipping_voucher_id || (req.body.shipping_voucher_applied && (req.body.shipping_voucher_applied._id || req.body.shipping_voucher_applied.id)) || null,
       session: session
     });
 
@@ -437,7 +508,7 @@ export const create = async (req, res) => {
       shipping_fee: serverPricing.shipping_fee,
       discount_amount: serverPricing.discount_amount,
       total_amount: serverPricing.final_total,
-      coupon_code: req.body.coupon_code || null,
+      coupon_code: req.body.coupon_code || (req.body.applied_coupon && req.body.applied_coupon.code) || null,
       points_earned: serverPricing.points_earned,
       payment,
       status: req.body.status || 'PENDING',
@@ -445,8 +516,8 @@ export const create = async (req, res) => {
       tracking: req.body.tracking || { history: [{ status: 'PENDING', note: 'Đơn hàng đã được tạo', timestamp: new Date() }] },
       delivery_slot: req.body.delivery_slot || null,
       pricing_breakdown: serverPricing.breakdown,
-      applied_promotions: serverPricing.applied_promotions,
-      applied_coupon: serverPricing.coupon_applied,
+      applied_promotions: sanitizeAppliedPromotions(serverPricing.applied_promotions || req.body.applied_promotions),
+      applied_coupon: sanitizeAppliedCoupon(serverPricing.coupon_applied || req.body.applied_coupon),
       product_voucher_applied: serverPricing.product_voucher_applied,
       shipping_voucher_applied: serverPricing.shipping_voucher_applied,
       gift_items: serverPricing.gift_items,
@@ -762,6 +833,7 @@ export const cancel = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Không thể hủy đơn hàng ở trạng thái này' });
     }
     order.status = 'CANCELLED';
+    order.cancel_reason = req.body.reason || 'Hủy bởi khách hàng';
     order.tracking.history.push({ status: 'CANCELLED', note: req.body.reason || 'Hủy bởi khách hàng', timestamp: new Date() });
 
     // 1. Restore inventory (idempotent via flag)

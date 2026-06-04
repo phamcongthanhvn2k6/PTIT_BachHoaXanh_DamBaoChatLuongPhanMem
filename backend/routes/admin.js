@@ -10,6 +10,8 @@ import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import { ensureRbacSeed, getPermissionsForUser, mapRoleIdToKey } from '../services/rbacService.js';
 import { resolveProductPricing } from '../services/pricingResolverService.js';
+import { logActivity } from '../services/auditService.js';
+import { invalidateMaintenanceCache } from '../middlewares/maintenanceGuard.js';
 
 const router = Router();
 
@@ -142,8 +144,51 @@ router.get('/settings', async (req, res) => {
 
 router.put('/settings', auth, admin, async (req, res) => {
   try {
+    const oldSettings = await AdminSetting.find();
+    const oldMap = {};
+    oldSettings.forEach(s => { oldMap[s.key] = s.value; });
+
     for (const [key, value] of Object.entries(req.body)) {
-      await AdminSetting.findOneAndUpdate({ key }, { key, value }, { upsert: true });
+      const oldValue = oldMap[key];
+      if (oldValue !== value) {
+        await AdminSetting.findOneAndUpdate({ key }, { key, value }, { upsert: true });
+        
+        if (key === 'maintenance_mode') {
+          invalidateMaintenanceCache();
+          if (value === true || value === 'true') {
+            try {
+              const { PaymentTransaction } = await import('../models/Payment.js');
+              const result = await PaymentTransaction.updateMany(
+                { status: { $in: ['PENDING', 'PROCESSING'] } },
+                { $set: { status: 'CANCELLED', 'metadata.cancel_reason': 'System entered maintenance mode' } }
+              );
+              console.info(`[Maintenance] Cancelled ${result.modifiedCount} pending/processing payment transactions.`);
+            } catch (payErr) {
+              console.error('[Maintenance] Failed to cancel pending payments:', payErr.message);
+            }
+          }
+          if (global.io) {
+            console.info(`[Socket] Broadcasting maintenance:${value ? 'on' : 'off'}`);
+            global.io.emit(`maintenance:${value ? 'on' : 'off'}`);
+          }
+        }
+
+        // Audit log the setting change
+        await logActivity({
+          userId: req.user.id || req.user._id,
+          userName: req.user.username || req.user.full_name || 'Admin',
+          action: 'UPDATE',
+          entity: 'admin_setting',
+          entityId: key,
+          details: {
+            field: key,
+            old_value: oldValue !== undefined ? oldValue : null,
+            new_value: value,
+            reason: req.body.maintenance_mode_reason || 'System configuration update'
+          },
+          ip: req.ip
+        });
+      }
     }
     const settings = await AdminSetting.find();
     const obj = {};

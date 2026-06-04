@@ -50,6 +50,18 @@ const statusDotColor: Record<string, string> = {
   RETURNED: 'bg-slate-400',
 };
 
+const formatDuration = (isoString: string, referenceTime: number) => {
+  if (!isoString) return '';
+  const diffMs = referenceTime - new Date(isoString).getTime();
+  if (diffMs < 0) return '0 phút';
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 60) return `${diffMins} phút`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours} giờ ${diffMins % 60} phút`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} ngày ${diffHours % 24} giờ`;
+};
+
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -66,6 +78,8 @@ const AdminDashboard: React.FC = () => {
   // Operational Alerts state
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
   const [expiringProducts, setExpiringProducts] = useState<any[]>([]);
+  const [maintenanceStatus, setMaintenanceStatus] = useState<any>(null);
+  const [now, setNow] = useState(Date.now());
 
   const [timeFilter, setTimeFilter] = useState('30d');
 
@@ -82,8 +96,16 @@ const AdminDashboard: React.FC = () => {
       // Fetch operational alerts based on branch
       const lowStock = await dataService.getLowStock(currentBranchId);
       const expiring = await dataService.getExpiringSoon(currentBranchId);
+      let mStatus = null;
+      try {
+        mStatus = await dataService.getMaintenanceStatus();
+      } catch (e) {
+        console.warn('Failed to fetch maintenance status:', e);
+      }
+
       setLowStockProducts(Array.isArray(lowStock) ? lowStock : []);
       setExpiringProducts(Array.isArray(expiring) ? expiring : []);
+      setMaintenanceStatus(mStatus);
       setSummary(data.summary);
       setRevenue(data.revenueSeries);
       setRecentOrders(data.recentOrders);
@@ -102,6 +124,11 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [timeFilter, currentBranchId]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   if (loading) {
     return (
@@ -192,6 +219,54 @@ const AdminDashboard: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Maintenance Mode Status Card */}
+        {maintenanceStatus && (
+          <div className={`p-6 rounded-2xl border transition-all duration-300 shadow-sm ${
+            maintenanceStatus.maintenance 
+              ? 'bg-rose-50 border-rose-200 text-rose-900 shadow-rose-100/50' 
+              : 'bg-emerald-50 border-emerald-200 text-emerald-950 shadow-emerald-100/50'
+          }`}>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                  maintenanceStatus.maintenance ? 'bg-rose-100 text-rose-600 animate-pulse' : 'bg-emerald-100 text-emerald-600'
+                }`}>
+                  <span className="material-symbols-outlined text-2xl">
+                    {maintenanceStatus.maintenance ? 'construction' : 'check_circle'}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-black tracking-tight">
+                    Trạng thái hệ thống: {maintenanceStatus.maintenance ? 'ĐANG BẢO TRÌ (MAINTENANCE ACTIVE)' : 'HOẠT ĐỘNG (ONLINE)'}
+                  </h3>
+                  <p className={`text-xs mt-1 ${maintenanceStatus.maintenance ? 'text-rose-700' : 'text-emerald-700'}`}>
+                    {maintenanceStatus.maintenance 
+                      ? 'Tất cả các tính năng mua sắm, thanh toán và đặt hàng từ phía khách hàng đã bị tạm khóa.' 
+                      : 'Hệ thống Lotte Mart đang vận hành bình thường và ổn định.'}
+                  </p>
+                </div>
+              </div>
+
+              {maintenanceStatus.maintenance && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-2 bg-white/50 border border-rose-100 p-4 rounded-xl text-xs md:text-sm font-medium">
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">Người kích hoạt</span>
+                    <span className="text-rose-950 font-bold">{maintenanceStatus.updated_by}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">Thời gian bắt đầu</span>
+                    <span className="text-rose-950 font-bold">{new Date(maintenanceStatus.updated_at).toLocaleString('vi-VN')}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold tracking-wider">Thời gian đã qua</span>
+                    <span className="text-rose-950 font-bold">{formatDuration(maintenanceStatus.updated_at, now)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* KPI Cards Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

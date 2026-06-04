@@ -274,6 +274,8 @@ export const endpoints = {
     detail: (id: string | number) => `/recipes/${id}`,
     byName: (name: string) => `/recipes/by-name/${name}`,
     generate: '/recipes/generate',
+    preview: '/recipes/preview',
+    save: '/recipes/save',
   },
 
   // ═══════════════════════════════════════════════
@@ -414,6 +416,9 @@ export const endpoints = {
     update: '/admin/settings',
     reset: '/admin/settings/reset',
   },
+  system: {
+    maintenanceStatus: '/system/maintenance-status',
+  },
   notificationTemplates: {
     list: '/admin/notification-templates',
     update: (id: string) => `/admin/notification-templates/${id}`,
@@ -458,5 +463,14 @@ export const endpoints = {
   // ═══════════════════════════════════════════════
   analytics: {
     dashboard: '/admin/analytics/dashboard',
+  },
+  recommendations: {
+    get: '/recommendations',
+  },
+  priceWatch: {
+    list: '/price-watch',
+    create: '/price-watch',
+    update: (id: string | number) => `/price-watch/${id}`,
+    delete: (id: string | number) => `/price-watch/${id}`,
   },
 };

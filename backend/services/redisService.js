@@ -48,15 +48,26 @@ try {
   console.warn('[Redis] Client creation failed:', err.message);
 }
 
+let resolveRedisReady;
+export const redisReady = new Promise((resolve) => {
+  resolveRedisReady = resolve;
+});
+
+export const getIsConnected = () => isConnected;
+
 // Attempt initial connection (non-blocking)
 if (redis) {
   connectionAttempted = true;
   redis.connect().then(() => {
     isConnected = true;
+    resolveRedisReady(true);
   }).catch((err) => {
     console.warn('⚠️ Redis unavailable — using in-memory fallback.', err.message);
     isConnected = false;
+    resolveRedisReady(false);
   });
+} else {
+  resolveRedisReady(false);
 }
 
 // ─── Memory cache cleanup (prevent memory leak) ─────────────────

@@ -10,6 +10,7 @@ import BranchSelector from "./BranchSelector";
 import { dataService } from "../../services/dataService";
 import { setDefaultLanguageFromSettings } from "../../i18n";
 import { getProductUrl } from "../../utils/productUrl";
+import { fallbackProductImage } from "../../utils/imageUrl";
 
 const Header: React.FC = () => {
   const { t } = useTranslation();
@@ -110,152 +111,113 @@ const Header: React.FC = () => {
 
   return (
     <header
+      className="sticky top-0 z-50 text-white shadow-md transition-shadow"
       style={{
         background: "#C1121F",
         fontFamily: "'Nunito', sans-serif",
-        position: "sticky",
-        top: 0,
-        zIndex: 100,
-        boxShadow: "0 2px 12px rgba(0,0,0,0.25)",
       }}
     >
+      {/* ═══ Maintenance Mode Banner ═══ */}
+      {settings?.maintenance_mode && (
+        <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white text-center py-2 px-4 text-xs font-bold flex items-center justify-center gap-2 shadow-inner relative z-50 border-b border-orange-400">
+          <span className="material-symbols-outlined text-[16px] animate-spin">construction</span>
+          <span>
+            {t('common.maintenanceModeActive') || 'Hệ thống đang bảo trì định kỳ. Một số tính năng đặt hàng/thanh toán tạm thời đóng.'}
+          </span>
+        </div>
+      )}
+
       {/* ═══ Top bar ═══ */}
       <div
-        style={{
-          background: "#9B0E17",
-          padding: "4px 24px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 16,
-          fontSize: 12,
-          color: "rgba(255,255,255,0.85)",
-        }}
+        className="flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-4 px-4 sm:px-6 py-1.5 sm:py-1 text-xs text-white/85"
+        style={{ background: "#9B0E17" }}
       >
         {/* Left — Branch selector */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <BranchSelector />
         </div>
 
-        {/* Right — Member + Language selector (same transparent-text style) */}
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <span style={{ cursor: "pointer" }}>🎁 {t("nav.memberLotte")}</span>
-          <span style={{ opacity: 0.3 }}>|</span>
+        {/* Right — Member + Language selector */}
+        <div className="flex items-center gap-3 sm:gap-4 flex-wrap justify-center">
+          <span className="cursor-pointer flex items-center gap-1">🎁 {t("nav.memberLotte")}</span>
+          <span className="opacity-30">|</span>
           <Link
             to="/account/support"
-            style={{ color: "rgba(255,255,255,0.85)", textDecoration: "none", fontWeight: 700 }}
+            className="hover:text-white font-bold transition-colors"
+            style={{ color: "rgba(255,255,255,0.85)", textDecoration: "none" }}
           >
             {t('support.helpLink')}
           </Link>
-          <span style={{ opacity: 0.3 }}>|</span>
+          <span className="opacity-30">|</span>
           <LanguageSwitcher />
         </div>
       </div>
 
       {/* ═══ Main header ═══ */}
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          padding: "12px 24px",
-          gap: 20,
-          maxWidth: 1400,
-          margin: "0 auto",
-          width: "100%",
-          position: "relative",
-        }}
+        className="flex flex-col md:flex-row items-center py-3 md:py-4 px-4 sm:px-6 gap-3 md:gap-5 max-w-[1400px] mx-auto w-full relative"
       >
-        <Link to="/home" style={{ textDecoration: "none" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-            {brandLogoUrl && (
-              <img
-                src={brandLogoUrl}
-                alt="Brand Logo"
-                style={{
-                  height: 38,
-                  width: 38,
-                  objectFit: "contain",
-                  borderRadius: "50%",
-                  background: "white",
-                  padding: "2px",
-                  boxShadow: "0 2px 6px rgba(0,0,0,0.15)",
-                }}
-              />
-            )}
-            <div
-              style={{
-                background: "white",
-                borderRadius: 8,
-                padding: "4px 10px",
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-              }}
-            >
-              <span style={{ color: "#C1121F", fontWeight: 900, fontSize: 22, letterSpacing: -1 }}>
-                {brandFirst || "LOTTE"}
-              </span>
-              <span style={{ color: "#C1121F", fontWeight: 700, fontSize: 14, borderLeft: "2px solid #C1121F", paddingLeft: 6 }}>
-                {brandSecond || "Mart"}
-              </span>
+        {/* Logo and Mobile Menu toggle wrapper */}
+        <div className="flex items-center justify-between w-full md:w-auto shrink-0 gap-4">
+          <Link to="/home" style={{ textDecoration: "none" }}>
+            <div className="flex items-center gap-2 sm:gap-2.5 cursor-pointer">
+              {brandLogoUrl && (
+                <img
+                  src={brandLogoUrl}
+                  alt="Brand Logo"
+                  className="h-8 w-8 sm:h-9.5 sm:w-9.5 object-contain rounded-full bg-white p-0.5 shadow-sm"
+                />
+              )}
+              <div
+                className="bg-white rounded-lg px-2 sm:px-2.5 py-1 flex items-center gap-1 shadow-sm"
+              >
+                <span className="text-red-700 font-black text-lg sm:text-2xl tracking-tighter leading-none">
+                  {brandFirst || "LOTTE"}
+                </span>
+                <span className="text-red-700 font-bold text-xs sm:text-sm border-l-2 border-red-700 pl-1.5 sm:pl-2 leading-none">
+                  {brandSecond || "Mart"}
+                </span>
+              </div>
+              <span className="text-white/70 text-[10px] sm:text-xs ml-1 hidden sm:inline">{t("common.vietnam")}</span>
             </div>
-            <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, marginLeft: 2 }}>{t("common.vietnam")}</span>
-          </div>
-        </Link>
+          </Link>
 
+          <div className="flex items-center gap-2">
+            <div className="md:hidden">
+              <HeaderProfile />
+            </div>
+            
+            {/* Hamburger Categories Menu Button for Mobile */}
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="flex md:hidden items-center justify-center bg-[#9B0E17] hover:bg-[#850C13] border-none text-white p-2 rounded-xl cursor-pointer font-bold text-sm select-none gap-2 whitespace-nowrap active:scale-95 transition-transform"
+            >
+              <span className="material-symbols-outlined text-[20px] leading-none">menu</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Categories Button for Desktop */}
         <button
           onClick={() => setMenuOpen(!menuOpen)}
-          style={{
-            background: "#9B0E17",
-            border: "none",
-            color: "white",
-            padding: "10px 18px",
-            borderRadius: 8,
-            cursor: "pointer",
-            fontWeight: 700,
-            fontSize: 14,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            whiteSpace: "nowrap",
-          }}
+          className="hidden md:flex items-center bg-[#9B0E17] hover:bg-[#850C13] border-none text-white px-4 py-2.5 rounded-xl cursor-pointer font-bold text-sm select-none gap-2 whitespace-nowrap"
         >
           ☰ {t("nav.categories")}
         </button>
 
-        <div ref={searchRef} style={{ flex: 1, position: "relative" }}>
-          <form onSubmit={handleSearch} style={{ width: "100%", position: "relative" }}>
+        {/* Search Input */}
+        <div ref={searchRef} className="w-full md:flex-1 relative order-3 md:order-none mt-1 md:mt-0">
+          <form onSubmit={handleSearch} className="w-full relative">
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onFocus={() => { if (search.trim()) setShowSuggestions(true); }}
               placeholder={t("nav.searchPlaceholder")}
-              style={{
-                width: "100%",
-                padding: "11px 50px 11px 18px",
-                borderRadius: 8,
-                border: "none",
-                fontSize: 15,
-                outline: "none",
-                boxSizing: "border-box",
-              }}
+              className="w-full py-2.5 pl-4 pr-12 rounded-xl border-none text-sm font-semibold outline-none bg-white text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-[#9B0E17]/20 transition-all shadow-inner"
             />
             <button
               type="submit"
-              style={{
-                position: "absolute",
-                right: 4,
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "#C1121F",
-                border: "none",
-                color: "white",
-                borderRadius: 6,
-                padding: "7px 14px",
-                cursor: "pointer",
-                fontSize: 16,
-              }}
+              className="absolute right-1 top-1 bottom-1 bg-[#C1121F] hover:bg-[#A50F18] border-none text-white rounded-lg px-3 cursor-pointer text-sm transition-colors flex items-center justify-center"
             >
               🔍
             </button>
@@ -263,21 +225,12 @@ const Header: React.FC = () => {
 
           {/* Autocomplete Dropdown */}
           {showSuggestions && search.trim() && (
-            <div style={{
-              position: "absolute",
-              top: "100%",
-              left: 0,
-              right: 0,
-              marginTop: 8,
-              background: "white",
-              borderRadius: 8,
-              boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-              overflow: "hidden",
-              zIndex: 1000,
-            }}>
+            <div 
+              className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-[1000]"
+            >
               {isSearching ? (
-                <div style={{ padding: "16px", textAlign: "center", color: "#666", fontSize: 14 }}>
-                  <span className="material-symbols-outlined animate-spin" style={{ fontSize: 18, verticalAlign: "middle", marginRight: 6 }}>progress_activity</span>
+                <div className="p-4 text-center text-slate-500 text-sm flex items-center justify-center gap-2">
+                  <span className="material-symbols-outlined animate-spin text-slate-400" style={{ fontSize: 18 }}>progress_activity</span>
                   {t('common.searching')}
                 </div>
               ) : suggestions.length > 0 ? (
@@ -290,32 +243,17 @@ const Header: React.FC = () => {
                         setShowSuggestions(false);
                         setSearch("");
                       }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        padding: "12px 16px",
-                        textDecoration: "none",
-                        color: "#333",
-                        borderBottom: idx < suggestions.length - 1 ? "1px solid #f0f0f0" : "none",
-                        transition: "background 0.2s",
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "#f9f9f9")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                      className="flex items-center p-3 hover:bg-slate-50 border-b border-slate-100 last:border-none transition-colors"
+                      style={{ textDecoration: "none", color: "#333" }}
                     >
                       <img 
-                        src={item.image || "https://via.placeholder.com/40"} 
+                        src={item.image || fallbackProductImage || "https://via.placeholder.com/40"} 
                         alt={item.name} 
-                        style={{ width: 40, height: 40, objectFit: "contain", marginRight: 12, borderRadius: 4, background: "#f5f5f5" }} 
+                        className="w-10 h-10 object-contain mr-3 rounded-lg bg-slate-50 border border-slate-100"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackProductImage; }}
                       />
-                      <div style={{ flex: 1, overflow: "hidden" }}>
-                        <div style={{ 
-                          fontSize: 14, 
-                          fontWeight: 600, 
-                          whiteSpace: "nowrap", 
-                          overflow: "hidden", 
-                          textOverflow: "ellipsis" 
-                        }}>
-                          {/* Basic highlight matching keywords logic */}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold text-slate-800 truncate">
                           {item.name.toLowerCase().includes(search.toLowerCase()) ? (
                             <>
                               {item.name.substring(0, item.name.toLowerCase().indexOf(search.toLowerCase()))}
@@ -326,16 +264,16 @@ const Header: React.FC = () => {
                             </>
                           ) : item.name}
                         </div>
-                        <div style={{ fontSize: 13, color: "#C1121F", fontWeight: 700, marginTop: 4 }}>
+                        <div className="text-xs text-rose-600 font-extrabold mt-1">
                           {item.promotion_price ? (
                             <>
-                              {item.promotion_price.toLocaleString("vi-VN")}đ
-                              <span style={{ textDecoration: "line-through", color: "#999", fontSize: 11, marginLeft: 6, fontWeight: 400 }}>
-                                {item.price.toLocaleString("vi-VN")}đ
+                              {item.promotion_price.toLocaleString("vi-VN")}₫
+                              <span className="text-slate-400 line-through text-[10px] ml-1.5 font-normal">
+                                {item.price.toLocaleString("vi-VN")}₫
                               </span>
                             </>
                           ) : (
-                            `${item.price?.toLocaleString("vi-VN")}đ`
+                            `${item.price?.toLocaleString("vi-VN")}₫`
                           )}
                         </div>
                       </div>
@@ -343,22 +281,13 @@ const Header: React.FC = () => {
                   ))}
                   <div 
                     onClick={handleSearch}
-                    style={{ 
-                      padding: "10px 16px", 
-                      textAlign: "center", 
-                      background: "#f8f9fa", 
-                      color: "#C1121F", 
-                      fontSize: 13, 
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      borderTop: "1px solid #f0f0f0"
-                    }}
+                    className="p-3 text-center bg-slate-50 hover:bg-slate-100 text-rose-600 text-xs font-bold cursor-pointer border-t border-slate-100 transition-colors"
                   >
                     {t('common.viewAllResults', { query: search })}
                   </div>
                 </div>
               ) : (
-                <div style={{ padding: "16px", textAlign: "center", color: "#666", fontSize: 14 }}>
+                <div className="p-4 text-center text-slate-500 text-sm">
                   {t('common.noSearchResults')}
                 </div>
               )}
@@ -366,20 +295,16 @@ const Header: React.FC = () => {
           )}
         </div>
 
-        <HeaderProfile />
+        {/* Profile on Desktop */}
+        <div className="hidden md:block shrink-0">
+          <HeaderProfile />
+        </div>
       </div>
 
-      {/* ═══ Nav ═══ */}
-      <nav style={{ background: "#A50F18", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+      {/* ═══ Nav (Desktop Only) ═══ */}
+      <nav className="hidden md:block" style={{ background: "#A50F18", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
         <div
-          style={{
-            display: "flex",
-            gap: 0,
-            maxWidth: 1400,
-            margin: "0 auto",
-            padding: "0 24px",
-            overflowX: "auto",
-          }}
+          className="flex gap-0 max-w-[1400px] mx-auto px-6 overflow-x-auto"
         >
           {navItems.map((item) => {
             const isActive =
@@ -390,17 +315,13 @@ const Header: React.FC = () => {
               <Link
                 key={item.path}
                 to={item.path}
+                className="transition-colors block py-2.5 px-4 text-sm whitespace-nowrap"
                 style={{
                   color: isActive ? "#FFD60A" : "rgba(255,255,255,0.9)",
                   textDecoration: "none",
-                  padding: "10px 16px",
-                  fontSize: 13,
                   fontWeight: isActive ? 800 : 600,
-                  whiteSpace: "nowrap",
                   borderBottom: isActive ? "3px solid #FFD60A" : "3px solid transparent",
                   background: isActive ? "rgba(255,214,10,0.15)" : "transparent",
-                  transition: "all 0.2s",
-                  display: "block",
                 }}
               >
                 {item.label}
@@ -410,16 +331,11 @@ const Header: React.FC = () => {
         </div>
       </nav>
 
+      {/* Mobile Drawer (Nav + Category menu list combined) */}
       {menuOpen && (
         <div
-          style={{
-            background: "#A50F18",
-            padding: "16px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            borderTop: "1px solid rgba(255,255,255,0.1)",
-          }}
+          className="md:hidden p-4 flex flex-col gap-1 border-t border-white/10"
+          style={{ background: "#A50F18" }}
         >
           {navItems.map((item) => {
             const isActive = currentPath === item.path || (item.path === "/home" && currentPath === "/");
@@ -428,12 +344,10 @@ const Header: React.FC = () => {
                 key={item.path}
                 to={item.path}
                 onClick={() => setMenuOpen(false)}
+                className="py-2.5 px-4 rounded-xl hover:bg-white/10 transition-colors text-sm font-bold block"
                 style={{
                   color: isActive ? "#FFD60A" : "white",
                   textDecoration: "none",
-                  fontSize: 15,
-                  fontWeight: isActive ? 800 : 600,
-                  padding: "8px 0",
                 }}
               >
                 {item.label}

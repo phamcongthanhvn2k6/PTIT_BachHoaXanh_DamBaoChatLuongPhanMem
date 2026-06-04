@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import enterpriseService from '../services/enterpriseService';
 import { dataService } from '../../services/dataService';
+import { productService } from '../../services/productService';
 import { useAppSelector } from '../../store';
 import { toast } from '../../components/Toast/toastEvent';
 import { useTranslation } from 'react-i18next';
@@ -22,6 +23,297 @@ const STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Đã hủy' },
 ];
 
+/* ============================================================
+   PRODUCT SEARCH SELECTOR (Searchable Combobox)
+   ============================================================ */
+interface ProductSearchSelectorProps {
+  branchId: string;
+  supplierId?: string;
+  value: string;
+  onChange: (value: string, bp: any) => void;
+  onInlineCreate: () => void;
+  disabled?: boolean;
+  t: any;
+  setFetchedProducts: React.Dispatch<React.SetStateAction<Record<string, any>>>;
+  fetchedProducts: Record<string, any>;
+}
+
+export const ProductSearchSelector: React.FC<ProductSearchSelectorProps> = ({
+  branchId,
+  supplierId,
+  value,
+  onChange,
+  onInlineCreate,
+  disabled,
+  t,
+  setFetchedProducts,
+  fetchedProducts
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [options, setOptions] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const clickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', clickOutside);
+    return () => document.removeEventListener('mousedown', clickOutside);
+  }, []);
+
+  // Fetch initial/searched products from backend
+  const fetchProducts = useCallback(async (query: string, pageNum: number, append = false) => {
+    if (!branchId) return;
+    setLoading(true);
+    try {
+      const limit = 15;
+      const res = await productService.getBranchProducts({
+        branch_id: branchId,
+        supplier_id: supplierId || undefined,
+        search: query || undefined,
+        limit,
+        page: pageNum
+      });
+      const data = Array.isArray(res) ? res : [];
+      setHasMore(data.length === limit);
+
+      setOptions(prev => {
+        const next = append ? [...prev, ...data] : data;
+        // Deduplicate
+        const unique: any[] = [];
+        const seen = new Set();
+        next.forEach(x => {
+          const id = String(x._id || x.id);
+          if (!seen.has(id)) {
+            seen.add(id);
+            unique.push(x);
+          }
+        });
+        return unique;
+      });
+
+      // Update fetchedProducts dictionary in parent
+      setFetchedProducts(prev => {
+        const next = { ...prev };
+        data.forEach(bp => {
+          next[String(bp._id || bp.id)] = bp;
+        });
+        return next;
+      });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [branchId, supplierId, setFetchedProducts]);
+
+  // Debounced search trigger
+  useEffect(() => {
+    if (!isOpen) return;
+    setPage(1);
+    const timer = setTimeout(() => {
+      fetchProducts(search, 1, false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search, isOpen, fetchProducts]);
+
+  // Load more trigger
+  const loadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchProducts(search, nextPage, true);
+  };
+
+  // Keyboard navigation
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!isOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        setIsOpen(true);
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      setHighlightedIndex(prev => Math.min(prev + 1, options.length - 1));
+      e.preventDefault();
+    } else if (e.key === 'ArrowUp') {
+      setHighlightedIndex(prev => Math.max(prev - 1, 0));
+      e.preventDefault();
+    } else if (e.key === 'Enter') {
+      if (highlightedIndex >= 0 && highlightedIndex < options.length) {
+        const selected = options[highlightedIndex];
+        onChange(String(selected._id || selected.id), selected);
+        setIsOpen(false);
+      }
+      e.preventDefault();
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+      e.preventDefault();
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      setHighlightedIndex(-1);
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [isOpen]);
+
+  const selectedBP = fetchedProducts[value];
+  const selectedLabel = selectedBP
+    ? `${selectedBP.product?.name || selectedBP.name || t('importOrders.unnamed', 'Chưa cập nhật tên')} | SKU: ${selectedBP.sku || '—'}`
+    : '';
+
+  return (
+    <div className="relative flex-1" ref={dropdownRef}>
+      <div
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        className={`w-full flex items-center justify-between px-3.5 py-2 border rounded-xl text-sm bg-white cursor-pointer select-none transition-all ${
+          disabled ? 'opacity-50 cursor-not-allowed bg-slate-50 border-slate-100' : 'hover:border-slate-300 border-slate-200'
+        } ${isOpen ? 'ring-2 ring-red-500/20 border-red-400' : ''}`}
+      >
+        <span className={selectedLabel ? 'text-slate-800 font-semibold truncate' : 'text-slate-400 truncate'}>
+          {selectedLabel || t('importOrders.selectAvailable', 'Chọn sản phẩm...')}
+        </span>
+        <span className="material-symbols-outlined text-slate-400 text-[18px]">
+          {isOpen ? 'arrow_drop_up' : 'arrow_drop_down'}
+        </span>
+      </div>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 mt-2 bg-white border border-slate-200 shadow-2xl rounded-2xl z-50 overflow-hidden flex flex-col max-h-[360px] animate-fade-in min-w-[320px] md:min-w-[400px]">
+          {/* Search bar inside Dropdown */}
+          <div className="p-2 border-b border-slate-100 flex items-center gap-2 bg-slate-50">
+            <span className="material-symbols-outlined text-slate-400 text-[18px]">search</span>
+            <input
+              ref={inputRef}
+              type="text"
+              className="w-full bg-transparent border-none focus:outline-none text-sm placeholder:text-slate-400 py-1"
+              placeholder={t('importOrders.searchPlaceholder', 'Tìm theo tên, SKU, barcode...')}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={handleKeyDown}
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="text-slate-400 hover:text-slate-600">
+                <span className="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            )}
+          </div>
+
+          {/* Options List */}
+          <div className="flex-1 overflow-y-auto max-h-[240px] divide-y divide-slate-100">
+            {options.map((opt, idx) => {
+              const optId = String(opt._id || opt.id);
+              const isSelected = optId === value;
+              const isHighlighted = idx === highlightedIndex;
+              const stock = opt.stock || 0;
+              const isLowStock = stock <= (opt.min_stock || 5);
+              const isOOS = stock === 0;
+
+              return (
+                <div
+                  key={optId}
+                  onClick={() => {
+                    onChange(optId, opt);
+                    setIsOpen(false);
+                  }}
+                  className={`p-3 cursor-pointer transition-colors flex items-center justify-between text-xs ${
+                    isHighlighted ? 'bg-slate-100' : isSelected ? 'bg-red-50' : 'hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="space-y-1 pr-3 flex-1 min-w-0">
+                    <p className="font-semibold text-slate-800 truncate text-xs">{opt.product?.name || opt.name}</p>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-slate-400">
+                      <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold">
+                        SKU: {opt.sku || '—'}
+                      </span>
+                      {opt.category_name && (
+                        <span className="text-slate-500">
+                          📁 {opt.category_name}
+                        </span>
+                      )}
+                      {opt.supplier_name && (
+                        <span className="text-slate-500 truncate max-w-[120px]">
+                          🏢 {opt.supplier_name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <span
+                      className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold ${
+                        isOOS
+                          ? 'bg-red-50 text-red-700 border border-red-100'
+                          : isLowStock
+                          ? 'bg-orange-50 text-orange-700 border border-orange-100'
+                          : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                      }`}
+                    >
+                      {isOOS ? t('common.outOfStock', 'Hết hàng') : `${t('common.stock', 'Tồn')}: ${stock}`}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+
+            {loading && (
+              <div className="p-3 text-center text-slate-400 flex items-center justify-center gap-2">
+                <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+                {t('importOrders.loadingProducts', 'Đang tải...')}
+              </div>
+            )}
+
+            {!loading && options.length === 0 && (
+              <div className="p-4 text-center text-slate-400">
+                {t('importOrders.noProductsFound', 'Không tìm thấy sản phẩm')}
+              </div>
+            )}
+
+            {hasMore && !loading && (
+              <button
+                type="button"
+                onClick={loadMore}
+                className="w-full py-2 bg-slate-50 hover:bg-slate-100 text-[11px] font-bold text-slate-600 transition-colors border-t border-slate-100 cursor-pointer"
+              >
+                {t('common.loadMore', 'Tải thêm sản phẩm...')}
+              </button>
+            )}
+          </div>
+
+          {/* Inline Action Footer */}
+          <div className="p-2 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => {
+                onInlineCreate();
+                setIsOpen(false);
+              }}
+              className="text-[11px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1.5 py-1 px-2 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[14px]">add</span>
+              {t('importOrders.createNew', '+ Tạo sản phẩm nhập mới')}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ============================================================
+   MAIN COMPONENT
+   ============================================================ */
 const AdminImportOrders: React.FC = () => {
   const { t } = useTranslation();
   const { adminBranchId } = useAppSelector((s) => s.adminAuth);
@@ -30,8 +322,9 @@ const AdminImportOrders: React.FC = () => {
   const [rows, setRows] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
-  const [branchProducts, setBranchProducts] = useState<any[]>([]);
-  const [loadingProducts, setLoadingProducts] = useState(false);
+
+  // Searchable combobox pre-fetched dictionary
+  const [fetchedProducts, setFetchedProducts] = useState<Record<string, any>>({});
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -47,6 +340,7 @@ const AdminImportOrders: React.FC = () => {
 
   /* Inline Product Creation */
   const [inlineCreateOpen, setInlineCreateOpen] = useState(false);
+  const [activeLineIdx, setActiveLineIdx] = useState<number | null>(null);
 
   /* Detail drawer */
   const [detailOrder, setDetailOrder] = useState<any>(null);
@@ -76,44 +370,11 @@ const AdminImportOrders: React.FC = () => {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const loadBranchProducts = useCallback(async (branchId: string) => {
-    if (!branchId) {
-      setBranchProducts([]);
-      return [];
-    }
-    setLoadingProducts(true);
-    try {
-      const res = await dataService.getBranchProducts(branchId);
-      const data = Array.isArray(res) ? res : [];
-      setBranchProducts(data);
-      return data;
-    } catch {
-      toast.error(t('importOrders.errorLoadProducts'));
-      return [];
-    } finally {
-      setLoadingProducts(false);
-    }
-  }, []);
-
-  // Refetch branch products whenever the selected branch in the modal changes
-  useEffect(() => {
-    loadBranchProducts(createBranchId);
-  }, [createBranchId, loadBranchProducts]);
-
   // Reset line items when branch changes to avoid cross-branch selections
   useEffect(() => {
     if (!createOpen) return;
     setLines([{ branch_product_id: '', quantity_ordered: 1, unit_cost: 0 }]);
   }, [createBranchId, createOpen]);
-
-  const branchProductOptions = useMemo(() => {
-    return branchProducts.map((bp: any) => ({
-      value: String(bp._id || bp.id),
-      label: `${bp.product?.name || bp.sku || bp.product_id} | Tồn ${bp.stock || 0}`,
-      product_id: bp.product_id,
-      name: bp.product?.name || bp.name || '',
-    }));
-  }, [branchProducts]);
 
   const selectedBranchName = useMemo(() => {
     if (!createBranchId) return '';
@@ -159,12 +420,32 @@ const AdminImportOrders: React.FC = () => {
     if (!supplierId) return toast.error(t('importOrders.errorSelectSupplier'));
     if (!createBranchId) return toast.error(t('importOrders.errorSelectBranch'));
 
+    // Enforce row-level validations
+    const seenBpIds = new Set<string>();
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.branch_product_id) {
+        return toast.error(`Dòng #${i + 1}: Vui lòng chọn sản phẩm.`);
+      }
+      if (seenBpIds.has(line.branch_product_id)) {
+        return toast.error(`Dòng #${i + 1}: Sản phẩm bị trùng lặp trong đơn hàng.`);
+      }
+      seenBpIds.add(line.branch_product_id);
+
+      if (Number(line.quantity_ordered || 0) <= 0) {
+        return toast.error(`Dòng #${i + 1}: Số lượng phải lớn hơn 0.`);
+      }
+      if (Number(line.unit_cost || 0) < 0) {
+        return toast.error(`Dòng #${i + 1}: Giá nhập không được âm.`);
+      }
+    }
+
     const items = lines
       .map((line) => {
-        const selected = branchProductOptions.find((o) => o.value === line.branch_product_id);
+        const bp = fetchedProducts[line.branch_product_id];
         return {
-          product_id: selected?.product_id,
-          product_name: selected?.name,
+          product_id: bp?.product_id,
+          product_name: bp?.product?.name || bp?.name,
           branch_product_id: line.branch_product_id,
           quantity_ordered: Number(line.quantity_ordered || 0),
           unit_cost: Number(line.unit_cost || 0),
@@ -196,13 +477,25 @@ const AdminImportOrders: React.FC = () => {
   };
 
   const handleInlineSuccess = async (newBpId: string, price: number) => {
-      // Refresh products & grid
-      await loadBranchProducts(createBranchId);
+      // Refresh backend list
       await loadData();
       
-      // Auto-assign newly created product to an empty line, or add a new line
+      // Fetch details of this new BP to add it to fetchedProducts dictionary
+      try {
+        const bpDetail = await dataService.getBranchProduct(newBpId);
+        if (bpDetail) {
+          setFetchedProducts(prev => ({ ...prev, [String(newBpId)]: bpDetail }));
+        }
+      } catch (e) {
+        console.error('Failed to pre-fetch new inline branch product details', e);
+      }
+      
+      // Auto-assign newly created product to the line that triggered the modal
       if (newBpId) {
         setLines((prev) => {
+          if (activeLineIdx !== null && activeLineIdx >= 0 && activeLineIdx < prev.length) {
+            return prev.map((l, i) => i === activeLineIdx ? { ...l, branch_product_id: String(newBpId), unit_cost: price || 0 } : l);
+          }
           const idx = prev.findIndex((l) => !l.branch_product_id);
           if (idx >= 0) {
             return prev.map((l, i) => i === idx ? { ...l, branch_product_id: String(newBpId), unit_cost: price || 0 } : l);
@@ -210,6 +503,7 @@ const AdminImportOrders: React.FC = () => {
           return [...prev, { branch_product_id: String(newBpId), quantity_ordered: 1, unit_cost: price || 0 }];
         });
       }
+      setActiveLineIdx(null);
   };
 
   const resetCreateForm = () => {
@@ -455,38 +749,29 @@ const AdminImportOrders: React.FC = () => {
               {lines.map((line, idx) => (
                 <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-slate-50/50 rounded-xl p-2">
                   <div className="col-span-6 flex items-center gap-1">
-                    <select
+                    <ProductSearchSelector
+                      branchId={createBranchId}
+                      supplierId={supplierId}
                       value={line.branch_product_id}
-                      onChange={(e) => updateLine(idx, 'branch_product_id', e.target.value)}
-                      className={cls.select + ' flex-1 !py-2'}
-                      disabled={loadingProducts || !createBranchId}
-                    >
-                      <option value="">
-                        {!createBranchId
-                          ? t('importOrders.selectBranchFirst')
-                          : !loadingProducts && branchProductOptions.length === 0
-                            ? t('importOrders.emptyBranchProducts')
-                          : loadingProducts
-                            ? t('importOrders.loadingProducts')
-                            : t('importOrders.selectAvailable')}
-                      </option>
-                      {branchProductOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
-                    <button 
-                      type="button" 
-                      onClick={() => {
+                      onChange={(val, bp) => {
+                        updateLine(idx, 'branch_product_id', val);
+                        if (bp) {
+                          updateLine(idx, 'unit_cost', bp.import_price || bp.price || 0);
+                        }
+                      }}
+                      onInlineCreate={() => {
                         if (!createBranchId) {
                           toast.error(t('importOrders.errorSelectBranch'));
                           return;
                         }
+                        setActiveLineIdx(idx);
                         setInlineCreateOpen(true);
-                      }} 
-                      title={t('importOrders.createNew')}
-                      className="inline-flex items-center justify-center h-[38px] px-3 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl text-xs font-bold transition-colors border border-blue-100 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                      }}
                       disabled={!createBranchId}
-                    >
-                      {t('importOrders.createNew')}
-                    </button>
+                      t={t}
+                      setFetchedProducts={setFetchedProducts}
+                      fetchedProducts={fetchedProducts}
+                    />
                   </div>
                   <div className="col-span-2">
                     <input
@@ -591,10 +876,14 @@ const AdminImportOrders: React.FC = () => {
       {/* ========== INLINE CREATE PRODUCT MODAL ========== */}
       <InlineCreateProductModal
         open={inlineCreateOpen}
-        onClose={() => setInlineCreateOpen(false)}
+        onClose={() => {
+          setInlineCreateOpen(false);
+          setActiveLineIdx(null);
+        }}
         branchId={createBranchId}
         branchName={selectedBranchName}
         defaultSupplierId={supplierId}
+        suppliers={suppliers}
         onSuccess={handleInlineSuccess}
       />
 

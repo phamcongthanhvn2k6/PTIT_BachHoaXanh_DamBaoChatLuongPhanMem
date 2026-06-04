@@ -14,6 +14,7 @@ import {
 import { promotionService } from '../services/promotionService';
 import { couponService } from '../services/couponService';
 import { toast } from '../components/Toast/toastEvent';
+import { dataService } from '../services/dataService';
 
 const getCouponLifecycle = (coupon: any) => {
   if (!coupon) return { total: 0, used: 0, remaining: null as number | null, soldOut: false, expired: false };
@@ -49,6 +50,18 @@ const Cart: React.FC = () => {
   const [couponError, setCouponError] = useState('');
   const [promoData, setPromoData] = useState<any>(null);
   const [promoLoading, setPromoLoading] = useState(false);
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+
+  useEffect(() => {
+    dataService.getAdminSettings()
+      .then(s => {
+        if (s && s.maintenance_mode) {
+          setMaintenanceMode(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const activeCouponSnapshot = promoData?.coupon_applied || appliedCoupon;
   const couponLifecycle = getCouponLifecycle(activeCouponSnapshot);
 
@@ -210,6 +223,10 @@ const Cart: React.FC = () => {
   };
 
   const handleCheckout = () => {
+    if (maintenanceMode) {
+      toast.error(t('common.maintenanceWarning') || 'Hệ thống đang bảo trì. Tính năng đặt hàng tạm thời đóng.');
+      return;
+    }
     if (items.length > 0) {
       navigate('/checkout');
     }
@@ -477,10 +494,26 @@ const Cart: React.FC = () => {
                  <p className="text-xs text-green-600 font-bold">{t('cart.couponAppliedText', { code: appliedCoupon.code })}</p>
               )}
 
-              <button onClick={handleCheckout} className="w-full mt-4 py-4 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2">
-                <span>{t('cart.checkoutBtn')}</span>
-                <span className="material-symbols-outlined text-xl">arrow_forward</span>
-              </button>
+              {maintenanceMode && (
+                <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-xl flex items-start gap-3">
+                  <span className="material-symbols-outlined text-amber-600 shrink-0">warning</span>
+                  <div className="text-xs text-amber-800 dark:text-amber-300 font-medium">
+                    {t('common.maintenanceWarning') || 'Hệ thống hiện đang bảo trì định kỳ. Quý khách tạm thời chưa thể tiến hành thanh toán hoặc đặt hàng mới. Xin lỗi vì sự bất tiện này.'}
+                  </div>
+                </div>
+              )}
+
+              {maintenanceMode ? (
+                <button disabled className="w-full mt-4 py-4 bg-slate-400 dark:bg-slate-700 text-white font-bold rounded-xl cursor-not-allowed flex items-center justify-center gap-2">
+                  <span className="material-symbols-outlined text-xl">construction</span>
+                  <span>{t('common.underMaintenance') || 'Hệ thống đang bảo trì'}</span>
+                </button>
+              ) : (
+                <button onClick={handleCheckout} className="w-full mt-4 py-4 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/30 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2">
+                  <span>{t('cart.checkoutBtn')}</span>
+                  <span className="material-symbols-outlined text-xl">arrow_forward</span>
+                </button>
+              )}
             </div>
 
             <div className="mt-6 flex items-center gap-3 p-4 bg-primary/5 rounded-xl border border-primary/10">

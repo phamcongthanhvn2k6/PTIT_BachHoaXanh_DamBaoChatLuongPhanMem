@@ -18,6 +18,7 @@ import { saveViewHistory } from '../services/viewHistoryService';
 import { resolveImageUrl, fallbackProductImage } from '../utils/imageUrl';
 import { extractProductId, getProductUrl, getLocaleFromPrefix } from '../utils/productUrl';
 import { HotDealCountdown } from '../components/HotDealCountdown/HotDealCountdown';
+import { formatRating } from '../utils/formatRating';
 
 const ProductDetail: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -75,9 +76,13 @@ const ProductDetail: React.FC = () => {
     return allBranchProducts
       .map(bp => {
         const found = branches.find(b => String(b.id || (b as any)._id) === String(bp.branch_id));
+        const bpAvailableQty = bp.available_quantity !== undefined 
+          ? bp.available_quantity 
+          : Math.max(0, bp.stock - (bp.reserved_quantity || 0));
         return found ? {
           ...found,
           stock: Number(bp.stock || 0),
+          available_quantity: bpAvailableQty,
           is_available: bp.is_available,
           price: Number(bp.price || 0),
           original_price: Number(bp.original_price || 0)
@@ -89,13 +94,21 @@ const ProductDetail: React.FC = () => {
   const availableBranches = useMemo(() => {
     if (!branches || !branches.length || !allBranchProducts.length) return [];
     return allBranchProducts
-      .filter(bp => bp.is_available !== false && Number(bp.stock) > 0)
+      .filter(bp => {
+        const bpAvailableQty = bp.available_quantity !== undefined 
+          ? bp.available_quantity 
+          : Math.max(0, bp.stock - (bp.reserved_quantity || 0));
+        return bp.is_available !== false && bpAvailableQty > 0;
+      })
       .map(bp => {
         const found = branches.find(b => String(b.id || (b as any)._id) === String(bp.branch_id));
+        const bpAvailableQty = bp.available_quantity !== undefined 
+          ? bp.available_quantity 
+          : Math.max(0, bp.stock - (bp.reserved_quantity || 0));
         return found ? {
           ...found,
           price: bp.price,
-          stock: bp.stock,
+          stock: bpAvailableQty,
           branchProduct: bp
         } : null;
       })
@@ -208,13 +221,18 @@ const ProductDetail: React.FC = () => {
           setAllBranchProducts([]);
         }
 
-        const activeBp = allBps.find(item => String(item.branch_id) === String(branchId) && item.is_available !== false);
+        const activeBp = allBps.find(item => item.is_available !== false && String(item.branch_id) === String(branchId));
         if (activeBp) {
           setBranchProduct(activeBp);
           setBranchUnavailable(false);
         } else {
           // It's unavailable in the current selected branch. Let's find any other branch where it is available!
-          const availableBp = allBps.find(item => item.is_available !== false && Number(item.stock) > 0);
+          const availableBp = allBps.find(item => {
+            const bpAvailableQty = item.available_quantity !== undefined 
+              ? item.available_quantity 
+              : Math.max(0, item.stock - (item.reserved_quantity || 0));
+            return item.is_available !== false && bpAvailableQty > 0;
+          });
           if (availableBp) {
             setBranchProduct(availableBp); // Set branchProduct to the available one so details are visible!
           } else if (allBps.length > 0) {
@@ -489,11 +507,15 @@ const ProductDetail: React.FC = () => {
   }
 
   // Determine if purchasing is possible
-  const canPurchase = branchProduct && !branchUnavailable && branchProduct.stock > 0 && branchProduct.is_available !== false && product?.is_active !== false;
+  const displayStock = branchProduct 
+    ? (branchProduct.available_quantity !== undefined 
+        ? branchProduct.available_quantity 
+        : Math.max(0, branchProduct.stock - (branchProduct.reserved_quantity || 0)))
+    : null;
+  const canPurchase = branchProduct && !branchUnavailable && displayStock !== null && displayStock > 0 && branchProduct.is_available !== false && product?.is_active !== false;
   const displayPrice = branchProduct?.effective_price !== undefined ? branchProduct.effective_price : (branchProduct?.price || product.effective_price || product.price || 0);
   const displayOriginalPrice = branchProduct?.original_price || product.original_price || 0;
   const displayDiscount = branchProduct?.discount_percent || product.discount_percent || 0;
-  const displayStock = branchProduct?.stock ?? null;
 
   const currentBranchId = activeBranchId;
   const compareProductId = String(product?.id || product?._id || '');
@@ -678,8 +700,12 @@ const ProductDetail: React.FC = () => {
 
   const getEffectiveMax = () => {
     const maxLimit = Math.max(1, Number(branchProduct?.max_purchase_limit || 20));
-    const maxStock = Math.max(0, Number(branchProduct?.stock ?? product?.stock ?? 0));
-    return maxStock > 0 ? Math.min(maxLimit, maxStock) : maxLimit;
+    const bpAvailableQty = branchProduct 
+      ? (branchProduct.available_quantity !== undefined 
+          ? branchProduct.available_quantity 
+          : Math.max(0, branchProduct.stock - (branchProduct.reserved_quantity || 0)))
+      : Math.max(0, product?.stock ?? 0);
+    return bpAvailableQty > 0 ? Math.min(maxLimit, bpAvailableQty) : maxLimit;
   };
 
   const clampQuantity = (value: number, notify: boolean) => {
@@ -690,11 +716,17 @@ const ProductDetail: React.FC = () => {
 
     let safeValue = Math.max(1, Math.floor(value));
     const maxAllowed = getEffectiveMax();
+    const bpAvailableQty = branchProduct 
+      ? (branchProduct.available_quantity !== undefined 
+          ? branchProduct.available_quantity 
+          : Math.max(0, branchProduct.stock - (branchProduct.reserved_quantity || 0)))
+      : 0;
+
     if (safeValue > maxAllowed) {
       safeValue = maxAllowed;
       if (notify) {
-        if (Number(branchProduct?.stock ?? 0) > 0 && safeValue === Number(branchProduct?.stock ?? 0)) {
-          toast.warning(t('cart.stockLimitWarning', { stock: Number(branchProduct?.stock ?? 0), defaultValue: `Chỉ còn ${Number(branchProduct?.stock ?? 0)} sản phẩm trong kho` }));
+        if (bpAvailableQty > 0 && safeValue === bpAvailableQty) {
+          toast.warning(t('cart.stockLimitWarning', { stock: bpAvailableQty, defaultValue: `Chỉ còn ${bpAvailableQty} sản phẩm trong kho` }));
         } else {
           toast.warning(t('cart.maxLimitReached', { max: maxAllowed }));
         }
@@ -964,7 +996,7 @@ const ProductDetail: React.FC = () => {
               <div className="flex mb-1">
                 <StarRating rating={product.average_rating || product.rating || 0} />
               </div>
-              <span className="font-bold ml-1">{product.average_rating || product.rating || 0}</span>
+              <span className="font-bold ml-1">{formatRating(product.average_rating || product.rating || 0)}</span>
               <span className="text-slate-400">|</span>
               <span className="text-primary font-medium">{product.review_count || 0} đánh giá</span>
               <span className="text-slate-400">|</span>
@@ -1002,7 +1034,7 @@ const ProductDetail: React.FC = () => {
                           : 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-800/40 dark:text-slate-400 dark:border-slate-700'
                       }`}
                     >
-                      {br.name} {br.stock > 0 ? `(${t('common.inStock', 'Còn hàng')}: ${br.stock})` : `(${t('common.outOfStock', 'Hết hàng')})`}
+                      {br.name} {br.available_quantity > 0 ? `(${t('common.inStock', 'Còn hàng')}: ${br.available_quantity})` : `(${t('common.outOfStock', 'Hết hàng')})`}
                     </span>
                   ))}
                   {productRealBranches.length === 0 && <span className="text-slate-400 font-medium">N/A</span>}
@@ -1492,7 +1524,7 @@ const ProductDetail: React.FC = () => {
               <h3 className="font-bold text-lg mb-4">Tổng quát đánh giá</h3>
               <div className="text-center mb-6">
                 <div className="text-6xl font-black text-slate-900 dark:text-slate-100">
-                  {product.average_rating || product.rating || 0}
+                  {formatRating(product.average_rating || product.rating || 0)}
                 </div>
                 <div className="flex justify-center my-2">
                   <StarRating rating={product.average_rating || product.rating || 0} />

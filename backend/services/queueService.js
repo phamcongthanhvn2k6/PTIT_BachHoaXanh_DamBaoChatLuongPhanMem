@@ -4,63 +4,156 @@
 // ═══════════════════════════════════════════════════════
 import { Queue, Worker } from 'bullmq';
 
+import { URL } from 'url';
 const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
-const connection = { url: redisUrl };
+
+const parseRedisUrl = (urlStr) => {
+  try {
+    const parsed = new URL(urlStr);
+    return {
+      host: parsed.hostname,
+      port: parsed.port ? parseInt(parsed.port) : 6379,
+      password: parsed.password || undefined,
+      username: parsed.username || undefined,
+    };
+  } catch (e) {
+    return { host: '127.0.0.1', port: 6379 };
+  }
+};
+
+const parsedConn = parseRedisUrl(redisUrl);
+
+const connection = {
+  ...parsedConn,
+  maxRetriesPerRequest: null,
+  enableOfflineQueue: false,
+  retryStrategy: (times) => {
+    if (times > 1) {
+      return null;
+    }
+    return 10000;
+  }
+};
 
 let isQueueActive = false;
+let initialized = false;
 
 // DLQ tracking (in-memory fallback when Redis unavailable)
 const deadLetterStore = [];
 
 let notificationQueue, auditQueue, emailQueue, dlqQueue;
 
-try {
-  // Dead Letter Queue — stores permanently failed jobs
-  dlqQueue = new Queue('DeadLetterQueue', { connection });
-
-  notificationQueue = new Queue('NotificationQueue', {
-    connection,
-    defaultJobOptions: {
-      attempts: 3,
-      backoff: { type: 'exponential', delay: 1000 },
-      removeOnComplete: 100,
-      removeOnFail: false, // Keep for DLQ inspection
-    }
-  });
-
-  auditQueue = new Queue('AuditQueue', {
-    connection,
-    defaultJobOptions: {
-      attempts: 3,
-      backoff: { type: 'exponential', delay: 500 },
-      removeOnComplete: 100,
-      removeOnFail: false,
-    }
-  });
-
-  emailQueue = new Queue('EmailQueue', {
-    connection,
-    defaultJobOptions: {
-      attempts: 3,
-      backoff: { type: 'exponential', delay: 2000 },
-      removeOnComplete: 50,
-      removeOnFail: false,
-    }
-  });
-
-  isQueueActive = true;
-  console.log('✅ BullMQ Queues initialized (with DLQ support)');
-} catch (e) {
-  console.warn('⚠️ BullMQ failed to connect, falling back to memory queue');
-}
-
 const queueMap = {
-  notification: notificationQueue,
-  audit: auditQueue,
-  email: emailQueue,
+  notification: null,
+  audit: null,
+  email: null,
+};
+
+export const initQueueService = async () => {
+  if (initialized) return isQueueActive;
+  initialized = true;
+
+  try {
+    const { redisReady } = await import('./redisService.js');
+    const isRedisAvailable = await redisReady;
+
+    if (!isRedisAvailable) {
+      isQueueActive = false;
+      return false;
+    }
+
+    // Dead Letter Queue — stores permanently failed jobs
+    dlqQueue = new Queue('DeadLetterQueue', { connection });
+
+    notificationQueue = new Queue('NotificationQueue', {
+      connection,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: 100,
+        removeOnFail: false, // Keep for DLQ inspection
+      }
+    });
+
+    auditQueue = new Queue('AuditQueue', {
+      connection,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 500 },
+        removeOnComplete: 100,
+        removeOnFail: false,
+      }
+    });
+
+    emailQueue = new Queue('EmailQueue', {
+      connection,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 2000 },
+        removeOnComplete: 50,
+        removeOnFail: false,
+      }
+    });
+
+    queueMap.notification = notificationQueue;
+    queueMap.audit = auditQueue;
+    queueMap.email = emailQueue;
+
+    // Initialize Workers if Redis is active
+    new Worker('NotificationQueue', async job => {
+      const { processNotificationJob } = await import('./userNotificationService.js');
+      await processNotificationJob(job.data);
+    }, {
+      connection,
+      concurrency: 5,
+    }).on('failed', (job, err) => {
+      if (job.attemptsMade >= job.opts.attempts) {
+        moveToDLQ(job, err, 'notification');
+      }
+    }).on('error', () => {
+      // Suppress connection lost error event logs
+    });
+
+    new Worker('AuditQueue', async job => {
+      const { processAuditJob } = await import('../utils/auditLogger.js');
+      await processAuditJob(job.data);
+    }, {
+      connection,
+      concurrency: 3,
+    }).on('failed', (job, err) => {
+      if (job.attemptsMade >= job.opts.attempts) {
+        moveToDLQ(job, err, 'audit');
+      }
+    }).on('error', () => {
+      // Suppress connection lost error event logs
+    });
+
+    new Worker('EmailQueue', async job => {
+      const { processEmailJob } = await import('./orderEmailService.js');
+      await processEmailJob(job.data);
+    }, {
+      connection,
+      concurrency: 2,
+    }).on('failed', (job, err) => {
+      if (job.attemptsMade >= job.opts.attempts) {
+        moveToDLQ(job, err, 'email');
+      }
+    }).on('error', () => {
+      // Suppress connection lost error event logs
+    });
+
+    isQueueActive = true;
+    console.log('✅ BullMQ Queues initialized (with DLQ support)');
+    return true;
+  } catch (e) {
+    console.warn('⚠️ BullMQ failed to connect, falling back to memory queue');
+    isQueueActive = false;
+    return false;
+  }
 };
 
 export const enqueueJob = async (queueName, jobName, data) => {
+  await initQueueService();
   const queue = queueMap[queueName];
   if (isQueueActive && queue) {
     try {
@@ -124,49 +217,11 @@ const moveToDLQ = async (job, err, queueName) => {
   console.error(`[DLQ] Job permanently failed: ${queueName}/${job.name}`, err?.message);
 };
 
-// Initialize Workers if Redis is active
-if (isQueueActive) {
-  new Worker('NotificationQueue', async job => {
-    const { processNotificationJob } = await import('./userNotificationService.js');
-    await processNotificationJob(job.data);
-  }, {
-    connection,
-    concurrency: 5,
-  }).on('failed', (job, err) => {
-    if (job.attemptsMade >= job.opts.attempts) {
-      moveToDLQ(job, err, 'notification');
-    }
-  });
-
-  new Worker('AuditQueue', async job => {
-    const { processAuditJob } = await import('../utils/auditLogger.js');
-    await processAuditJob(job.data);
-  }, {
-    connection,
-    concurrency: 3,
-  }).on('failed', (job, err) => {
-    if (job.attemptsMade >= job.opts.attempts) {
-      moveToDLQ(job, err, 'audit');
-    }
-  });
-
-  new Worker('EmailQueue', async job => {
-    const { processEmailJob } = await import('./orderEmailService.js');
-    await processEmailJob(job.data);
-  }, {
-    connection,
-    concurrency: 2,
-  }).on('failed', (job, err) => {
-    if (job.attemptsMade >= job.opts.attempts) {
-      moveToDLQ(job, err, 'email');
-    }
-  });
-}
-
 /**
  * Get failed jobs from all queues (for admin endpoint)
  */
 export const getFailedJobs = async () => {
+  await initQueueService();
   const results = [];
 
   // 1. Get from BullMQ DLQ
