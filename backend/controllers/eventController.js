@@ -1,5 +1,4 @@
-import { EventComment } from '../models/Event.js';
-import { EventPost } from '../models/EventPost.js';
+import { EventPost, EventComment } from '../models/EventPost.js';
 import mongoose from 'mongoose';
 
 // Dynamic status resolution based on date and administrative status

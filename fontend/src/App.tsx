@@ -26,7 +26,7 @@ import Register from './pages/Register.tsx';
 import LoginSuccess from './pages/LoginSuccess.tsx';
 import Cart from './pages/Cart.tsx';
 import Checkout from './pages/Checkout.tsx';
-import PaymentRaw, { PaymentPage } from './pages/Payment.tsx';
+import { PaymentPage } from './pages/Payment.tsx';
 import PaymentSuccess from './pages/PaymentSuccess.tsx';
 import PaymentFailed from './pages/PaymentFailed.tsx';
 import Orders from './pages/Orders.tsx';
@@ -51,6 +51,7 @@ import ComparePage from './pages/Compare.tsx';
 import AccountLayout from './layouts/AccountLayout.tsx';
 import CompareBar from './components/compare/CompareBar.tsx';
 import viewHistoryService from './services/viewHistoryService.ts';
+import StorefrontPopupModal from './components/StorefrontPopupModal/StorefrontPopupModal.tsx';
 
 // Admin Pages
 import AdminLayout from './layouts/AdminLayout.tsx';
@@ -82,6 +83,8 @@ import About from './pages/About.tsx';
 import SmartShopping from './pages/SmartShopping.tsx';
 import SharedFamilyCart from './pages/SharedFamilyCart.tsx';
 import RecipeDetail from './pages/RecipeDetail.tsx';
+import LotteFunZone from './pages/LotteFunZone.tsx';
+import AdminGamification from './admin/pages/AdminGamification.tsx';
 
 
 function App() {
@@ -286,6 +289,7 @@ function App() {
         <Route path="/order/track" element={<OrderTracking />} />
         <Route path="/carrot-scene" element={<CarrotScene />} />
         <Route path="/smart-shopping" element={<SmartShopping />} />
+        <Route path="/lotte-fun-zone" element={<AuthGuard><LotteFunZone /></AuthGuard>} />
         <Route path="/recipes" element={<RecipeDetail />} />
         <Route path="/recipes/:name" element={<RecipeDetail />} />
         <Route path="/family-cart" element={<AuthGuard><SharedFamilyCart /></AuthGuard>} />
@@ -330,6 +334,7 @@ function App() {
             <Route path="categories" element={<AdminPermissionGuard permission="products.read"><AdminCategoryManagement /></AdminPermissionGuard>} />
             <Route path="customers" element={<AdminCustomers />} />
             <Route path="coupons" element={<AdminCouponsManagement />} />
+            <Route path="gamification" element={<AdminGamification />} />
             <Route path="events" element={<AdminLotteMartEventsManagementPortal />} />
             <Route path="settings" element={<AdminSystemSettings />} />
             <Route path="orders" element={<AdminLotteMartOrderManagement />} />
@@ -353,6 +358,7 @@ function App() {
       </Routes>
       {!isAdminRoute && <CompareBar />}
       {!isAdminRoute && <Footer />}
+      {!isAdminRoute && <StorefrontPopupModal />}
       <ToastContainer />
     </>
   );

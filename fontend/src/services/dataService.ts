@@ -1063,5 +1063,49 @@ export const dataService = {
   getRequisitions: async (): Promise<any[]> => safeArr(httpClient.get('/internal-requisitions')),
   createRequisition: async (data: any): Promise<any> => obj(await httpClient.post('/internal-requisitions', data)),
   updateRequisitionStatus: async (id: string | number, status: string): Promise<any> => obj(await httpClient.put(`/internal-requisitions/${id}/status`, { status })),
+
+  // ═══════════════════════════════════════════════
+  // GAMIFICATION
+  // ═══════════════════════════════════════════════
+  getGamificationCampaign: async (type: 'spin' | 'checkin'): Promise<any> => {
+    return safeObj(httpClient.get('/gamification/campaign/active', { params: { type } }));
+  },
+  getCheckinState: async (): Promise<any> => {
+    return safeObj(httpClient.get('/gamification/checkin/state'));
+  },
+  getMyLogs: async (params?: any): Promise<any> => {
+    const res = await httpClient.get('/gamification/my-logs', { params });
+    return res.data ?? res;
+  },
+  spinWheel: async (): Promise<any> => {
+    const res = await httpClient.post('/gamification/spin');
+    return res.data ?? res;
+  },
+  dailyCheckin: async (): Promise<any> => {
+    const res = await httpClient.post('/gamification/checkin');
+    return res.data ?? res;
+  },
+  adminGetCampaigns: async (): Promise<any[]> => {
+    return safeArr(httpClient.get('/gamification/admin/campaigns'));
+  },
+  adminCreateCampaign: async (payload: any): Promise<any> => {
+    const res = await httpClient.post('/gamification/admin/campaigns', payload);
+    return res.data ?? res;
+  },
+  adminUpdateCampaign: async (id: string, payload: any): Promise<any> => {
+    const res = await httpClient.put(`/gamification/admin/campaigns/${id}`, payload);
+    return res.data ?? res;
+  },
+  adminDeleteCampaign: async (id: string): Promise<any> => {
+    const res = await httpClient.delete(`/gamification/admin/campaigns/${id}`);
+    return res.data ?? res;
+  },
+  adminGetLogs: async (params?: any): Promise<any> => {
+    const res = await httpClient.get('/gamification/admin/logs', { params });
+    return res.data ?? res;
+  },
+  adminGetAnalytics: async (campaignId: string): Promise<any> => {
+    return safeObj(httpClient.get(`/gamification/admin/analytics/${campaignId}`));
+  },
 };
 

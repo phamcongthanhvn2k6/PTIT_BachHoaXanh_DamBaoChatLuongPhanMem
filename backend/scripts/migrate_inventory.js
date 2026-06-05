@@ -16,6 +16,7 @@ import InventoryBatch from '../models/InventoryBatch.js';
 import StockMovement from '../models/StockMovement.js';
 import Category from '../models/Category.js';
 import Branch from '../models/Branch.js';
+import { AuditLog } from '../models/Misc.js';
 
 const runMigration = async () => {
   try {

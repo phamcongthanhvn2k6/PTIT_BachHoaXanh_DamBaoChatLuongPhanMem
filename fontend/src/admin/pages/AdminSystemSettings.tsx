@@ -33,6 +33,13 @@ const AdminSystemSettings: React.FC = () => {
   const [togglingMaintenance, setTogglingMaintenance] = useState(false);
   const faviconInputRef = useRef<HTMLInputElement>(null);
 
+  // Maintenance Confirmation Modal States
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [modalType, setModalType] = useState<'enable' | 'disable'>('enable');
+  const [confirmReason, setConfirmReason] = useState('');
+  const [confirmMsgText, setConfirmMsgText] = useState('');
+  const [acknowledged, setAcknowledged] = useState(false);
+
   // Keep ref in sync so async callbacks always read the latest value
   useEffect(() => { settingsRef.current = settings; }, [settings]);
 
@@ -82,6 +89,19 @@ const AdminSystemSettings: React.FC = () => {
     }
   };
 
+  const [health, setHealth] = useState<any>(null);
+
+  const fetchHealth = async () => {
+    try {
+      const res = await httpClient.get('/api/health');
+      if (res?.data) {
+        setHealth(res.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch health status:', err);
+    }
+  };
+
   // ── Data loading ──────────────────────────────────────────────
   const loadData = async () => {
     try {
@@ -89,6 +109,7 @@ const AdminSystemSettings: React.FC = () => {
       const res = await dataService.getAdminSettings();
       setSettings(res || {});
       setHasChanges(false);
+      await fetchHealth();
     } catch (err) {
       toast.error(t('adminSettings.loadError') + (err as Error).message);
     } finally {
@@ -96,22 +117,35 @@ const AdminSystemSettings: React.FC = () => {
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(fetchHealth, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleSettingChange = (name: string, value: any) => {
     setSettings((prev: any) => ({ ...prev, [name]: value }));
     setHasChanges(true);
   };
 
-  const handleMaintenanceToggle = async () => {
+  const handleMaintenanceToggleClick = () => {
     if (togglingMaintenance) return;
     const nextVal = !settings.maintenance_mode;
-    
-    const confirmMsg = nextVal 
-      ? t('adminSettings.confirmMaintenanceOn') || 'Xác nhận BẬT chế độ bảo trì? Hệ thống sẽ ngừng nhận đơn hàng từ khách hàng.'
-      : t('adminSettings.confirmMaintenanceOff') || 'Xác nhận TẮT chế độ bảo trì? Khách hàng có thể mua sắm bình thường.';
-      
-    if (!window.confirm(confirmMsg)) return;
+    setModalType(nextVal ? 'enable' : 'disable');
+    setConfirmReason(nextVal ? 'Scheduled system upgrade' : '');
+    setConfirmMsgText(
+      nextVal
+        ? 'Hệ thống đang bảo trì định kỳ để nâng cấp. Vui lòng quay lại sau.'
+        : ''
+    );
+    setAcknowledged(false);
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmMaintenanceToggle = async () => {
+    if (!acknowledged) return;
+    const nextVal = modalType === 'enable';
+    setShowConfirmModal(false);
 
     try {
       setTogglingMaintenance(true);
@@ -122,8 +156,8 @@ const AdminSystemSettings: React.FC = () => {
       
       if (nextVal) {
         payload.maintenance_mode_start_at = new Date().toISOString();
-        payload.maintenance_mode_reason = 'Scheduled system upgrade';
-        payload.maintenance_mode_message = 'Hệ thống đang bảo trì định kỳ để nâng cấp. Vui lòng quay lại sau.';
+        payload.maintenance_mode_reason = confirmReason || 'Scheduled system upgrade';
+        payload.maintenance_mode_message = confirmMsgText || 'Hệ thống đang bảo trì định kỳ để nâng cấp. Vui lòng quay lại sau.';
       }
       
       await dataService.updateAdminSettings(payload);
@@ -405,7 +439,7 @@ const AdminSystemSettings: React.FC = () => {
                 </span>
                 <h4 className="text-[11px] font-black uppercase tracking-[0.15em] text-on-surface opacity-60">{t('adminSettings.maintenanceMode')}</h4>
               </div>
-              <div className={`flex items-center justify-between ${togglingMaintenance ? 'cursor-not-allowed' : 'cursor-pointer'}`} onClick={handleMaintenanceToggle}>
+              <div className={`flex items-center justify-between ${togglingMaintenance ? 'cursor-not-allowed' : 'cursor-pointer'}`} onClick={handleMaintenanceToggleClick}>
                 <div>
                   <p className={`text-sm font-bold ${settings.maintenance_mode ? 'text-orange-900' : 'text-on-surface'}`}>{t('adminSettings.maintenanceToggle')}</p>
                   <p className="text-[10px] text-secondary mt-1 max-w-[200px] leading-relaxed">{t('adminSettings.maintenanceDesc')}</p>
@@ -428,25 +462,70 @@ const AdminSystemSettings: React.FC = () => {
                   </div>
                   <span className="text-white/80 text-xs font-bold tracking-wide">Lotte Mart Core</span>
                 </div>
-                <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/15 px-2.5 py-1 rounded-full tracking-wide flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse"></span>
-                  ONLINE
+                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full tracking-wide flex items-center gap-1 ${
+                  health?.status === 'OK' ? 'text-emerald-400 bg-emerald-500/15' : 'text-rose-400 bg-rose-500/15'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full inline-block ${
+                    health?.status === 'OK' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'
+                  }`}></span>
+                  {health?.status || 'OFFLINE'}
                 </span>
               </div>
               <div className="bg-slate-950 divide-y divide-slate-800/60">
-                {[
-                  { label: t('adminSettings.infoVersion'), value: 'v3.0.0', cls: 'text-violet-400' },
-                  { label: t('adminSettings.infoEnv'), value: 'PRODUCTION', cls: 'text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded' },
-                  { label: t('adminSettings.infoDb'), value: '2.4 GB', cls: 'text-emerald-400' },
-                  { label: t('adminSettings.infoBackup'), value: t('adminSettings.infoBackupValue'), cls: 'text-slate-300' },
-                  { label: t('adminSettings.infoApi'), value: 'Healthy', cls: 'text-emerald-400' },
-                ].map(r => (
-                  <div key={r.label} className="flex items-center justify-between px-5 py-3">
-                    <span className="text-slate-500 text-[11px] font-medium">{r.label}</span>
-                    <span className={`text-[11px] font-bold font-mono ${r.cls}`}>{r.value}</span>
-                  </div>
-                ))}
+                <div className="flex items-center justify-between px-5 py-3">
+                  <span className="text-slate-500 text-[11px] font-medium">{t('adminSettings.infoVersion')}</span>
+                  <span className="text-[11px] font-bold font-mono text-violet-400">v3.0.0</span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3">
+                  <span className="text-slate-500 text-[11px] font-medium">{t('adminSettings.infoEnv')}</span>
+                  <span className="text-[11px] font-bold font-mono text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded">PRODUCTION</span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3">
+                  <span className="text-slate-500 text-[11px] font-medium">{t('adminSettings.infoDb')}</span>
+                  <span className={`text-[11px] font-bold font-mono ${
+                    health?.dbStatus === 'connected' ? 'text-emerald-400' : 'text-rose-400'
+                  }`}>
+                    {health?.dbStatus ? String(health.dbStatus).toUpperCase() : 'CHECKING...'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3">
+                  <span className="text-slate-500 text-[11px] font-medium">Circuit Breaker</span>
+                  <span className={`text-[11px] font-bold font-mono ${
+                    health?.circuitBreaker?.status === 'CLOSED' ? 'text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded' : 'text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded'
+                  }`}>
+                    {health?.circuitBreaker?.status || 'UNKNOWN'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between px-5 py-3">
+                  <span className="text-slate-500 text-[11px] font-medium">Uptime</span>
+                  <span className="text-[11px] font-bold font-mono text-slate-300">
+                    {health?.uptime 
+                      ? `${Math.floor(health.uptime / 3600)}h ${Math.floor((health.uptime % 3600) / 60)}m ${Math.floor(health.uptime % 60)}s`
+                      : 'checking...'}
+                  </span>
+                </div>
               </div>
+              
+              <div className="bg-slate-900/40 px-5 py-3.5 border-t border-slate-800/40">
+                <h5 className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">Hệ Thống Lập Lịch (Cron Jobs)</h5>
+                <div className="space-y-1.5">
+                  {[
+                    { name: 'Thanh toán tự động', status: health?.schedulers?.payment_timeout?.status, freq: 'Mỗi phút' },
+                    { name: 'Đối soát giao dịch', status: health?.schedulers?.reconciliation?.status, freq: '03:00 hàng ngày' },
+                    { name: 'Sao lưu dữ liệu', status: health?.schedulers?.backup?.status, freq: '02:00 hàng ngày' }
+                  ].map((job, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-[10px]">
+                      <span className="text-slate-500">{job.name} ({job.freq})</span>
+                      <span className={`font-mono font-bold ${
+                        job.status === 'active' ? 'text-emerald-400' : 'text-slate-500'
+                      }`}>
+                        {job.status ? 'ACTIVE' : 'INACTIVE'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="bg-slate-900/70 px-5 py-3">
                 <p className="text-[10px] text-slate-500 leading-relaxed">{t('adminSettings.infoNote')}</p>
               </div>
@@ -467,6 +546,133 @@ const AdminSystemSettings: React.FC = () => {
             <button onClick={saveSettings} disabled={isSaving} className="inline-flex items-center justify-center gap-2 h-10 px-10 bg-green-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-green-600/15 hover:bg-green-700 hover:-translate-y-0.5 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
               {isSaving ? t('adminSettings.saving') : t('adminSettings.saveAll')}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Polish & Premium Enterprise Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-fade-in">
+          <div className="relative bg-white w-full max-w-xl rounded-3xl shadow-2xl border border-slate-100 overflow-hidden transform transition-all duration-300 scale-100">
+            
+            {/* Warning header band */}
+            <div className={`h-2 w-full ${modalType === 'enable' ? 'bg-gradient-to-r from-amber-500 to-red-600' : 'bg-gradient-to-r from-emerald-400 to-blue-600'}`} />
+
+            <div className="p-8">
+              {/* Icon & Title */}
+              <div className="flex items-start gap-4 mb-6">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+                  modalType === 'enable' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'
+                }`}>
+                  <span className="material-symbols-outlined text-[28px]">
+                    {modalType === 'enable' ? 'warning' : 'task_alt'}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 tracking-tight">
+                    {modalType === 'enable' ? 'Xác nhận kích hoạt Chế độ Bảo trì' : 'Xác nhận tắt Chế độ Bảo trì'}
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1 uppercase font-bold tracking-wider">
+                    {modalType === 'enable' ? 'Lotte Mart Safety Alert' : 'System Restore Operation'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Warning/Description Box */}
+              <div className={`p-5 rounded-2xl mb-6 text-sm leading-relaxed border ${
+                modalType === 'enable' 
+                  ? 'bg-amber-50/60 border-amber-200 text-amber-900' 
+                  : 'bg-emerald-50/40 border-emerald-100 text-emerald-900'
+              }`}>
+                {modalType === 'enable' ? (
+                  <div className="space-y-2">
+                    <p className="font-bold">⚠️ Tác động nghiêm trọng đến khách hàng:</p>
+                    <ul className="list-disc pl-5 space-y-1 text-xs text-amber-800">
+                      <li>Toàn bộ ứng dụng khách hàng (Storefront) sẽ lập tức bị khóa.</li>
+                      <li>Khách hàng đang mua sắm không thể hoàn tất thanh toán.</li>
+                      <li>Mọi API giỏ hàng, đặt hàng, đối soát sẽ bị chặn.</li>
+                      <li>Quy trình nghiệp vụ nội bộ (Admin) vẫn hoạt động bình thường.</li>
+                    </ul>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="font-bold">✅ Phục hồi hệ thống hoạt động bình thường:</p>
+                    <p className="text-xs text-emerald-800">
+                      Hệ thống sẽ mở lại ứng dụng bán hàng. Khách hàng có thể truy cập, xem sản phẩm, tạo đơn hàng và thanh toán trực tuyến ngay lập tức.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Inputs (Only for enable) */}
+              {modalType === 'enable' && (
+                <div className="space-y-4 mb-6">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Lý do bảo trì</label>
+                    <input 
+                      type="text" 
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:bg-white focus:border-amber-500 outline-none transition-all"
+                      placeholder="VD: Nâng cấp máy chủ cơ sở dữ liệu định kỳ..."
+                      value={confirmReason}
+                      onChange={(e) => setConfirmReason(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-500">Thông báo hiển thị cho người dùng</label>
+                    <textarea 
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:bg-white focus:border-amber-500 outline-none transition-all h-20 resize-none"
+                      placeholder="Thông báo hiển thị trên banner bảo trì..."
+                      value={confirmMsgText}
+                      onChange={(e) => setConfirmMsgText(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Safety Acknowledgment Checkbox */}
+              <div className="mb-6 p-4 rounded-xl bg-slate-50 border border-slate-100 flex items-start gap-3">
+                <input 
+                  type="checkbox" 
+                  id="safety-ack"
+                  checked={acknowledged}
+                  onChange={(e) => setAcknowledged(e.target.checked)}
+                  className="mt-1 h-4.5 w-4.5 rounded border-slate-300 text-primary focus:ring-primary/20 transition-all cursor-pointer"
+                />
+                <label htmlFor="safety-ack" className="text-xs font-semibold text-slate-600 select-none cursor-pointer leading-normal">
+                  Tôi đã đọc kỹ tác động, hiểu rõ hậu quả kỹ thuật và đồng ý thực hiện hành động này.
+                </label>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmModal(false)}
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmMaintenanceToggle}
+                  disabled={!acknowledged}
+                  className={`px-8 py-2.5 font-bold rounded-xl text-xs shadow-lg transition-all flex items-center gap-1.5 ${
+                    !acknowledged 
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' 
+                      : modalType === 'enable'
+                        ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-amber-600/15'
+                        : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/15'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[16px]">
+                    {modalType === 'enable' ? 'construction' : 'power_settings_new'}
+                  </span>
+                  <span>
+                    {modalType === 'enable' ? 'Bật bảo trì hệ thống' : 'Tắt bảo trì & Mở cửa hàng'}
+                  </span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

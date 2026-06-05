@@ -582,7 +582,7 @@ const Payment: React.FC = () => {
         txnData = await paymentService.processPayment({
           orderId,
           provider,
-          amount: createdOrder?.total_amount || createdOrder?.total || finalTotal,
+          amount: createdOrder?.total_amount || (createdOrder as any)?.total || finalTotal,
           methodId: selectedMethodId,
           userId: currentUser?.id || currentUser?._id || '',
           currency: 'VND'

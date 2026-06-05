@@ -79,12 +79,10 @@ export const list = async (req, res) => {
 
 export const detail = async (req, res) => {
   try {
-    if (req.user?.role_id !== 3 && String(req.params.id) !== String(req.userId)) {
-      // Admin users should be able to view details if they have appropriate permissions, 
-      // but let's allow admins to view any user for now in the staff management context.
-      if (!req.user || !req.user.role_key) {
-        return res.status(403).json({ success: false, message: 'Không thể xem thông tin người dùng khác' });
-      }
+    const isSelf = String(req.params.id) === String(req.userId);
+    const isAdmin = req.user && [1, 2].includes(Number(req.user.role_id));
+    if (!isSelf && !isAdmin) {
+      return res.status(403).json({ success: false, message: 'Không thể xem thông tin người dùng khác' });
     }
     const user = await User.findById(req.params.id).select('-password_hash -refresh_token');
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
@@ -96,10 +94,10 @@ export const detail = async (req, res) => {
 
 export const update = async (req, res) => {
   try {
-    if (req.user?.role_id !== 3 && String(req.params.id) !== String(req.userId)) {
-      if (!req.user || !req.user.role_key) {
-        return res.status(403).json({ success: false, message: 'Không thể cập nhật người dùng khác' });
-      }
+    const isSelf = String(req.params.id) === String(req.userId);
+    const isAdmin = req.user && [1, 2].includes(Number(req.user.role_id));
+    if (!isSelf && !isAdmin) {
+      return res.status(403).json({ success: false, message: 'Không thể cập nhật người dùng khác' });
     }
     const updates = { ...req.body };
     if (updates.phone !== undefined) {
@@ -191,7 +189,9 @@ export const updateMembership = async (req, res) => {
 
 export const updateSettings = async (req, res) => {
   try {
-    if (req.user?.role_id !== 3 && String(req.params.id) !== String(req.userId)) {
+    const isSelf = String(req.params.id) === String(req.userId);
+    const isAdmin = req.user && [1, 2].includes(Number(req.user.role_id));
+    if (!isSelf && !isAdmin) {
       return res.status(403).json({ success: false, message: 'Không thể cập nhật cài đặt người dùng khác' });
     }
     

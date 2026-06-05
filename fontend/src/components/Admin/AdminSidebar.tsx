@@ -27,7 +27,8 @@ const menuItems: MenuItem[] = [
   { to: '/admin/products', icon: 'inventory_2', labelKey: 'sidebar.inventory', fallbackLabel: 'Quản lý kho', permission: 'products.read' },
   { to: '/admin/orders', icon: 'receipt_long', labelKey: 'sidebar.orders', fallbackLabel: 'Đơn hàng', permission: 'orders.read' },
   { to: '/admin/customers', icon: 'group', labelKey: 'sidebar.customers', fallbackLabel: 'Khách hàng', permission: 'customers.read' },
-  { to: '/admin/coupons', icon: 'local_activity', labelKey: 'sidebar.coupons', fallbackLabel: 'Khuyến mãi & Coupon', permission: 'coupons.read' },
+  { to: '/admin/coupons', icon: 'local_activity', labelKey: 'sidebar.coupons', fallbackLabel: 'Trung tâm Marketing', permission: 'coupons.read' },
+  { to: '/admin/gamification', icon: 'sports_esports', labelKey: 'sidebar.gamification', fallbackLabel: 'Lotte Fun Zone', permission: 'settings.read' },
   { to: '/admin/settings', icon: 'settings', labelKey: 'sidebar.settings', fallbackLabel: 'Cấu hình hệ thống', permission: 'settings.read' },
 
   // Enterprise Inventory

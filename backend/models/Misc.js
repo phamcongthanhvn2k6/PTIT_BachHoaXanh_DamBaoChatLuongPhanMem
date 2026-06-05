@@ -81,6 +81,11 @@ const auditLogSchema = new mongoose.Schema({
   ip: { type: String, default: '' },
 }, { timestamps: { createdAt: 'created_at' } });
 
+auditLogSchema.index({ created_at: -1 });
+auditLogSchema.index({ action: 1 });
+auditLogSchema.index({ entity: 1, entity_id: 1 });
+auditLogSchema.index({ user_id: 1, created_at: -1 });
+
 const adminSettingSchema = new mongoose.Schema({
   key: { type: String, required: true, unique: true },
   value: { type: mongoose.Schema.Types.Mixed, default: null },

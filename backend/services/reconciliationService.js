@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import BranchProduct from '../models/BranchProduct.js';
 import InventoryBatch from '../models/InventoryBatch.js';
 import { AuditLog } from '../models/Misc.js';
+import { sendMail } from './emailService.js';
 import { Coupon, CouponUsage } from '../models/Coupon.js';
 import Promotion from '../models/Promotion.js';
 import { PromotionUsage } from '../models/PromotionUsage.js';
@@ -131,6 +132,9 @@ export async function runReconciliationAudit() {
         details: { discrepancies },
         ip: '127.0.0.1'
       });
+
+      // Trigger daily reconciliation discrepancy alert
+      await sendReconciliationAlert(discrepancies);
     } else {
       console.log('[RECONCILIATION] ✅ Data integrity reconciliation audit completed. No discrepancies found.');
     }
@@ -140,6 +144,54 @@ export async function runReconciliationAudit() {
   }
 
   return discrepancies;
+}
+
+export async function sendReconciliationAlert(discrepancies) {
+  try {
+    const adminEmail = process.env.EMAIL_USER || 'admin@lottemart.vn';
+    const subject = `[LOTTE ERP ALERT] ${discrepancies.length} Data Reconciliation Discrepancies Found`;
+    const rows = discrepancies.map(d => `
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 8px; font-weight: bold; color: #e53e3e;">${d.domain.toUpperCase()}</td>
+        <td style="padding: 8px;">${d.type}</td>
+        <td style="padding: 8px;">${d.message}</td>
+        <td style="padding: 8px; font-family: monospace; font-size: 11px;">${JSON.stringify(d.details)}</td>
+      </tr>
+    `).join('');
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; color: #2d3748;">
+        <h2 style="color: #e53e3e; border-bottom: 2px solid #e53e3e; padding-bottom: 8px;">⚠️ Cảnh Báo Đối Soát Dữ Liệu Lotte Mart ERP</h2>
+        <p>Hệ thống tự động phát hiện <b>${discrepancies.length} bất thường</b> về dữ liệu trong đợt đối soát lúc <b>${new Date().toLocaleString('vi-VN')}</b>.</p>
+        
+        <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
+          <thead>
+            <tr style="background-color: #f7fafc; border-bottom: 2px solid #cbd5e0;">
+              <th style="padding: 8px; text-align: left;">Phân Hệ</th>
+              <th style="padding: 8px; text-align: left;">Loại Lỗi</th>
+              <th style="padding: 8px; text-align: left;">Nội Dung Chi Tiết</th>
+              <th style="padding: 8px; text-align: left;">Thông Tin Kỹ Thuật</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+        
+        <p style="margin-top: 24px; color: #718096; font-size: 12px;">Đây là email tự động từ hệ thống giám sát. Vui lòng đăng nhập Admin Dashboard để kiểm tra và xử lý.</p>
+      </div>
+    `;
+
+    await sendMail({
+      to: adminEmail,
+      subject,
+      text: `Cảnh Báo Đối Soát Dữ Liệu: ${discrepancies.length} bất thường được tìm thấy.`,
+      html
+    });
+    console.log(`[RECONCILIATION] Alert email sent successfully to ${adminEmail}`);
+  } catch (err) {
+    console.error(`[RECONCILIATION] Failed to send discrepancy alert email:`, err.message);
+  }
 }
 
 export function startReconciliationScheduler() {

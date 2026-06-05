@@ -12,6 +12,7 @@ const parseId = (id) => {
 const normalizeStr = (str) => {
   if (!str) return '';
   return str.toLowerCase()
+    .replace(/đ/g, 'd')
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9\s]+/g, ' ')
@@ -69,7 +70,7 @@ const INGREDIENT_RULES = {
   'duong': {
     required: ['duong'],
     forbidden: ['coca', 'pepsi', 'bia', 'nuoc ngot', 'sua tuoi'],
-    categories: ['Thực phẩm', 'Gia vị']
+    categories: ['Thực phẩm', 'Gia vị', 'Gia vị & Nguyên liệu nấu ăn']
   },
   'hanh tim': {
     required: ['hanh', 'hanh tim', 'hanh tay'],
@@ -125,6 +126,41 @@ const INGREDIENT_RULES = {
     required: ['tieu', 'tieu den', 'tieu xay'],
     forbidden: ['coca', 'pepsi', 'sua', 'bia', 'banh'],
     categories: ['Thực phẩm', 'Gia vị']
+  },
+  'muoi': {
+    required: ['muoi', 'muoi say', 'muoi tinh'],
+    forbidden: ['trung', 'banh', 'hat dieu', 'tom', 'ot', 'tieu', 'ga', 'heo', 'bo', 'coca', 'pepsi', 'sua', 'bia'],
+    categories: ['Thực phẩm', 'Gia vị', 'Gia vị & Nguyên liệu nấu ăn']
+  },
+  'bot nep': {
+    required: ['bot nep', 'bot gao', 'nep nuong'],
+    forbidden: ['giat', 'omo', 'comfort', 'ngot', 'ajinomoto', 'nem', 'canh', 'coca', 'pepsi', 'sua'],
+    categories: ['Thực phẩm', 'Gia vị', 'Nguyên liệu làm bánh']
+  },
+  'bot banh in': {
+    required: ['bot nep', 'bot gao', 'nep nuong'],
+    forbidden: ['giat', 'omo', 'comfort', 'ngot', 'ajinomoto', 'nem', 'canh', 'coca', 'pepsi', 'sua'],
+    categories: ['Thực phẩm', 'Gia vị', 'Nguyên liệu làm bánh']
+  },
+  'bot gao': {
+    required: ['bot gao', 'bot nep', 'gao st25', 'gao lut'],
+    forbidden: ['giat', 'omo', 'comfort', 'ngot', 'ajinomoto', 'nem', 'canh', 'coca', 'pepsi', 'sua'],
+    categories: ['Thực phẩm', 'Gia vị', 'Nguyên liệu làm bánh']
+  },
+  'dau xanh': {
+    required: ['dau xanh', 'mung bean'],
+    forbidden: ['sua', 'dau nanh', 'fami', 'dau thuc vat', 'dau an', 'dau phong', 'dau do', 'dau den'],
+    categories: ['Thực phẩm', 'Hạt']
+  },
+  'nuoc hoa buoi': {
+    required: ['buoi da xanh', 'hoa buoi'],
+    forbidden: ['la vie', 'coca', 'pepsi', 'bia', 'sua', 'tra', 'xo'],
+    categories: ['Thực phẩm']
+  },
+  'dua bao': {
+    required: ['dua bao', 'cui dua', 'dua nao', 'dua tuoi'],
+    forbidden: ['sua', 'pepsi', 'coca', 'dau an'],
+    categories: ['Thực phẩm']
   }
 };
 
@@ -160,9 +196,13 @@ const calculateScore = (product, ingredientName, rule) => {
     score += 30;
   }
 
-  // Add bonus for matching rule categories
-  if (rule && rule.categories && rule.categories.includes(product.category_name)) {
-    score += 20;
+  // Add bonus for matching rule categories / tags
+  if (rule && rule.categories) {
+    const hasCategoryMatch = rule.categories.includes(product.category_name);
+    const hasTagMatch = product.tags && product.tags.some(t => rule.categories.includes(t));
+    if (hasCategoryMatch || hasTagMatch) {
+      score += 20;
+    }
   }
 
   return score;
@@ -203,10 +243,16 @@ export const matchIngredient = async (ingredientName, branchIdStr) => {
       return { match: null, substitutes: [] };
     }
 
-    // Build regex query matching any of the required keywords
-    const queryConditions = keywords.map(kw => ({
-      name: { $regex: kw.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), $options: 'i' }
-    }));
+    // Build regex query matching any of the required keywords against name or slug
+    const queryConditions = [];
+    for (const kw of keywords) {
+      const escapedKw = kw.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      queryConditions.push({ name: { $regex: escapedKw, $options: 'i' } });
+      const normKw = normalizeStr(kw);
+      if (normKw) {
+        queryConditions.push({ slug: { $regex: normKw.replace(/-/g, '.*'), $options: 'i' } });
+      }
+    }
 
     // Fetch candidate active products from the store database
     const products = await Product.find({

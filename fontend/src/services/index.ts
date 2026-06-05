@@ -21,3 +21,5 @@ export { bannerService } from './bannerService';
 export { hotDealService } from './hotDealService';
 export { recommendationService } from './recommendationService';
 export { priceWatchService } from './priceWatchService';
+export { popupAdService } from './popupAdService';
+

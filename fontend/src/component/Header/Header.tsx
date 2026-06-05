@@ -59,7 +59,7 @@ const Header: React.FC = () => {
     { label: t("nav.shopAtHome"), path: "/shop-at-home" },
     { label: t("nav.promotions"), path: "/promotions" },
     { label: t("nav.featuredEvents"), path: "/featured-events" },
-    { label: t("nav.entertainment"), path: "/carrot-scene" },
+    { label: t("nav.entertainment"), path: "/lotte-fun-zone" },
   ];
 
   const handleSearch = (e: React.FormEvent) => {

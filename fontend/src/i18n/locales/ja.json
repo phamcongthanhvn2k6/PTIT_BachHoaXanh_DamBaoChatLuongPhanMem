@@ -595,7 +595,8 @@
     "inventory": "在庫管理",
     "orders": "注文",
     "customers": "顧客",
-    "coupons": "プロモーション & クーポン",
+    "coupons": "マーケティングセンター",
+    "gamification": "Lotte Fun Zone",
     "flashDeals": "フラッシュディール",
     "settings": "システム設定",
     "suppliers": "サプライヤー",
@@ -2034,5 +2035,44 @@
     "saveSuccess": "レシピを保存しました！",
     "saveFailed": "レシピの保存に失敗しました。",
     "savedBadge": "リストに保存済み"
+  },
+  "qa": {
+    "title": "製品のQ&A ({{count}})",
+    "askPrompt": "この製品について質問がありますか？",
+    "placeholder": "質問を入力してください (例: この製品は子供向けですか？)",
+    "submit": "質問する",
+    "submitting": "送信中...",
+    "noQuestions": "この製品に対する質問はまだありません。",
+    "sentSuccess": "AIによる自動回答が生成されました",
+    "sentPending": "質問が送信され、承認待ちです",
+    "aiResponse": "Lotte Mart AIアシスタント",
+    "adminResponse": "Lotte Martサポート",
+    "mixedResponse": "Lotte Mart & AI",
+    "aiModel": "使用したAIモデル: {{model}}",
+    "pendingReview": "承認待ち",
+    "aiAnswering": "AIアシスタントが回答中...",
+    "waitingAdmin": "管理者の回答待ち...",
+    "tooShort": "質問は少なくとも5文字以上である必要があります",
+    "submitError": "現在、質問を送信できません",
+    "sourceLabel": "回答ソース",
+    "aiStatusLabel": "AIステータス",
+    "confidenceScoreLabel": "信頼スコア",
+    "actionApprove": "回答を承認",
+    "actionHide": "質問を非表示",
+    "actionEdit": "回答を編集",
+    "actionDelete": "質問を削除",
+    "saveReply": "回答を保存",
+    "placeholderReply": "管理者からの回答を入力..."
+  },
+  "admin": {
+    "promotions": {
+      "pageTitle": "マーケティングセンター",
+      "breadcrumbSystem": "システム",
+      "breadcrumbPromo": "マーケティングセンター",
+      "tabPromotions": "プロモーション＆クーポン",
+      "tabBanners": "バナー",
+      "tabHotDeals": "ホットディール",
+      "tabPopupAds": "ポップアップ広告"
+    }
   }
 }

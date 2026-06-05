@@ -105,16 +105,42 @@ router.post('/auth/login', async (req, res) => {
     const { email, password } = req.body;
     const normalizedEmail = email?.toLowerCase().trim();
     
-    let user = await User.findOne({ email: normalizedEmail, role_id: { $ne: 3 } });
+    // Log if seed account is missing
+    if (normalizedEmail === 'admin@lottemart.vn') {
+      const exists = await User.findOne({ email: normalizedEmail });
+      if (!exists) {
+        console.warn(`[Admin Auth] Warning: Seed admin account 'admin@lottemart.vn' is missing from the database.`);
+      }
+    }
 
-    if (!user) return res.status(401).json({ success: false, message: 'Sai email hoặc mật khẩu' });
-    if (Number(user.role_id) === 3) return res.status(403).json({ success: false, message: 'Không có quyền truy cập admin' });
+    let user = await User.findOne({ email: normalizedEmail });
+
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Tài khoản không tồn tại' });
+    }
+
+    if (Number(user.role_id) === 3 || user.role_key === 'customer') {
+      return res.status(403).json({ success: false, message: 'Không có quyền truy cập admin' });
+    }
     
+    if (user.status === 'LOCKED' || !user.is_active) {
+      return res.status(403).json({ success: false, message: 'Tài khoản admin đã bị khóa' });
+    }
+
+    if (user.status === 'INACTIVE') {
+      return res.status(403).json({ success: false, message: 'Tài khoản admin chưa được kích hoạt' });
+    }
+
+    if (!user.password_hash) {
+      console.error(`[Admin Auth] User ${normalizedEmail} has no password hash.`);
+      return res.status(401).json({ success: false, message: 'Tài khoản chưa thiết lập mật khẩu' });
+    }
+
     const valid = await user.comparePassword(password);
-    if (!valid) return res.status(401).json({ success: false, message: 'Sai email hoặc mật khẩu' });
+    if (!valid) {
+      return res.status(401).json({ success: false, message: 'Mật khẩu không chính xác' });
+    }
     
-    if (!user.is_active) return res.status(403).json({ success: false, message: 'Tài khoản admin đã bị khóa' });
-
     const token = generateToken(user);
     user.role_key = user.role_key || mapRoleIdToKey(user.role_id);
     user.permissions = await getPermissionsForUser(user);

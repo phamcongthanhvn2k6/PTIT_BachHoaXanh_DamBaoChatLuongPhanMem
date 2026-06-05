@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import '../config/loadEnv.js';
 
 const OPENROUTER_API_BASE = 'https://openrouter.ai/api/v1';
@@ -50,6 +51,9 @@ const parseJsonFromText = (text) => {
 };
 
 const FALLBACK_MODELS = [
+  'openrouter/free',
+  'google/gemini-2.5-flash:free',
+  'google/gemini-2.5-pro:free',
   'qwen/qwen3-coder:free',
   'google/gemma-4-31b-it:free',
   'meta-llama/llama-3.3-70b-instruct:free',
@@ -58,7 +62,7 @@ const FALLBACK_MODELS = [
   'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free'
 ];
 
-const getModelList = () => {
+export const getModelList = () => {
   let primary = process.env.OPENROUTER_MODEL || DEFAULT_MODEL;
   if (primary.includes('deepseek-v4-flash')) {
     primary = 'qwen/qwen3-coder:free';
@@ -72,7 +76,7 @@ const getModelList = () => {
   return list;
 };
 
-const callOpenRouter = async (messages, options = {}, isJson = false) => {
+export const callOpenRouter = async (messages, options = {}, isJson = false) => {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     const err = new Error('AI provider is not configured');
@@ -80,7 +84,22 @@ const callOpenRouter = async (messages, options = {}, isJson = false) => {
     throw err;
   }
 
-  const modelsToTry = getModelList();
+  let modelsToTry = [];
+  try {
+    if (mongoose.connection.readyState === 1) {
+      const AdminSettingModel = mongoose.models.AdminSetting || mongoose.model('AdminSetting');
+      const settingDoc = await AdminSettingModel.findOne({ key: 'qa_active_models' }).lean();
+      if (settingDoc && Array.isArray(settingDoc.value) && settingDoc.value.length > 0) {
+        modelsToTry = settingDoc.value;
+      }
+    }
+  } catch (err) {
+    console.warn('[aiClient] Error fetching active models from db settings:', err.message);
+  }
+
+  if (modelsToTry.length === 0) {
+    modelsToTry = getModelList();
+  }
   let lastError = null;
 
   for (let i = 0; i < modelsToTry.length; i++) {

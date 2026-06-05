@@ -1,6 +1,9 @@
 import { getCache, setCache } from '../services/redisService.js';
 
 export const recipeRateLimiter = async (req, res, next) => {
+  if (process.env.NODE_ENV !== 'production') {
+    return next();
+  }
   try {
     let limit = 3; // default guest limit: 3/hr
     let identifier = req.ip || 'guest';

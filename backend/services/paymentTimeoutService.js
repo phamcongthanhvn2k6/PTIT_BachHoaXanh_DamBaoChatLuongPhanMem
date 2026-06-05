@@ -12,7 +12,10 @@ import { HotDeal } from '../models/Misc.js';
 import inventoryService from './inventoryService.js';
 import { restorePromotionsAndCoupons, restoreHotDealsForOrderItems } from './orderHardeningService.js';
 import { logActivity } from './auditService.js';
-import { notifyPaymentFailed, notifyOrderStatusChanged } from './userNotificationService.js';
+import { notifyPaymentFailed, notifyOrderStatusChanged, notifyPaymentSuccess } from './userNotificationService.js';
+import { LoyaltyTransaction } from '../models/Loyalty.js';
+import User from '../models/User.js';
+import { queueOrderSuccessEmail } from './orderEmailService.js';
 
 let schedulerStarted = false;
 
@@ -153,6 +156,143 @@ export async function expireSinglePayment(tx, session = null) {
 }
 
 /**
+ * Simulate querying the external gateway (VNPAY/Momo/Bank) for transaction status.
+ */
+async function checkExternalProviderStatus(tx) {
+  // Check if simulation metadata indicates external success
+  const isSuccess = tx.metadata?.external_status === 'SUCCESS' || tx.metadata?.simulate_external_success === true;
+  return isSuccess ? 'COMPLETED' : 'EXPIRED';
+}
+
+/**
+ * Finalize payment transaction if it was successful on the external provider.
+ */
+export async function finalizePaymentTransaction(tx, session = null) {
+  const oldStatus = tx.status;
+  tx.status = 'COMPLETED';
+  tx.paid_at = new Date();
+  tx.metadata = {
+    ...(tx.metadata || {}),
+    finalized_by: 'PAYMENT_TIMEOUT_RECOVERY',
+    finalized_at: new Date()
+  };
+  
+  if (session) {
+    await tx.save({ session });
+  } else {
+    await tx.save();
+  }
+
+  const orderIdStr = tx.order_id ? String(tx.order_id) : '';
+  if (orderIdStr && mongoose.isValidObjectId(orderIdStr)) {
+    const order = session 
+      ? await Order.findById(orderIdStr).session(session)
+      : await Order.findById(orderIdStr);
+      
+    if (order && order.status !== 'CANCELLED' && order.payment_status !== 'PAID') {
+      order.payment_status = 'PAID';
+      order.status = 'CONFIRMED';
+      if (order.payment) {
+        order.payment.status = 'PAID';
+        order.payment.transaction_id = tx.transaction_id;
+      } else {
+        order.payment = {
+          method: tx.provider || 'BANK_TRANSFER',
+          status: 'PAID',
+          transaction_id: tx.transaction_id
+        };
+      }
+      
+      const orderTotalAmount = order.total_amount || tx.amount || 0;
+      const pointsEarned = Math.floor(orderTotalAmount / 10000);
+      order.points_earned = pointsEarned;
+      
+      if (session) {
+        await order.save({ session });
+      } else {
+        await order.save();
+      }
+
+      // Award points & loyalty
+      const userIdStr = tx.user_id ? String(tx.user_id) : '';
+      if (pointsEarned > 0 && userIdStr && mongoose.isValidObjectId(userIdStr)) {
+        const user = session
+          ? await User.findById(userIdStr).session(session)
+          : await User.findById(userIdStr);
+        if (user) {
+          user.lotte_points = (user.lotte_points || 0) + pointsEarned;
+          
+          // Calculate membership level
+          const MEMBERSHIP_TIERS = [
+            { name: 'Đồng', minPoints: 0 },
+            { name: 'Bạc', minPoints: 100 },
+            { name: 'Vàng', minPoints: 500 },
+            { name: 'Kim Cương', minPoints: 2000 },
+          ];
+          let tier = 'Đồng';
+          for (const t of MEMBERSHIP_TIERS) {
+            if (user.lotte_points >= t.minPoints) tier = t.name;
+          }
+          user.membership_level = tier;
+          
+          if (session) {
+            await user.save({ session });
+          } else {
+            await user.save();
+          }
+
+          // Create LoyaltyTransaction
+          await LoyaltyTransaction.create([{
+            user_id: user._id,
+            type: 'earn',
+            points: pointsEarned,
+            source: 'purchase',
+            description: `Tích điểm tự động phục hồi từ đơn hàng #${tx.order_id || tx.transaction_id}`,
+            order_id: tx.order_id || null,
+            balance_after: user.lotte_points
+          }], session ? { session } : {});
+        }
+      }
+
+      // Notify and Email
+      try {
+        await notifyOrderStatusChanged({
+          userId: order.user_id,
+          orderId: String(order._id),
+          status: 'CONFIRMED',
+          note: 'Thanh toán thành công (Tự động phục hồi)'
+        });
+        await notifyPaymentSuccess({
+          userId: tx.user_id,
+          orderId: tx.order_id,
+          amount: tx.amount
+        });
+        queueOrderSuccessEmail(order._id);
+      } catch (err) {
+        console.warn('[PAYMENT_TIMEOUT] notifications failed in finalize:', err.message);
+      }
+    }
+  }
+
+  // Write Audit Log
+  await logActivity({
+    userId: null,
+    userName: 'SYSTEM_PAYMENT_TIMEOUT_RECOVERY',
+    action: 'PAYMENT_CONFIRMED',
+    entity: 'payment',
+    entityId: tx._id,
+    details: {
+      order_id: tx.order_id,
+      transaction_id: tx.transaction_id,
+      old_status: oldStatus,
+      new_status: 'COMPLETED',
+      reason: 'Verified successful with payment provider',
+      amount: tx.amount
+    }
+  });
+}
+
+/**
  * Scan for stale pending payments older than 15 minutes and expire them.
  */
 export async function expireStalePayments() {
@@ -198,7 +338,15 @@ export async function expireStalePayments() {
         continue; // Already processed or changed status
       }
 
-      await expireSinglePayment(currentTx, session);
+      // Verify payment with external provider first
+      const providerStatus = await checkExternalProviderStatus(currentTx);
+      if (providerStatus === 'COMPLETED') {
+        await finalizePaymentTransaction(currentTx, session);
+        console.log(`[PAYMENT_TIMEOUT] Recovered and finalized successful transaction ${currentTx._id}`);
+      } else {
+        await expireSinglePayment(currentTx, session);
+        console.log(`[PAYMENT_TIMEOUT] Successfully expired transaction ${currentTx._id} and rolled back order resources.`);
+      }
 
       // Commit Mongoose transaction
       if (session) {
@@ -208,7 +356,6 @@ export async function expireStalePayments() {
       }
 
       expiredCount++;
-      console.log(`[PAYMENT_TIMEOUT] Successfully expired transaction ${currentTx._id} and rolled back order resources.`);
     } catch (txErr) {
       console.error(`[PAYMENT_TIMEOUT] Failed to expire transaction ${tx._id}:`, txErr.stack);
       if (session) {

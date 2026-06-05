@@ -84,7 +84,6 @@ const RecipeDetail: React.FC = () => {
   const { currentBranchId, availableProducts } = useBranchData();
 
   const [recipe, setRecipe] = useState<any>(null);
-  const [isCached, setIsCached] = useState<boolean | null>(null);
   const [isSaved, setIsSaved] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
@@ -109,7 +108,6 @@ const RecipeDetail: React.FC = () => {
       });
       if (res.success && res.data) {
         setRecipe(res.data);
-        setIsCached(res.cached ?? false);
         setIsSaved(res.isSaved ?? false);
         setShowForm(false);
         if (res.cached && res.isSaved) {
@@ -135,7 +133,6 @@ const RecipeDetail: React.FC = () => {
     if (!name) {
       setShowForm(true);
       setRecipe(null);
-      setIsCached(null);
       setIsSaved(true);
       return;
     }
@@ -149,7 +146,6 @@ const RecipeDetail: React.FC = () => {
         const res = await recipeService.getRecipeByName(name, currentBranchId || undefined);
         if (res.success && res.data) {
           setRecipe(res.data);
-          setIsCached(res.cached ?? true);
           setIsSaved(true);
           setServings(res.data.servings || 2);
           setShowForm(false);

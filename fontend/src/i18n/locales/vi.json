@@ -293,7 +293,8 @@
     "inventory": "Quản lý kho",
     "orders": "Đơn hàng",
     "customers": "Khách hàng",
-    "coupons": "Khuyến mãi & Coupon",
+    "coupons": "Trung tâm Marketing",
+    "gamification": "Lotte Fun Zone",
     "flashDeals": "Flash Deal",
     "settings": "Cấu hình hệ thống",
     "suppliers": "Nhà cung cấp",
@@ -2122,5 +2123,44 @@
     "saveSuccess": "Lưu công thức thành công!",
     "saveFailed": "Không thể lưu công thức.",
     "savedBadge": "Đã lưu vào danh sách"
+  },
+  "qa": {
+    "title": "Hỏi đáp về sản phẩm ({{count}})",
+    "askPrompt": "Bạn có câu hỏi về sản phẩm này?",
+    "placeholder": "Nhập câu hỏi của bạn (ví dụ: Sản phẩm này phù hợp cho trẻ em từ mấy tuổi?)",
+    "submit": "Gửi câu hỏi",
+    "submitting": "Đang gửi...",
+    "noQuestions": "Chưa có câu hỏi nào cho sản phẩm này.",
+    "sentSuccess": "Đã gửi câu hỏi tự động bằng AI",
+    "sentPending": "Câu hỏi đã được gửi và đang chờ kiểm duyệt phản hồi",
+    "aiResponse": "Trợ lý AI Lotte Mart",
+    "adminResponse": "Lotte Mart",
+    "mixedResponse": "Lotte Mart & AI",
+    "aiModel": "Model AI sử dụng: {{model}}",
+    "pendingReview": "Chờ duyệt",
+    "aiAnswering": "Trợ lý AI đang trả lời...",
+    "waitingAdmin": "Đang chờ quản trị viên phản hồi...",
+    "tooShort": "Câu hỏi cần ít nhất 5 ký tự",
+    "submitError": "Không thể gửi câu hỏi lúc này",
+    "sourceLabel": "Nguồn phản hồi",
+    "aiStatusLabel": "Trạng thái AI",
+    "confidenceScoreLabel": "Độ tự tin",
+    "actionApprove": "Duyệt câu trả lời",
+    "actionHide": "Ẩn câu hỏi",
+    "actionEdit": "Chỉnh sửa câu trả lời",
+    "actionDelete": "Xóa câu hỏi",
+    "saveReply": "Lưu phản hồi",
+    "placeholderReply": "Nhập phản hồi từ admin..."
+  },
+  "admin": {
+    "promotions": {
+      "pageTitle": "Trung tâm Marketing",
+      "breadcrumbSystem": "Hệ thống",
+      "breadcrumbPromo": "Trung tâm Marketing",
+      "tabPromotions": "Khuyến mãi & Coupons",
+      "tabBanners": "Banners",
+      "tabHotDeals": "Hot Deals",
+      "tabPopupAds": "Popup Ads"
+    }
   }
 }

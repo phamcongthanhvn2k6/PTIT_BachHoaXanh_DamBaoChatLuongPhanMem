@@ -676,23 +676,26 @@ const ProductDetail: React.FC = () => {
 
     const content = questionDraft.trim();
     if (content.length < 5) {
-      toast.warning('Câu hỏi cần ít nhất 5 ký tự');
+      toast.warning(t('qa.tooShort', 'Câu hỏi cần ít nhất 5 ký tự'));
       return;
     }
 
     setSubmittingQuestion(true);
     try {
-      const created = await productService.askProductQuestion(String(product.id || product._id), content);
-      if (created?.id) {
-        setQuestions((prev) => [created, ...prev]);
-      } else {
-        const latest = await productService.getProductQuestions(String(product.id || product._id));
-        setQuestions(Array.isArray(latest) ? latest : []);
-      }
+      const res = await productService.askProductQuestion(String(product.id || product._id), content);
+      
+      // Let's refetch to keep states in sync or update directly
+      const latest = await productService.getProductQuestions(String(product.id || product._id));
+      setQuestions(Array.isArray(latest) ? latest : []);
       setQuestionDraft('');
-      toast.success('Đã gửi câu hỏi cho sản phẩm');
-    } catch {
-      toast.error('Không thể gửi câu hỏi lúc này');
+
+      if (res?.status === 'answered') {
+        toast.success(t('qa.sentSuccess', 'Đã trả lời tự động bằng AI'));
+      } else {
+        toast.success(t('qa.sentPending', 'Câu hỏi đã được gửi và đang chờ kiểm duyệt phản hồi'));
+      }
+    } catch (err) {
+      toast.error(t('qa.submitError', 'Không thể gửi câu hỏi lúc này'));
     } finally {
       setSubmittingQuestion(false);
     }
@@ -1576,56 +1579,142 @@ const ProductDetail: React.FC = () => {
 
         {/* Questions Section */}
         <div className="mb-16">
-          <h3 className="text-2xl font-extrabold mb-6">Hỏi đáp về sản phẩm ({questions.length})</h3>
+          <h3 className="text-2xl font-extrabold mb-6">
+            {t('qa.title', { count: questions.length })}
+          </h3>
 
-          <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 mb-5">
-            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Bạn có câu hỏi về sản phẩm này?</p>
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 mb-6 shadow-sm">
+            <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">
+              {t('qa.askPrompt', 'Bạn có câu hỏi về sản phẩm này?')}
+            </p>
             <textarea
               value={questionDraft}
               onChange={(e) => setQuestionDraft(e.target.value)}
-              placeholder="Nhập câu hỏi của bạn (ví dụ: Sản phẩm này phù hợp cho trẻ em từ mấy tuổi?)"
-              className="w-full h-24 p-3 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-primary resize-none"
+              placeholder={t('qa.placeholder', 'Nhập câu hỏi của bạn (ví dụ: Sản phẩm này phù hợp cho trẻ em từ mấy tuổi?)')}
+              className="w-full h-24 p-4 border border-slate-200 dark:border-slate-700 rounded-2xl focus:outline-none focus:border-primary resize-none transition bg-slate-50/50 dark:bg-slate-800/20 focus:bg-white dark:focus:bg-slate-900 text-sm"
             />
             <div className="mt-3 flex justify-end">
               <button
                 onClick={handleAskQuestion}
                 disabled={submittingQuestion}
-                className="px-5 py-2.5 rounded-xl bg-primary text-white font-bold hover:bg-primary/90 transition disabled:opacity-60"
+                className="px-6 py-3 rounded-2xl bg-primary text-white font-black hover:bg-primary/95 hover:shadow-lg hover:shadow-primary/20 active:scale-[0.98] transition disabled:opacity-60 flex items-center gap-2 cursor-pointer text-sm"
               >
-                {submittingQuestion ? 'Đang gửi...' : 'Gửi câu hỏi'}
+                {submittingQuestion ? (
+                  <>
+                    <span className="material-symbols-outlined animate-spin text-lg">progress_activity</span>
+                    {t('qa.submitting', 'Đang gửi...')}
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-lg">send</span>
+                    {t('qa.submit', 'Gửi câu hỏi')}
+                  </>
+                )}
               </button>
             </div>
           </div>
 
           {questions.length === 0 ? (
-            <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-xl text-center text-slate-500">
-              Chưa có câu hỏi nào cho sản phẩm này.
+            <div className="bg-slate-50 dark:bg-slate-800/40 p-8 rounded-3xl text-center text-slate-500 border border-dashed border-slate-200 dark:border-slate-700">
+              <span className="material-symbols-outlined text-4xl text-slate-300 mb-2 block">help_outline</span>
+              {t('qa.noQuestions', 'Chưa có câu hỏi nào cho sản phẩm này.')}
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-6">
               {questions.map((q: any, index: number) => {
                 const answerList = Array.isArray(q.answers)
                   ? q.answers
                   : q.answer?.content
-                    ? [{ content: q.answer.content, created_at: q.answer.answered_at }]
+                    ? [{
+                        content: q.answer.content,
+                        created_at: q.answer.answered_at,
+                        admin_name: q.answer.admin_name,
+                        source: q.answer_source || 'admin',
+                      }]
                     : [];
 
+                // Determine badge color and label for response type
+                let sourceLabel = t('qa.adminResponse', 'Lotte Mart');
+                let sourceBadgeClass = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+                
+                if (q.answer_source === 'ai') {
+                  sourceLabel = t('qa.aiResponse', 'Trợ lý AI Lotte Mart');
+                  sourceBadgeClass = 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary';
+                } else if (q.answer_source === 'mixed') {
+                  sourceLabel = t('qa.mixedResponse', 'Lotte Mart & AI');
+                  sourceBadgeClass = 'bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-300 border border-amber-200/50';
+                }
+
+                const isPending = q.status === 'pending' || q.ai_status === 'pending' || q.ai_status === 'needs_review';
+
                 return (
-                  <div key={q.id || `${q.created_at || 'q'}-${index}`} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
-                    <div className="flex gap-3 mb-3">
-                      <span className="font-bold text-slate-900 dark:text-slate-100">{q.user?.name || q.user_name || 'Khách hàng'}</span>
-                      <span className="text-slate-400 text-sm">{q.created_at ? new Date(q.created_at).toLocaleDateString('vi-VN') : ''}</span>
-                    </div>
-                    <p className="text-slate-700 dark:text-slate-300 font-medium mb-3">Q: {q.content || q.question}</p>
-                    {answerList.map((a: any, i: number) => (
-                      <div key={i} className="pl-4 mt-2 border-l-2 border-primary/20">
-                        <p className="text-sm font-bold text-primary mb-1">
-                          A: Lotte Mart
-                          <span className="text-slate-400 font-normal ml-2">{a.created_at ? new Date(a.created_at).toLocaleDateString() : ''}</span>
-                        </p>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">{a.content}</p>
+                  <div key={q.id || `${q.created_at || 'q'}-${index}`} className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm transition hover:shadow-md">
+                    <div className="flex items-center justify-between gap-4 mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-slate-600 dark:text-slate-300">
+                          {String(q.user_name || 'K').charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <span className="font-extrabold text-sm text-slate-900 dark:text-slate-100 block">
+                            {q.user_name || 'Khách hàng'}
+                          </span>
+                          <span className="text-[11px] text-slate-400 font-bold block">
+                            {q.created_at ? new Date(q.created_at).toLocaleDateString('vi-VN') : ''}
+                          </span>
+                        </div>
                       </div>
-                    ))}
+                      
+                      {isPending && (
+                        <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                          {t('qa.pendingReview', 'Chờ duyệt')}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <p className="text-slate-800 dark:text-slate-200 font-bold mb-4 pl-1 text-sm">
+                      Q: {q.content || q.question}
+                    </p>
+
+                    {answerList.length > 0 ? (
+                      answerList.map((a: any, i: number) => (
+                        <div key={i} className="pl-4 mt-3 border-l-2 border-primary/20 py-1 bg-slate-50/50 dark:bg-slate-800/10 rounded-r-xl pr-4">
+                          <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                            <span className="text-xs font-black text-slate-900 dark:text-slate-100">
+                              {a.admin_name || sourceLabel}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold tracking-wide uppercase ${sourceBadgeClass}`}>
+                              {q.answer_source === 'ai' ? 'AI' : q.answer_source === 'mixed' ? 'Mixed' : 'Admin'}
+                            </span>
+                            <span className="text-[10px] text-slate-400 ml-1 font-bold">
+                              {a.created_at ? new Date(a.created_at).toLocaleDateString('vi-VN') : ''}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-semibold">
+                            {a.content}
+                          </p>
+                          {q.ai_model_used && q.answer_source === 'ai' && (
+                            <span className="text-[9px] font-mono text-slate-400 dark:text-slate-500 block mt-2">
+                              {t('qa.aiModel', { model: q.ai_model_used })}
+                            </span>
+                          )}
+                        </div>
+                      ))
+                    ) : isPending ? (
+                      <div className="pl-4 mt-3 border-l-2 border-amber-400/30 py-2 italic text-xs text-slate-500 flex items-center gap-2">
+                        {q.qa_mode === 'admin' ? (
+                          <>
+                            <span className="material-symbols-outlined text-base text-amber-500">schedule</span>
+                            {t('qa.waitingAdmin', 'Đang chờ quản trị viên phản hồi...')}
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined animate-spin text-base text-amber-500">progress_activity</span>
+                            {t('qa.aiAnswering', 'Trợ lý AI đang trả lời...')}
+                          </>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 );
               })}

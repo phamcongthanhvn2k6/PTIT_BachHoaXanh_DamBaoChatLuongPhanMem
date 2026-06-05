@@ -140,5 +140,6 @@ const start = async () => {
 start().catch((err) => {
   console.error('[startup] Fatal startup error:', err);
 });
+// Trigger watch reload to connect DB
 
 

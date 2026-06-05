@@ -60,6 +60,7 @@ const productSchema = new mongoose.Schema({
   related_product_ids: [{ type: mongoose.Schema.Types.Mixed }],
   frequently_bought_together: [{ type: mongoose.Schema.Types.Mixed }],
   created_by: { type: mongoose.Schema.Types.Mixed, default: null },
+  qa_mode: { type: String, enum: ['ai', 'admin', 'default'], default: 'default' },
   is_deleted: { type: Boolean, default: false }
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
 

@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
-import { EventPost } from '../models/EventPost.js';
-import { EventComment } from '../models/Event.js';
+import { EventPost, EventComment } from '../models/EventPost.js';
 import User from '../models/User.js';
 
 const MONGO_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/lottemart';

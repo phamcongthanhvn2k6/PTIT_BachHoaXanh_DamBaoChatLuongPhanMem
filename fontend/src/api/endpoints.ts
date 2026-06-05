@@ -382,6 +382,13 @@ export const endpoints = {
     update: (id: string | number) => `/banners/${id}`,
     delete: (id: string | number) => `/banners/${id}`,
   },
+  popupAds: {
+    list: '/popup-ads',
+    detail: (id: string | number) => `/popup-ads/${id}`,
+    create: '/popup-ads',
+    update: (id: string | number) => `/popup-ads/${id}`,
+    delete: (id: string | number) => `/popup-ads/${id}`,
+  },
   hotDeals: {
     list: '/hot-deals',
     create: '/hot-deals',

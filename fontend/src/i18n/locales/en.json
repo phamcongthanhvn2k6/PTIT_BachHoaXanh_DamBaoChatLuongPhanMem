@@ -293,7 +293,8 @@
     "inventory": "Inventory Management",
     "orders": "Orders",
     "customers": "Customers",
-    "coupons": "Promotions & Coupons",
+    "coupons": "Marketing Center",
+    "gamification": "Lotte Fun Zone",
     "flashDeals": "Flash Deal",
     "settings": "System Settings",
     "suppliers": "Suppliers",
@@ -2122,5 +2123,44 @@
     "saveSuccess": "Recipe saved successfully!",
     "saveFailed": "Failed to save recipe.",
     "savedBadge": "Saved to list"
+  },
+  "qa": {
+    "title": "Product Q&A ({{count}})",
+    "askPrompt": "Do you have a question about this product?",
+    "placeholder": "Enter your question (e.g., Is this product suitable for kids?)",
+    "submit": "Ask Question",
+    "submitting": "Sending...",
+    "noQuestions": "No questions yet for this product.",
+    "sentSuccess": "Answered automatically by AI",
+    "sentPending": "Question submitted and is pending moderation",
+    "aiResponse": "Lotte Mart AI Assistant",
+    "adminResponse": "Lotte Mart Support",
+    "mixedResponse": "Lotte Mart & AI",
+    "aiModel": "AI Model used: {{model}}",
+    "pendingReview": "Pending Approval",
+    "aiAnswering": "AI Assistant is answering...",
+    "waitingAdmin": "Awaiting administrator response...",
+    "tooShort": "Question must be at least 5 characters long",
+    "submitError": "Cannot submit question at this time",
+    "sourceLabel": "Response Source",
+    "aiStatusLabel": "AI Status",
+    "confidenceScoreLabel": "Confidence Score",
+    "actionApprove": "Approve Answer",
+    "actionHide": "Hide Question",
+    "actionEdit": "Edit Answer",
+    "actionDelete": "Delete Question",
+    "saveReply": "Save Response",
+    "placeholderReply": "Enter response from admin..."
+  },
+  "admin": {
+    "promotions": {
+      "pageTitle": "Marketing Center",
+      "breadcrumbSystem": "System",
+      "breadcrumbPromo": "Marketing Center",
+      "tabPromotions": "Promotions & Coupons",
+      "tabBanners": "Banners",
+      "tabHotDeals": "Hot Deals",
+      "tabPopupAds": "Popup Ads"
+    }
   }
 }

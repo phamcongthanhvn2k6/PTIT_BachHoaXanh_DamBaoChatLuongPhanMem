@@ -4,6 +4,7 @@ import Promotion from '../models/Promotion.js';
 import { Coupon } from '../models/Coupon.js';
 import ProductQuestion from '../models/ProductQuestion.js';
 import Order from '../models/Order.js';
+import SearchHistory from '../models/SearchHistory.js';
 import mongoose from 'mongoose';
 import { paginateMeta } from '../utils/helpers.js';
 import { syncHotDealsForProductId } from '../services/hotDealIntegrityService.js';
@@ -11,6 +12,8 @@ import { slugify, buildProductSlug, extractIdFromSlug, generateShortCode } from 
 import { resolveEffectivePrice, resolveProductPricing } from '../services/pricingResolverService.js';
 import { HotDeal } from '../models/Misc.js';
 import { buildProductAISummary, isProductAISummaryReady } from '../services/aiSummaryService.js';
+import { generateAiAnswer } from '../services/qaAiService.js';
+
 
 
 const parseBranchId = (id) => {
@@ -106,8 +109,18 @@ const normalizeQuestion = (questionDoc) => {
         admin_name: q.answer.admin_name || 'Lotte Mart',
       }]
       : [],
+    answer_source: q.answer_source || 'admin',
+    ai_model_used: q.ai_model_used || '',
+    ai_status: q.ai_status || 'pending',
+    confidence_score: q.confidence_score ?? 1.0,
+    reviewed_at: q.reviewed_at || null,
+    reviewed_by: q.reviewed_by || null,
+    moderated_flag: q.moderated_flag ?? false,
+    qa_mode: q.qa_mode || 'ai',
+    ai_attempt_count: q.ai_attempt_count || 0,
   };
 };
+
 
 // GET /api/products
 export const list = async (req, res) => {
@@ -305,9 +318,20 @@ export const list = async (req, res) => {
 export const search = async (req, res) => {
   req.query.search = req.query.q || req.query.search || '';
 
-  // Clone response to intercept — if $text returns 0 results, retry with $regex
   const originalJson = res.json.bind(res);
   const searchTerm = String(req.query.search || '').trim();
+
+  // If user is authenticated, asynchronously save search query to DB
+  if (req.userId && searchTerm) {
+    try {
+      await SearchHistory.create({
+        user_id: req.userId,
+        query: searchTerm
+      });
+    } catch (err) {
+      console.warn('[SearchHistory] Failed to log user search:', err.message);
+    }
+  }
 
   // If search term is very short (< 2 chars), skip $text entirely and use $regex
   if (searchTerm && searchTerm.length < 2) {
@@ -688,18 +712,98 @@ export const askQuestion = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Nội dung câu hỏi phải có ít nhất 5 ký tự' });
     }
 
-    const created = await ProductQuestion.create({
+    console.log(`[AI-QA] Question received: "${content}" for product: "${product.name}"`);
+
+    // Resolve Q&A Mode:
+    // 1. Check product override
+    let resolvedQaMode = 'ai'; // Default global fallback
+    if (product.qa_mode && product.qa_mode !== 'default') {
+      resolvedQaMode = product.qa_mode;
+      console.log(`[AI-QA] Product-specific Q&A mode resolved: "${resolvedQaMode}"`);
+    } else {
+      // 2. Check global setting
+      try {
+        const AdminSettingModel = mongoose.models.AdminSetting || mongoose.model('AdminSetting');
+        const globalSetting = await AdminSettingModel.findOne({ key: 'qa_mode' }).lean();
+        if (globalSetting && (globalSetting.value === 'ai' || globalSetting.value === 'admin')) {
+          resolvedQaMode = globalSetting.value;
+          console.log(`[AI-QA] Global Q&A mode resolved: "${resolvedQaMode}"`);
+        }
+      } catch (dbErr) {
+        console.warn('[AI-QA] Error checking global qa_mode setting, falling back to "ai":', dbErr.message);
+      }
+    }
+
+    // Create the question record
+    const questionDoc = new ProductQuestion({
       product_id: product._id,
       user_id: req.userId,
-      user_name: req.user.full_name || req.user.username || 'Khach hang',
+      user_name: req.user.full_name || req.user.username || 'Khách hàng',
       question: content,
       status: 'pending',
+      qa_mode: resolvedQaMode,
+      answer_source: resolvedQaMode === 'ai' ? 'ai' : 'admin',
+      ai_status: resolvedQaMode === 'ai' ? 'pending' : 'needs_review', // if admin, needs review to be answered manually
     });
+
+    if (resolvedQaMode === 'ai') {
+      // Auto-generate AI response in real-time
+      try {
+        const aiResult = await generateAiAnswer(product, content);
+        
+        questionDoc.answer_source = 'ai';
+        questionDoc.ai_model_used = aiResult.model;
+        questionDoc.ai_status = aiResult.needs_review ? 'needs_review' : 'answered';
+        questionDoc.confidence_score = aiResult.confidence_score;
+        
+        // If AI feels highly confident and does not need review, make it answered immediately
+        if (!aiResult.needs_review && aiResult.confidence_score >= 0.6) {
+          questionDoc.status = 'answered';
+          questionDoc.answer = {
+            content: aiResult.answer,
+            admin_id: null,
+            admin_name: 'Trợ lý AI Lotte Mart',
+            answered_at: new Date(),
+          };
+          console.log(`[AI-QA] Question marked answered. Model: "${aiResult.model}" | Conf: ${aiResult.confidence_score}`);
+        } else {
+          // Needs review, save answer content but keep status as pending
+          questionDoc.status = 'pending';
+          questionDoc.answer = {
+            content: aiResult.answer,
+            admin_id: null,
+            admin_name: 'Trợ lý AI Lotte Mart (Chờ duyệt)',
+            answered_at: new Date(),
+          };
+          console.log(`[AI-QA] Question saved as pending review. Model: "${aiResult.model}"`);
+        }
+      } catch (aiErr) {
+        console.error('[askQuestion] AI auto-answering error:', aiErr);
+        questionDoc.answer_source = 'ai';
+        questionDoc.ai_status = 'rejected';
+        questionDoc.status = 'pending';
+      }
+    } else {
+      console.log(`[AI-QA] AI Mode is OFF. Storing question for manual admin response.`);
+      questionDoc.status = 'pending';
+      questionDoc.answer_source = 'admin';
+      questionDoc.answer = {
+        content: '',
+        admin_id: null,
+        admin_name: '',
+        answered_at: null,
+      };
+    }
+
+    await questionDoc.save();
+    console.log(`[AI-QA] Answer saved. Document ID: ${questionDoc._id}`);
 
     return res.status(201).json({
       success: true,
-      data: normalizeQuestion(created),
-      message: 'Đã gửi câu hỏi, Lotte Mart sẽ phản hồi sớm',
+      data: normalizeQuestion(questionDoc),
+      message: questionDoc.status === 'answered'
+        ? 'Đã trả lời tự động bằng AI'
+        : 'Câu hỏi đã được gửi và đang chờ kiểm duyệt phản hồi',
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -719,13 +823,28 @@ export const replyQuestion = async (req, res) => {
       return res.status(400).json({ success: false, message: 'answer content is required' });
     }
 
+    const originalContent = question.answer?.content || '';
+    
     question.answer = {
       content,
       admin_id: req.userId,
       admin_name: req.user?.full_name || req.user?.username || 'Lotte Mart',
       answered_at: new Date(),
     };
+    
+    // If the answer content was changed by admin, update source
+    if (question.answer_source === 'ai' && originalContent !== content) {
+      question.answer_source = 'mixed';
+    } else if (!question.answer_source) {
+      question.answer_source = 'admin';
+    }
+
     question.status = 'answered';
+    question.ai_status = 'answered';
+    question.moderated_flag = true;
+    question.reviewed_at = new Date();
+    question.reviewed_by = req.userId;
+
     await question.save();
 
     return res.json({

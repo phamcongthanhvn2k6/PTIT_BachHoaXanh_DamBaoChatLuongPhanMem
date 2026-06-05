@@ -36,7 +36,12 @@ const NUTRITION_DICTIONARY = {
   'nuoc tuong': { calories: 53, protein: 5.5, fat: 0.6, carbs: 6, fiber: 0.8 },
   'nuoc mam': { calories: 35, protein: 5, fat: 0, carbs: 3, fiber: 0 },
   'mi goi': { calories: 350, protein: 7, fat: 13, carbs: 51, fiber: 2.5 },
-  'mi hao hao': { calories: 350, protein: 7, fat: 13, carbs: 51, fiber: 2.5 }
+  'mi hao hao': { calories: 350, protein: 7, fat: 13, carbs: 51, fiber: 2.5 },
+  'nep': { calories: 360, protein: 7, fat: 1, carbs: 80, fiber: 1.2 },
+  'duong': { calories: 387, protein: 0, fat: 0, carbs: 100, fiber: 0 },
+  'dau xanh': { calories: 347, protein: 23, fat: 1.2, carbs: 62, fiber: 16 },
+  'cui dua': { calories: 354, protein: 3.3, fat: 33, carbs: 15, fiber: 9 },
+  'buoi': { calories: 38, protein: 0.8, fat: 0, carbs: 9.6, fiber: 1 }
 };
 
 const parseQuantityInGrams = (qtyStr, unitStr) => {
@@ -153,7 +158,36 @@ const DISH_FALLBACKS = {
   ]},
   'pho-bo': { title: 'Phở Bò', desc: 'Phở bò Hà Nội với nước dùng xương bò hầm trong nhiều giờ, thơm ngọt đậm đà cùng bánh phở mềm.', ingredients: [
     { name: 'Xương bò', quantity: '1', unit: 'kg', note: 'Rửa sạch' }, { name: 'Thịt bò tái', quantity: '300', unit: 'g', note: 'Thái lát mỏng' }, { name: 'Bánh phở tươi', quantity: '400', unit: 'g', note: '' }, { name: 'Hành tây', quantity: '1', unit: 'củ', note: 'Nướng thơm' }, { name: 'Gừng', quantity: '1', unit: 'nhánh', note: 'Nướng thơm' }, { name: 'Quế', quantity: '1', unit: 'thanh', note: '' }, { name: 'Hồi', quantity: '3', unit: 'cánh', note: '' }, { name: 'Nước mắm', quantity: '2', unit: 'thìa canh', note: '' }
-  ]}
+  ]},
+  'banh-in': { 
+    title: 'Bánh In', 
+    desc: 'Bánh in là món bánh cổ truyền Sông nước & Cố đô Huế dẻo mịn từ bột nếp chín, ngọt bùi từ nhân đậu xanh sên kỹ và thoảng nhẹ hương hoa bưởi quý phái.', 
+    ingredients: [
+      { name: 'Bột nếp chín (bột bánh in)', quantity: '200', unit: 'g', note: 'Hoặc bột nếp thường rang thơm' }, 
+      { name: 'Đường tinh luyện', quantity: '150', unit: 'g', note: 'Làm nước đường ngọt thanh' }, 
+      { name: 'Đậu xanh không vỏ', quantity: '100', unit: 'g', note: 'Ngâm mềm trước khi nấu' }, 
+      { name: 'Nước hoa bưởi', quantity: '1', unit: 'thìa cà phê', note: 'Tạo hương vị hoa bưởi đặc trưng' }, 
+      { name: 'Nước lọc', quantity: '100', unit: 'ml', note: '' }, 
+      { name: 'Dầu ăn', quantity: '1', unit: 'thìa cà phê', note: 'Sên nhân đậu xanh' }, 
+      { name: 'Muối', quantity: '1/4', unit: 'thìa cà phê', note: '' }
+    ],
+    difficulty: 'Trung bình',
+    prep_time: '15 phút',
+    cook_time: '35 phút',
+    steps: [
+      { step: 1, title: 'Nấu nước đường ngọt thanh', description: 'Cho đường tinh luyện và nước lọc vào nồi nhỏ. Đun lửa vừa và khuấy cho tan hết đường. Tắt bếp, để nguội hoàn toàn rồi trộn nước hoa bưởi vào.', duration: '10 phút' },
+      { step: 2, title: 'Làm nhân đậu xanh sên dẻo', description: 'Đậu xanh không vỏ đem vo sạch, hấp chín mềm rồi tán mịn. Cho vào chảo sên lửa nhỏ cùng chút đường, muối, và dầu ăn cho đến khi đậu kết thành khối dẻo mịn không dính chảo.', duration: '20 phút' },
+      { step: 3, title: 'Trộn bột bánh in', description: 'Rây bột nếp chín vào tô lớn. Rưới từ từ nước đường hoa bưởi nguội vào bột. Dùng tay chà xát nhẹ nhàng để nước đường thấm đều bột nếp, tạo độ ẩm xốp vừa phải.', duration: '15 phút' },
+      { step: 4, title: 'Tạo hình bánh bằng khuôn', description: 'Cho một lớp bột nếp đã ẩm xốp vào khuôn nén nhẹ. Tiếp theo cho một phần nhân đậu xanh sên vào giữa, rồi phủ thêm bột nếp kín khuôn. Dùng nắp ép lực đều để bánh kết dính.', duration: '10 phút' },
+      { step: 5, title: 'Đóng khuôn hoàn thành', description: 'Gõ nhẹ khuôn để lấy bánh ra ngoài. Bánh in chín có màu trắng tinh khôi, hoa văn sắc nét, bảo quản trong hộp kín hoặc thưởng thức cùng trà nóng.', duration: '5 phút' }
+    ],
+    tips: [
+      'Chọn bột bánh in mới để tránh mùi mốc dầu',
+      'Đậu xanh sên phải đủ khô dẻo để bánh không bị chảy xệ',
+      'Nước đường phải thật nguội mới trộn bột để tránh làm bột chín vón cục'
+    ],
+    tags: ['Món ngọt', 'Bánh truyền thống', 'Ẩm thực Huế', 'Món chay']
+  }
 };
 
 const buildStructuredFallback = (dishName, servings) => {
@@ -173,18 +207,25 @@ const buildStructuredFallback = (dishName, servings) => {
     { name: 'Ớt tươi', quantity: '1', unit: 'trái', note: 'Tùy chọn' }
   ];
 
+  const prep_time = match?.prep_time || '20 phút';
+  const cook_time = match?.cook_time || '30 phút';
+  const difficulty = match?.difficulty || 'Trung bình';
+
+  const steps = match?.steps || [
+    { step: 1, title: 'Sơ chế nguyên liệu', description: `Rửa sạch và cắt thái tất cả nguyên liệu cho món ${title}. Hành tím và tỏi bằm nhỏ, ớt thái lát.`, duration: '10 phút' },
+    { step: 2, title: 'Ướp gia vị', description: `Ướp nguyên liệu chính với nước mắm, đường, tiêu và hành tỏi bằm trong ít nhất 15 phút cho thấm đều.`, duration: '15 phút' },
+    { step: 3, title: 'Phi thơm hành tỏi', description: 'Đun nóng dầu ăn trong chảo hoặc nồi, phi thơm hành tím và tỏi bằm cho đến khi vàng đều và tỏa mùi thơm.', duration: '3 phút' },
+    { step: 4, title: 'Chế biến chính', description: `Cho nguyên liệu đã ướp vào nồi, đảo đều trên lửa vừa. Thêm nước vừa đủ, đậy nắp và nấu cho đến khi chín mềm.`, duration: '20 phút' },
+    { step: 5, title: 'Hoàn thành và trình bày', description: `Nêm nếm lại gia vị cho vừa khẩu vị. Múc ${title} ra đĩa, rắc tiêu và hành lá, dùng nóng với cơm trắng.`, duration: '5 phút' }
+  ];
+
+  const tips = match?.tips || ['Nêm nếm gia vị từ từ để đạt vị vừa ăn', 'Dùng nóng với cơm trắng để ngon nhất', 'Có thể điều chỉnh lượng ớt theo khẩu vị'];
+  const tags = match?.tags || ['Món Việt', 'Bữa cơm gia đình', 'Truyền thống'];
+
   return {
-    title, description: desc, prep_time: '20 phút', cook_time: '30 phút', difficulty: 'Trung bình',
+    title, description: desc, prep_time, cook_time, difficulty,
     ingredients, servings, ai_generated: false, source_type: 'fallback',
-    steps: [
-      { step: 1, title: 'Sơ chế nguyên liệu', description: `Rửa sạch và cắt thái tất cả nguyên liệu cho món ${title}. Hành tím và tỏi bằm nhỏ, ớt thái lát.`, duration: '10 phút' },
-      { step: 2, title: 'Ướp gia vị', description: `Ướp nguyên liệu chính với nước mắm, đường, tiêu và hành tỏi bằm trong ít nhất 15 phút cho thấm đều.`, duration: '15 phút' },
-      { step: 3, title: 'Phi thơm hành tỏi', description: 'Đun nóng dầu ăn trong chảo hoặc nồi, phi thơm hành tím và tỏi bằm cho đến khi vàng đều và tỏa mùi thơm.', duration: '3 phút' },
-      { step: 4, title: 'Chế biến chính', description: `Cho nguyên liệu đã ướp vào nồi, đảo đều trên lửa vừa. Thêm nước vừa đủ, đậy nắp và nấu cho đến khi chín mềm.`, duration: '20 phút' },
-      { step: 5, title: 'Hoàn thành và trình bày', description: `Nêm nếm lại gia vị cho vừa khẩu vị. Múc ${title} ra đĩa, rắc tiêu và hành lá, dùng nóng với cơm trắng.`, duration: '5 phút' }
-    ],
-    tips: ['Nêm nếm gia vị từ từ để đạt vị vừa ăn', 'Dùng nóng với cơm trắng để ngon nhất', 'Có thể điều chỉnh lượng ớt theo khẩu vị'],
-    tags: ['Món Việt', 'Bữa cơm gia đình', 'Truyền thống'],
+    steps, tips, tags,
     nutrition: calculateLocalNutrition(ingredients, servings)
   };
 };
@@ -202,7 +243,8 @@ QUY TẮC BẮT BUỘC:
 - title PHẢI giữ nguyên tên món mà người dùng yêu cầu, viết hoa chữ cái đầu (VD: "Gà Kho", "Phở Bò", "Bún Chả"). KHÔNG được thêm nguyên liệu phụ vào tên trừ khi người dùng yêu cầu.
 - Mỗi nguyên liệu (ingredient) phải có tên cụ thể, rõ ràng (VD: "Đùi gà" thay vì "Gà", "Nước mắm Phú Quốc" thay vì "Gia vị"). KHÔNG dùng tên chung chung như "Nguyên liệu chính" hay "Gia vị các loại".
 - Mỗi bước nấu (step) phải mô tả chi tiết kỹ thuật nấu cụ thể cho món này, KHÔNG dùng câu chung chung.
-- Giá trị dinh dưỡng phải thực tế và lớn hơn 0.`;
+- Giá trị dinh dưỡng phải thực tế và lớn hơn 0.
+- PHÂN BIỆT RÕ MÓN NGỌT VÀ MÓN MẶN: Nếu món ăn là đồ ngọt, bánh ngọt truyền thống hoặc chè (VD: "Bánh In", "Bánh Dẻo", "Bánh Cốm", "Bánh Phu Thê", "Chè đậu xanh"), TUYỆT ĐỐI KHÔNG sử dụng các nguyên liệu mặn như: nước mắm, nước tương, hạt nêm, bột ngọt, tiêu đen, tỏi, hành tím phi, hành lá, ớt, thịt gà, thịt heo, thịt bò. Các nguyên liệu ngọt phải kết hợp cùng nước đường, nước hoa bưởi, nước lọc hoặc cốt dừa, không dùng dầu mỡ phi hành tỏi chiên xào.`;
 
   const userPrompt = `Tạo công thức nấu ăn hoàn chỉnh cho:
 Tên món: ${dishName}
@@ -214,8 +256,8 @@ YÊU CẦU JSON:
 2. description: Mô tả hấp dẫn ≥20 từ về nguồn gốc và đặc trưng món ăn
 3. prep_time, cook_time: thời gian thực tế (VD: "15 phút")
 4. difficulty: "Dễ" | "Trung bình" | "Khó"
-5. ingredients: ≥8 nguyên liệu CỤ THỂ, mỗi cái có name (tên rõ ràng như "Đùi gà bỏ xương", "Hành tím"), quantity, unit, note
-6. steps: ≥5 bước nấu CHI TIẾT cho đúng món này, mỗi bước có step, title, description (≥40 ký tự mô tả kỹ thuật cụ thể), duration
+5. ingredients: ≥8 nguyên liệu CỤ THỂ, mỗi cái có name (tên rõ ràng như "Bột nếp chín", "Nước hoa bưởi"), quantity, unit, note. KHÔNG sử dụng gia vị món mặn hay phi tỏi ớt cho bánh ngọt/chè.
+6. steps: ≥5 bước nấu CHI TIẾT cho đúng món này, mỗi bước có step, title, description (≥40 ký tự mô tả kỹ thuật cụ thể cho món này), duration.
 7. tips: ≥3 mẹo thực tế
 8. tags: từ khóa liên quan
 9. nutrition: calories, protein, fat, carbs, fiber - tính thực tế cho mỗi phần ăn, tất cả >0
@@ -248,6 +290,22 @@ Trả về JSON hợp lệ theo schema.`;
           parsed.nutrition = calculateLocalNutrition(parsed.ingredients, servings);
         }
       }
+
+      // Safeguard sweet recipes from accidental savory hallucinations
+      const sweetKeywords = ['banh-in', 'banh-deo', 'banh-troi', 'banh-chay', 'che-', 'banh-phu-the', 'banh-xu-xe', 'banh-com'];
+      const normalizedTitle = normalizeStr(parsed.title);
+      const isSweet = sweetKeywords.some(kw => normalizedTitle.includes(kw));
+      if (isSweet) {
+        const savoryKeywords = ['nước mắm', 'nuoc mam', 'tỏi', 'toi', 'hành', 'hanh', 'tiêu', 'tieu', 'ớt', 'ot', 'thịt gà', 'thịt heo', 'thịt bò'];
+        const hasSavory = parsed.ingredients.some(ing => 
+          savoryKeywords.some(sk => ing.name.toLowerCase().includes(sk))
+        );
+        if (hasSavory) {
+          console.warn(`[aiService] Sweet recipe "${parsed.title}" contained savory ingredients. Rejecting and falling back to structured definition.`);
+          return buildStructuredFallback(dishName, servings);
+        }
+      }
+
       return parsed;
     }
     throw new Error('AI generation returned empty result');

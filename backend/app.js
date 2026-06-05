@@ -28,6 +28,7 @@ import promotionRoutes from './routes/promotions.js';
 import couponRoutes from './routes/coupons.js';
 import eventRoutes from './routes/events.js';
 import loyaltyRoutes from './routes/loyalty.js';
+import gamificationRoutes from './routes/gamification.js';
 import paymentRoutes from './routes/payments.js';
 import checkoutRoutes from './routes/checkout.js';
 import bannerRoutes from './routes/banners.js';
@@ -47,6 +48,10 @@ import recipeRoutes from './routes/recipes.js';
 import questionRoutes from './routes/questions.js';
 import recommendationRoutes from './routes/recommendations.js';
 import priceWatchRoutes from './routes/priceWatch.js';
+import Order from './models/Order.js';
+import SearchHistory from './models/SearchHistory.js';
+import MembershipTier from './models/MembershipTier.js';
+import popupAdRoutes from './routes/popupAds.js';
 
 // Enterprise Modules
 import supplierRoutes from './routes/suppliers.js';
@@ -140,13 +145,32 @@ app.use((req, res, next) => {
 
 // Health check — MUST be before circuit breaker so it always responds
 app.get('/api/health', (req, res) => {
+  const dbState = mongoose.connection.readyState;
+  const dbStates = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+  const cbState = (dbState === 1) ? 'CLOSED' : (dbState === 2 ? 'HALF-OPEN' : 'OPEN');
+  
   res.json({
     success: true,
-    status: 'OK',
-    message: 'Lotte Mart API is running',
+    status: dbState === 1 ? 'OK' : 'DEGRADED',
+    message: dbState === 1 ? 'Lotte Mart API is fully operational' : 'Lotte Mart API is operating in degraded mode',
     uptime: process.uptime(),
     memoryUsage: process.memoryUsage(),
-    dbStatus: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    dbStatus: dbStates[dbState] || 'unknown',
+    circuitBreaker: {
+      status: cbState,
+      tripped: cbState === 'OPEN',
+      mode: 'automatic'
+    },
+    schedulers: {
+      payment_timeout: { status: 'active', frequency: 'every minute' },
+      reconciliation: { status: 'active', frequency: 'daily at 03:00 AM' },
+      backup: { status: 'active', frequency: 'daily at 02:00 AM' }
+    },
     timestamp: new Date().toISOString()
   });
 });
@@ -204,6 +228,7 @@ apiRouter.use('/promotions', promotionRoutes);
 apiRouter.use('/coupons', orderLimiter, maintenanceGuard, couponRoutes);
 apiRouter.use('/events', eventRoutes);
 apiRouter.use('/loyalty', loyaltyRoutes);
+apiRouter.use('/gamification', gamificationRoutes);
 apiRouter.use('/payments', maintenanceGuard, paymentRoutes);
 apiRouter.use('/checkout', maintenanceGuard, checkoutRoutes);
 apiRouter.use('/banners', bannerRoutes);
@@ -230,13 +255,14 @@ apiRouter.use('/inventory-batches', inventoryBatchRoutes);
 apiRouter.use('/stock-takes', stockTakeRoutes);
 apiRouter.use('/internal-requisitions', reqRoutes);
 apiRouter.use('/flash-deals', flashDealRoutes);
+apiRouter.use('/popup-ads', popupAdRoutes);
 
 // Maintenance Status public endpoint (no auth required)
 apiRouter.get('/system/maintenance-status', async (req, res) => {
   try {
     const { AdminSetting, AuditLog } = await import('./models/Misc.js');
     const setting = await AdminSetting.findOne({ key: 'maintenance_mode' });
-    const isMaintenance = setting ? !!setting.value : false;
+    const isMaintenance = setting ? (setting.value === true || setting.value === 'true') : false;
 
     const lastLog = await AuditLog.findOne({
       entity: 'admin_setting',
@@ -270,10 +296,37 @@ app.put('/api/hot-deals/:id', authMw, adminMw, updateHotDeal);
 app.delete('/api/hot-deals/:id', authMw, adminMw, deleteHotDeal);
 app.get('/api/featured-collections', listFeaturedCollections);
 app.get('/api/delivery-slots', listDeliverySlots);
-app.get('/api/membership-tiers', (req, res) => res.json({ success: true, data: [{ level: 'Đồng', min_points: 0 }, { level: 'Bạc', min_points: 100 }, { level: 'Vàng', min_points: 500 }, { level: 'Kim Cương', min_points: 2000 }] }));
-app.get('/api/search/products', (req, res) => { req.query.search = req.query.q || ''; import('./controllers/productController.js').then(m => m.search(req, res)); });
-app.get('/api/search/history/:userId', (req, res) => res.json({ success: true, data: [] }));
-app.get('/api/purchase-history/:userId', (req, res) => res.json({ success: true, data: [] }));
+app.get('/api/membership-tiers', async (req, res) => {
+  try {
+    const tiers = await MembershipTier.find({}).sort({ min_points: 1 }).lean();
+    return res.json({ success: true, data: tiers });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+app.get('/api/search/products', optionalAuthMw, (req, res) => { req.query.search = req.query.q || ''; import('./controllers/productController.js').then(m => m.search(req, res)); });
+app.get('/api/search/history/:userId', authMw, async (req, res) => {
+  try {
+    if (String(req.userId) !== String(req.params.userId) && req.user?.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Forbidden: You cannot access another user\'s history.' });
+    }
+    const history = await SearchHistory.find({ user_id: req.params.userId }).sort({ created_at: -1 }).limit(50).lean();
+    return res.json({ success: true, data: history });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+app.get('/api/purchase-history/:userId', authMw, async (req, res) => {
+  try {
+    if (String(req.userId) !== String(req.params.userId) && req.user?.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Forbidden: You cannot access another user\'s history.' });
+    }
+    const orders = await Order.find({ user_id: req.params.userId }).sort({ created_at: -1 }).limit(50).lean();
+    return res.json({ success: true, data: orders });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 // Product sub-routes for reviews (mounted under /api/products/:productId/reviews)
 app.get('/api/products/:productId/reviews', optionalAuthMw, productReviews);

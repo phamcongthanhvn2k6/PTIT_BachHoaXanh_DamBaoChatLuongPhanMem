@@ -65,7 +65,7 @@ const verifySmtpConnection = async () => {
   return smtpVerifyPromise;
 };
 
-const sendMail = async ({ to, subject, text, html }) => {
+export const sendMail = async ({ to, subject, text, html }) => {
   const cfg = requireEmailConfig();
   const transporter = getTransporter();
 
@@ -214,6 +214,7 @@ export const sendPriceDropEmail = async ({ email, username, productName, oldPric
 };
 
 export default {
+  sendMail,
   sendOtpEmail,
   sendOrderSuccessEmail,
   sendNotificationSettingsEmail,

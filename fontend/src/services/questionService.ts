@@ -16,5 +16,13 @@ export const questionService = {
   reply: async (productId: string, questionId: string, content: string) => {
     const res = await httpClient.post(`/products/${productId}/questions/${questionId}/reply`, { content });
     return res.data;
+  },
+  getSettings: async () => {
+    const res = await httpClient.get('/questions/settings');
+    return res.data;
+  },
+  updateSettings: async (payload: any) => {
+    const res = await httpClient.put('/questions/settings', payload);
+    return res.data;
   }
 };

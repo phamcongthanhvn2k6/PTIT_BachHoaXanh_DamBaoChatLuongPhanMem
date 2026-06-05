@@ -17,7 +17,7 @@ export async function checkMaintenanceMode() {
   if (Date.now() - lastCheck > CACHE_TTL) {
     try {
       const setting = await AdminSetting.findOne({ key: 'maintenance_mode' });
-      isMaintenance = setting ? !!setting.value : false;
+      isMaintenance = setting ? (setting.value === true || setting.value === 'true') : false;
       lastCheck = Date.now();
     } catch (err) {
       console.error('[MaintenanceGuard] Error reading settings:', err);

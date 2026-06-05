@@ -10,12 +10,14 @@ import { hotDealService } from '../../services/hotDealService';
 import { productService } from '../../services/productService';
 import { branchService } from '../../services/branchService';
 import { categoryService } from '../../services/categoryService';
+import { popupAdService } from '../../services/popupAdService';
+
 import PromotionImageDisplay from '../../components/PromotionImageFallback/PromotionImageFallback';
 
 type GenericItem = {
   id: string | number;
   _id?: string;
-  item_type: 'promotion' | 'coupon' | 'banner' | 'hot_deal';
+  item_type: 'promotion' | 'coupon' | 'banner' | 'hot_deal' | 'popup_ad';
   title: string;
   code?: string;
   is_active: boolean;
@@ -68,6 +70,14 @@ type GenericItem = {
   text_color?: string;
   overlay_color?: string;
   text_shadow?: boolean;
+  subtitle?: string;
+  cta_text?: string;
+  cta_link?: string;
+  campaign_type?: string;
+  campaign_ref?: string;
+  target_branch?: string;
+  target_audience?: string;
+  show_once_per_day?: boolean;
 };
 
 type PromotionRecordType = 'promotion' | 'coupon';
@@ -140,6 +150,15 @@ type BasicAssetFormState = {
   text_color: string;
   overlay_color: string;
   text_shadow: boolean;
+  subtitle: string;
+  description: string;
+  cta_text: string;
+  campaign_type: 'url' | 'coupon' | 'promotion' | 'none';
+  campaign_ref: string;
+  target_branch: string;
+  target_audience: 'all' | 'member' | 'new';
+  priority: string;
+  show_once_per_day: boolean;
 };
 
 const toItemId = (item: any): string => String(item?.id || item?._id || '');
@@ -241,6 +260,15 @@ const defaultBasicForm = (): BasicAssetFormState => ({
   text_color: '#ffffff',
   overlay_color: 'rgba(0,0,0,0.3)',
   text_shadow: true,
+  subtitle: '',
+  description: '',
+  cta_text: '',
+  campaign_type: 'none',
+  campaign_ref: '',
+  target_branch: 'all',
+  target_audience: 'all',
+  priority: '0',
+  show_once_per_day: true,
 });
 
 const normalizePromotionItemToForm = (item?: GenericItem | null): PromotionFormState => {
@@ -290,7 +318,7 @@ const normalizePromotionItemToForm = (item?: GenericItem | null): PromotionFormS
   };
 };
 
-const normalizeBasicItemToForm = (item?: GenericItem | null, activeTab: 'banners' | 'hot_deals' = 'banners'): BasicAssetFormState => {
+const normalizeBasicItemToForm = (item?: GenericItem | null, activeTab: 'banners' | 'hot_deals' | 'popup_ads' = 'banners'): BasicAssetFormState => {
   if (!item) {
     return {
       ...defaultBasicForm(),
@@ -303,7 +331,7 @@ const normalizeBasicItemToForm = (item?: GenericItem | null, activeTab: 'banners
     title: item.title || '',
     imageUrl: image,
     imagePreview: image,
-    link: item.link || '',
+    link: item.link || (item as any).cta_link || '',
     position: item.position || 'home',
     product_id: item.product_id ? String(item.product_id) : '',
     branch_product_id: (item as any).branch_product_id ? String((item as any).branch_product_id) : '',
@@ -318,6 +346,15 @@ const normalizeBasicItemToForm = (item?: GenericItem | null, activeTab: 'banners
     text_color: item.text_color || '#ffffff',
     overlay_color: item.overlay_color || 'rgba(0,0,0,0.3)',
     text_shadow: item.text_shadow !== false,
+    subtitle: (item as any).subtitle || '',
+    description: item.description || '',
+    cta_text: (item as any).cta_text || '',
+    campaign_type: (item as any).campaign_type || 'none',
+    campaign_ref: (item as any).campaign_ref || '',
+    target_branch: (item as any).target_branch || 'all',
+    target_audience: (item as any).target_audience || 'all',
+    priority: String(item.priority ?? 0),
+    show_once_per_day: (item as any).show_once_per_day !== false,
   };
 };
 
@@ -519,9 +556,10 @@ const CampaignPreview: React.FC<{
 
 const AdminCouponsManagement: React.FC = () => {
   const { t } = useTranslation();
-  const createLabel = (tab: 'promotions' | 'banners' | 'hot_deals') => {
+  const createLabel = (tab: 'promotions' | 'banners' | 'hot_deals' | 'popup_ads') => {
     if (tab === 'banners') return t('admin.promotions.banner', 'Banner');
     if (tab === 'hot_deals') return t('admin.promotions.hotDeal', 'Hot Deal');
+    if (tab === 'popup_ads') return t('admin.promotions.popupAd', 'Popup Ad');
     return t('admin.promotions.promoCoupon', 'Khuyến mãi/Coupon');
   };
   const getActiveLabel = (isActive: boolean) => (
@@ -529,12 +567,13 @@ const AdminCouponsManagement: React.FC = () => {
       ? t('admin.promotions.statusActiveLabel', 'Hoạt động / Active')
       : t('admin.promotions.statusInactiveLabel', 'Không hoạt động / Inactive')
   );
-  const [activeTab, setActiveTab] = useState<'promotions' | 'banners' | 'hot_deals'>('promotions');
+  const [activeTab, setActiveTab] = useState<'promotions' | 'banners' | 'hot_deals' | 'popup_ads'>('promotions');
 
   const [promotions, setPromotions] = useState<any[]>([]);
   const [coupons, setCoupons] = useState<any[]>([]);
   const [banners, setBanners] = useState<any[]>([]);
   const [hotDeals, setHotDeals] = useState<any[]>([]);
+  const [popupAds, setPopupAds] = useState<any[]>([]);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -602,16 +641,18 @@ const AdminCouponsManagement: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [pRes, cRes, bRes, hRes] = await Promise.all([
+      const [pRes, cRes, bRes, hRes, paRes] = await Promise.all([
         promotionService.getPromotions(),
         couponService.getCoupons(),
         bannerService.getBanners({ includeInactive: true }),
         hotDealService.getHotDeals({ includeInactive: true }),
+        popupAdService.getPopupAds({ includeInactive: true }),
       ]);
       setPromotions((pRes as any)?.data || (pRes as any) || []);
       setCoupons((cRes as any)?.data || (cRes as any) || []);
       setBanners((bRes as any)?.data || (bRes as any) || []);
       setHotDeals((hRes as any)?.data || (hRes as any) || []);
+      setPopupAds((paRes as any)?.data || (paRes as any) || []);
     } catch (err: any) {
       toast.error(err?.message || 'Lỗi tải dữ liệu');
     } finally {
@@ -782,6 +823,7 @@ const AdminCouponsManagement: React.FC = () => {
       }
 
       setBasicForm({
+        ...defaultBasicForm(),
         title: draft.title || '',
         imageUrl: draft.imageUrl || '',
         imagePreview: draft.imageUrl || '',
@@ -831,6 +873,16 @@ const AdminCouponsManagement: React.FC = () => {
       }));
     }
 
+    if (activeTab === 'popup_ads') {
+      list = (popupAds || []).map((pa: any) => ({
+        ...pa,
+        id: toItemId(pa),
+        item_type: 'popup_ad' as const,
+        title: pa.title || `Popup Ad #${String(toItemId(pa)).slice(-6)}`,
+        is_active: pa.status === 'active',
+      }));
+    }
+
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
       list = list.filter((item) => `${item.title || ''} ${item.code || ''}`.toLowerCase().includes(q));
@@ -863,7 +915,7 @@ const AdminCouponsManagement: React.FC = () => {
     });
 
     return list;
-  }, [activeTab, promotions, coupons, banners, hotDeals, searchTerm, filterStatus, sortOrder]);
+  }, [activeTab, promotions, coupons, banners, hotDeals, popupAds, searchTerm, filterStatus, sortOrder]);
 
   const paginatedList = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -897,7 +949,7 @@ const AdminCouponsManagement: React.FC = () => {
     if (activeTab === 'promotions') {
       setPromotionForm(normalizePromotionItemToForm(item));
     } else {
-      setBasicForm(normalizeBasicItemToForm(item, activeTab === 'banners' ? 'banners' : 'hot_deals'));
+      setBasicForm(normalizeBasicItemToForm(item, activeTab));
     }
 
     setShowFormModal(true);
@@ -1183,6 +1235,43 @@ const AdminCouponsManagement: React.FC = () => {
       const finalImage = await uploadImageIfNeeded();
       const editingId = toItemId(editingItem);
 
+      if (activeTab === 'popup_ads') {
+        if (!basicForm.title.trim()) {
+          toast.error('Popup Ad cần tiêu đề');
+          return;
+        }
+        if (!finalImage) {
+          toast.error('Popup Ad cần hình ảnh');
+          return;
+        }
+
+        const payload = {
+          title: basicForm.title.trim(),
+          subtitle: basicForm.subtitle.trim(),
+          description: basicForm.description.trim(),
+          image_url: finalImage,
+          cta_text: basicForm.cta_text.trim(),
+          cta_link: basicForm.link.trim(),
+          campaign_type: basicForm.campaign_type,
+          campaign_ref: basicForm.campaign_ref || undefined,
+          target_branch: basicForm.target_branch,
+          target_audience: basicForm.target_audience,
+          start_date: toIsoOrNull(basicForm.start_date),
+          end_date: toIsoOrNull(basicForm.end_date),
+          priority: Number(basicForm.priority || 0),
+          status: basicForm.is_active ? 'active' : 'paused',
+          show_once_per_day: basicForm.show_once_per_day,
+        };
+
+        if (editingItem && editingItem.item_type === 'popup_ad') {
+          await popupAdService.updatePopupAd(editingId, payload);
+          toast.success(t('admin.promotions.saveSuccess', 'Lưu thành công'));
+        } else {
+          await popupAdService.createPopupAd(payload);
+          toast.success(t('admin.promotions.saveSuccess', 'Lưu thành công'));
+        }
+      }
+
       if (activeTab === 'banners') {
         if (!basicForm.title.trim()) {
           toast.error(t('admin.promotions.bannerTitleRequired', 'Banner cần tiêu đề'));
@@ -1337,8 +1426,10 @@ const AdminCouponsManagement: React.FC = () => {
         await couponService.updateCoupon(itemId, { is_active: nextStatus });
       } else if (item.item_type === 'banner') {
         await bannerService.updateBanner(itemId, { is_active: nextStatus });
-      } else {
+      } else if (item.item_type === 'hot_deal') {
         await hotDealService.updateHotDeal(itemId, { is_active: nextStatus });
+      } else if (item.item_type === 'popup_ad') {
+        await popupAdService.updatePopupAd(itemId, { status: nextStatus ? 'active' : 'inactive' });
       }
 
       toast.success(t('admin.promotions.toggleSuccess', { action: nextStatus ? t('admin.promotions.toggleEnabled', 'bật') : t('admin.promotions.toggleDisabled', 'tắt'), defaultValue: 'Đã {{action}} thành công' }));
@@ -1356,6 +1447,7 @@ const AdminCouponsManagement: React.FC = () => {
       if (deleteConfirm.type === 'coupon') await couponService.deleteCoupon(String(deleteConfirm.id));
       if (deleteConfirm.type === 'banner') await bannerService.deleteBanner(String(deleteConfirm.id));
       if (deleteConfirm.type === 'hot_deal') await hotDealService.deleteHotDeal(String(deleteConfirm.id));
+      if (deleteConfirm.type === 'popup_ad') await popupAdService.deletePopupAd(String(deleteConfirm.id));
 
       setDeleteConfirm({ show: false, id: null, type: '' });
       toast.success(t('admin.promotions.deleteSuccess', 'Xóa thành công'));
@@ -1877,7 +1969,208 @@ const AdminCouponsManagement: React.FC = () => {
         </div>
       </div>
 
-      {activeTab === 'banners' ? (
+      {activeTab === 'popup_ads' ? (
+        <>
+          <div>
+            <label className="block text-sm font-bold mb-2">Phụ đề (Subtitle)</label>
+            <input
+              value={basicForm.subtitle}
+              onChange={(e) => setBasicField('subtitle', e.target.value)}
+              className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
+              placeholder="Ví dụ: Chỉ hôm nay"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold mb-2">Mô tả chi tiết</label>
+            <textarea
+              value={basicForm.description}
+              onChange={(e) => setBasicField('description', e.target.value)}
+              rows={3}
+              className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl resize-none"
+              placeholder="Nhập mô tả cho popup..."
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold mb-2">Nút hành động (CTA Text)</label>
+            <input
+              value={basicForm.cta_text}
+              onChange={(e) => setBasicField('cta_text', e.target.value)}
+              className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
+              placeholder="Ví dụ: Nhận Ngay"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold mb-2">Đường dẫn hành động (CTA Link)</label>
+            <input
+              value={basicForm.link}
+              onChange={(e) => setBasicField('link', e.target.value)}
+              className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
+              placeholder="Ví dụ: /promotions, https://lottemart.vn..."
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">Loại chiến dịch liên kết</label>
+              <select
+                value={basicForm.campaign_type}
+                onChange={(e) => {
+                  setBasicField('campaign_type', e.target.value as any);
+                  setBasicField('campaign_ref', '');
+                }}
+                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
+              >
+                <option value="none">Không liên kết</option>
+                <option value="url">Đường dẫn URL tự do</option>
+                <option value="coupon">Mã Coupon</option>
+                <option value="promotion">Chiến dịch Khuyến mãi</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Đối tượng mục tiêu</label>
+              <select
+                value={basicForm.target_audience}
+                onChange={(e) => setBasicField('target_audience', e.target.value as any)}
+                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
+              >
+                <option value="all">Tất cả khách hàng</option>
+                <option value="member">Thành viên đã đăng nhập</option>
+                <option value="new">Khách hàng mới (chưa có đơn)</option>
+              </select>
+            </div>
+          </div>
+
+          {basicForm.campaign_type === 'promotion' && (
+            <div>
+              <label className="block text-sm font-bold mb-2">Chọn chiến dịch Promotion liên kết *</label>
+              <select
+                value={basicForm.campaign_ref}
+                onChange={(e) => setBasicField('campaign_ref', e.target.value)}
+                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
+              >
+                <option value="">-- Chọn Promotion --</option>
+                {promotions.map((p: any) => (
+                  <option key={toItemId(p)} value={toItemId(p)}>{p.title || `Promotion #${toItemId(p).slice(-6)}`}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {basicForm.campaign_type === 'coupon' && (
+            <div>
+              <label className="block text-sm font-bold mb-2">Chọn mã Coupon liên kết *</label>
+              <select
+                value={basicForm.campaign_ref}
+                onChange={(e) => setBasicField('campaign_ref', e.target.value)}
+                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
+              >
+                <option value="">-- Chọn Coupon --</option>
+                {coupons.map((c: any) => (
+                  <option key={toItemId(c)} value={toItemId(c)}>{c.code || c.title || `Coupon #${toItemId(c).slice(-6)}`}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">Chi nhánh áp dụng</label>
+              <select
+                value={basicForm.target_branch}
+                onChange={(e) => setBasicField('target_branch', e.target.value)}
+                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
+              >
+                <option value="all">Tất cả chi nhánh</option>
+                {branchOptions.map(opt => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">Độ ưu tiên (Priority)</label>
+              <input
+                type="number"
+                value={basicForm.priority}
+                onChange={(e) => setBasicField('priority', e.target.value)}
+                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
+                placeholder="0"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-bold mb-2">{t('admin.promotions.startDate', 'Bắt đầu')}</label>
+              <input
+                type="datetime-local"
+                value={basicForm.start_date}
+                onChange={(e) => setBasicField('start_date', e.target.value)}
+                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2">{t('admin.promotions.endDate', 'Kết thúc')}</label>
+              <input
+                type="datetime-local"
+                value={basicForm.end_date}
+                onChange={(e) => setBasicField('end_date', e.target.value)}
+                className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
+              />
+            </div>
+          </div>
+
+          <label className="inline-flex items-center gap-2 text-sm font-semibold cursor-pointer">
+            <input
+              type="checkbox"
+              checked={basicForm.show_once_per_day}
+              onChange={(e) => setBasicField('show_once_per_day', e.target.checked)}
+              className="h-4 w-4 rounded text-red-600 focus:ring-red-500"
+            />
+            Chỉ hiển thị 1 lần mỗi ngày cho mỗi người dùng (show_once_per_day)
+          </label>
+
+          <div className="mt-4 p-4 rounded-xl border border-slate-200 bg-surface-container flex flex-col gap-4">
+            <h4 className="font-bold text-sm">Xem trước giao diện Storefront Popup Modal</h4>
+            <div className="flex justify-center bg-slate-800 p-8 rounded-xl relative overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden border border-slate-100 flex flex-col relative">
+                <button type="button" className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors">
+                  <span className="material-symbols-outlined text-sm font-black">close</span>
+                </button>
+                {basicForm.imagePreview || basicForm.imageUrl ? (
+                  <img src={basicForm.imagePreview || basicForm.imageUrl} alt="Popup preview" className="w-full h-48 object-cover" />
+                ) : (
+                  <div className="w-full h-48 bg-slate-100 flex items-center justify-center text-slate-400">
+                    <span className="material-symbols-outlined text-4xl">image</span>
+                  </div>
+                )}
+                <div className="p-6 flex-1 flex flex-col justify-between text-center">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800 tracking-tight">{basicForm.title || 'Tiêu Đề Quảng Cáo'}</h3>
+                    {basicForm.subtitle && (
+                      <h4 className="text-sm font-medium text-red-500 mt-1">{basicForm.subtitle}</h4>
+                    )}
+                    <p className="text-xs text-slate-500 mt-3 leading-relaxed">{basicForm.description || 'Mô tả nội dung chương trình khuyến mãi và các chính sách áp dụng...'}</p>
+                  </div>
+                  <div className="mt-6">
+                    <button type="button" className="w-full py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-sm transition-all shadow-md shadow-red-500/20">
+                      {basicForm.cta_text || 'Xem Chi Tiết'}
+                    </button>
+                    <div className="mt-4 flex items-center justify-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                      <input type="checkbox" checked={basicForm.show_once_per_day} disabled className="rounded border-slate-300 text-red-600 focus:ring-red-500" />
+                      <span>Không hiển thị lại hôm nay</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      ) : activeTab === 'banners' ? (
         <>
           <div>
             <label className="block text-sm font-bold mb-2">{t('admin.promotions.link', 'Đường dẫn')}</label>
@@ -2306,9 +2599,9 @@ const AdminCouponsManagement: React.FC = () => {
       <main className="max-w-7xl mx-auto">
         <section className="mb-8 flex justify-between items-end">
           <div>
-            <h1 className="text-3xl font-black tracking-tight mb-2">{t('admin.promotions.pageTitle', 'Quản lý Khuyến Mãi')}</h1>
+            <h1 className="text-3xl font-black tracking-tight mb-2">{t('admin.promotions.pageTitle', 'Trung tâm Marketing')}</h1>
             <nav className="flex gap-2 text-sm font-medium text-secondary">
-              <span>{t('admin.promotions.breadcrumbSystem', 'Hệ thống')}</span><span>/</span><span className="text-primary">{t('admin.promotions.breadcrumbPromo', 'Khuyến mãi & Marketing')}</span>
+              <span>{t('admin.promotions.breadcrumbSystem', 'Hệ thống')}</span><span>/</span><span className="text-primary">{t('admin.promotions.breadcrumbPromo', 'Trung tâm Marketing')}</span>
             </nav>
           </div>
           <button
@@ -2324,12 +2617,13 @@ const AdminCouponsManagement: React.FC = () => {
           {[
             { id: 'promotions', label: t('admin.promotions.tabPromotions', 'Khuyến mãi / Coupons') },
             { id: 'banners', label: t('admin.promotions.tabBanners', 'Banners') },
-            { id: 'hot_deals', label: t('admin.promotions.tabHotDeals', 'Gi?m gi? nhanh') }
+            { id: 'hot_deals', label: t('admin.promotions.tabHotDeals', 'Giảm giá nhanh') },
+            { id: 'popup_ads', label: t('admin.promotions.tabPopupAds', 'Popup Ads') }
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => {
-                setActiveTab(tab.id as 'promotions' | 'banners' | 'hot_deals');
+                setActiveTab(tab.id as 'promotions' | 'banners' | 'hot_deals' | 'popup_ads');
                 setCurrentPage(1);
               }}
               className={`pb-4 px-2 font-bold text-sm border-b-2 transition-colors ${
@@ -2447,16 +2741,39 @@ const AdminCouponsManagement: React.FC = () => {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
-                          <span className="text-xs font-bold text-on-surface uppercase">
-                            {item.type || item.position || (item.original_price ? t('admin.promotions.discountPriceLabel', 'Gi? gi?m') : t('admin.promotions.notAvailable', 'Kh?ng c?'))}
-                          </span>
-                          <span className="text-sm text-secondary font-medium mt-0.5">
-                            {(item.discount_value || item.value) ? `${item.discount_value || item.value} ${(item.type === 'percentage' || item.type === 'percent') ? '%' : 'VND'}` : ''}
-                            {item.deal_price ? `${Number(item.deal_price).toLocaleString()}đ (Từ ${Number(item.original_price || 0).toLocaleString()}đ)` : ''}
-                            {item.link ? `${t('admin.promotions.linkLabel', 'Liên kết')}: ${item.link}` : ''}
-                          </span>
-                          {total > 0 && (
-                            <span className="text-xs text-secondary mt-1">{t('admin.promotions.remainingLabel', 'Còn lại')}: {Number(remaining || 0).toLocaleString('vi-VN')} / {Number(total).toLocaleString('vi-VN')}</span>
+                          {item.item_type === 'popup_ad' ? (
+                            <>
+                              <span className="text-xs font-bold text-red-600 uppercase">
+                                Popup Ad {item.priority ? `(Độ ưu tiên: ${item.priority})` : ''}
+                              </span>
+                              <span className="text-xs text-slate-800 font-medium mt-1">
+                                <strong>Đối tượng:</strong> {item.target_audience === 'all' ? 'Tất cả' : item.target_audience === 'member' ? 'Thành viên' : 'Khách mới'}
+                              </span>
+                              {(item.cta_link || item.link) && (
+                                <span className="text-xs text-slate-500 mt-0.5 truncate max-w-xs">
+                                  <strong>CTA:</strong> {item.cta_text || 'Xem chi tiết'} ({item.cta_link || item.link})
+                                </span>
+                              )}
+                              {item.campaign_type && item.campaign_type !== 'none' && (
+                                <span className="text-[10px] text-green-600 font-bold mt-1">
+                                  Liên kết: {item.campaign_type.toUpperCase()} ({item.campaign_ref || 'N/A'})
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-xs font-bold text-on-surface uppercase">
+                                {item.type || item.position || (item.original_price ? t('admin.promotions.discountPriceLabel', 'Giá giảm') : t('admin.promotions.notAvailable', 'Không có'))}
+                              </span>
+                              <span className="text-sm text-secondary font-medium mt-0.5">
+                                {(item.discount_value || item.value) ? `${item.discount_value || item.value} ${(item.type === 'percentage' || item.type === 'percent') ? '%' : 'VND'}` : ''}
+                                {item.deal_price ? `${Number(item.deal_price).toLocaleString()}đ (Từ ${Number(item.original_price || 0).toLocaleString()}đ)` : ''}
+                                {item.link ? `${t('admin.promotions.linkLabel', 'Liên kết')}: ${item.link}` : ''}
+                              </span>
+                              {total > 0 && (
+                                <span className="text-xs text-secondary mt-1">{t('admin.promotions.remainingLabel', 'Còn lại')}: {Number(remaining || 0).toLocaleString('vi-VN')} / {Number(total).toLocaleString('vi-VN')}</span>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
@@ -2624,6 +2941,45 @@ const AdminCouponsManagement: React.FC = () => {
                       <span className="block text-xs uppercase font-black">{t('admin.promotions.hotDealPrice', 'Giá Hot Deal')}</span>
                       <span className="text-2xl font-black">{detailItem.deal_price?.toLocaleString()}đ</span>
                     </div>
+                  </div>
+                )}
+
+                {detailItem.item_type === 'popup_ad' && (
+                  <div className="p-4 bg-red-50 text-red-900 rounded-xl border border-red-100 space-y-2">
+                    {detailItem.subtitle && (
+                      <div>
+                        <span className="block text-xs uppercase font-bold opacity-75">Phụ đề</span>
+                        <span className="text-sm font-semibold">{detailItem.subtitle}</span>
+                      </div>
+                    )}
+                    <div>
+                      <span className="block text-xs uppercase font-bold opacity-75">Đối tượng mục tiêu</span>
+                      <span className="text-sm font-semibold">
+                        {detailItem.target_audience === 'all' ? 'Tất cả khách hàng' : detailItem.target_audience === 'member' ? 'Thành viên đã đăng nhập' : 'Khách hàng mới'}
+                      </span>
+                    </div>
+                    {detailItem.cta_text && (
+                      <div>
+                        <span className="block text-xs uppercase font-bold opacity-75">Nút hành động (CTA)</span>
+                        <span className="text-sm font-semibold">{detailItem.cta_text}</span>
+                      </div>
+                    )}
+                    {detailItem.campaign_type && detailItem.campaign_type !== 'none' && (
+                      <div>
+                        <span className="block text-xs uppercase font-bold opacity-75">Liên kết chiến dịch</span>
+                        <span className="text-sm font-semibold uppercase">{detailItem.campaign_type} ({detailItem.campaign_ref || 'N/A'})</span>
+                      </div>
+                    )}
+                    <div>
+                      <span className="block text-xs uppercase font-bold opacity-75">Tần suất hiển thị</span>
+                      <span className="text-sm font-semibold">{detailItem.show_once_per_day ? '1 lần/ngày' : 'Mỗi lượt truy cập'}</span>
+                    </div>
+                    {detailItem.priority !== undefined && (
+                      <div>
+                        <span className="block text-xs uppercase font-bold opacity-75">Độ ưu tiên (Priority)</span>
+                        <span className="text-sm font-semibold">{detailItem.priority}</span>
+                      </div>
+                    )}
                   </div>
                 )}
 

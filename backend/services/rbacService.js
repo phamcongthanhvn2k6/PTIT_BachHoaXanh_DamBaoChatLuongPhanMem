@@ -189,6 +189,48 @@ export async function ensureRbacSeed() {
       await existing.save();
     }
   }
+
+  // Ensure default admin user admin@lottemart.vn exists and is active
+  try {
+    const mongoose = (await import('mongoose')).default;
+    const User = mongoose.model('User');
+    const adminEmail = 'admin@lottemart.vn';
+    const adminUser = await User.findOne({ email: adminEmail });
+    if (!adminUser) {
+      const bcrypt = await import('bcryptjs');
+      const hash = await bcrypt.default.hash('Admin@123', 10);
+      await User.create({
+        username: 'admin',
+        full_name: 'Admin Lotte',
+        email: adminEmail,
+        password_hash: hash,
+        role_id: 1,
+        is_active: true,
+        email_verified: true,
+        status: 'ACTIVE',
+        membership_level: 'Kim Cương',
+        lotte_points: 9999,
+      });
+      console.info(`[RBAC] Default admin ${adminEmail} created successfully.`);
+    } else {
+      let changed = false;
+      if (!adminUser.is_active || adminUser.status !== 'ACTIVE') {
+        adminUser.is_active = true;
+        adminUser.status = 'ACTIVE';
+        changed = true;
+      }
+      if (adminUser.role_id !== 1) {
+        adminUser.role_id = 1;
+        changed = true;
+      }
+      if (changed) {
+        await adminUser.save();
+        console.info(`[RBAC] Default admin ${adminEmail} status and role synchronized.`);
+      }
+    }
+  } catch (adminErr) {
+    console.error('[RBAC] Failed to ensure default admin exists:', adminErr.message);
+  }
 }
 
 export async function getRoleByUser(user) {
