@@ -7,7 +7,7 @@ import { reorderFromOrder } from '../slices/cartSlice';
 import { toast } from '../components/Toast/toastEvent';
 import { dataService } from '../services/dataService';
 import { supportService } from '../services/supportService';
-import { resolveImageUrl } from '../utils/imageUrl';
+import { resolveImageUrl, getBackendHost } from '../utils/imageUrl';
 import { reviewService } from '../services/reviewService';
 import httpClient from '../api/httpClient';
 import { getProductUrl } from '../utils/productUrl';
@@ -218,7 +218,7 @@ const OrderDetail: React.FC = () => {
     try {
        const res = await dataService.getInvoice(String(order.id));
        if (res.success && res.url) {
-           window.open(`http://localhost:3001${res.url}`, '_blank');
+           window.open(`${getBackendHost()}${res.url}`, '_blank');
        } else {
            throw new Error(res.message || "Tạo hóa đơn thất bại");
        }

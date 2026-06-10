@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from '../../components/Toast/toastEvent';
 import { useAppSelector } from '../../store';
 import { productService } from '../../services/productService';
+import { getBackendHost } from '../../utils/imageUrl';
 
 type SortOption = 'newest' | 'stock-low' | 'best-seller' | 'price-high' | 'price-low';
 
@@ -807,7 +808,7 @@ const AdminProductManagement: React.FC = () => {
                 try {
                   setIsProcessing(true);
                   const token = localStorage.getItem('access_token') || sessionStorage.getItem('token');
-                  const res = await fetch('http://localhost:3001/api/promotions/bulk-expiring', {
+                  const res = await fetch(`${getBackendHost()}/api/promotions/bulk-expiring`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
                   });
