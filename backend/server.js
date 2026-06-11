@@ -80,6 +80,7 @@ const start = async () => {
           }
         },
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'Accept-Language', 'X-Language', 'Cache-Control', 'Pragma', 'Expires'],
         credentials: true,
       },
     });

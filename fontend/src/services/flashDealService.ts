@@ -13,10 +13,7 @@ const asObject = (value: any): any => {
   return value;
 };
 
-const noCacheHeaders = {
-  'Cache-Control': 'no-cache',
-  Pragma: 'no-cache',
-};
+const noCacheHeaders = {};
 
 const emitFlashDealRefreshSignal = () => {
   try {

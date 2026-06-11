@@ -43,7 +43,7 @@ export const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept-Language', 'X-Language'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept-Language', 'X-Language', 'Cache-Control', 'Pragma', 'Expires'],
 };
 
 export default () => cors(corsOptions);

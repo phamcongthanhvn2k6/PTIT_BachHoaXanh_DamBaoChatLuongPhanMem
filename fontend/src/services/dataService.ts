@@ -791,10 +791,7 @@ export const dataService = {
     if (options?.forceRefresh) params._ts = Date.now();
     return safeArr(httpClient.get(endpoints.flashDeals.list, {
       params,
-      headers: {
-        'Cache-Control': 'no-cache',
-        Pragma: 'no-cache',
-      },
+      headers: {},
     }));
   },
   getHotDealById: async (id: string | number): Promise<any> => {
@@ -826,10 +823,7 @@ export const dataService = {
 
     return safeArr(httpClient.get(endpoints.flashDeals.list, {
       params,
-      headers: {
-        'Cache-Control': 'no-cache',
-        Pragma: 'no-cache',
-      },
+      headers: {},
     }));
   },
   getFlashDealById: async (id: string | number): Promise<any> => {
