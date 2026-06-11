@@ -223,9 +223,15 @@ export async function ensureRbacSeed() {
         adminUser.role_id = 1;
         changed = true;
       }
+      const bcrypt = await import('bcryptjs');
+      const isCorrect = adminUser.password_hash ? await bcrypt.default.compare('Admin@123', adminUser.password_hash) : false;
+      if (!isCorrect) {
+        adminUser.password_hash = await bcrypt.default.hash('Admin@123', 10);
+        changed = true;
+      }
       if (changed) {
         await adminUser.save();
-        console.info(`[RBAC] Default admin ${adminEmail} status and role synchronized.`);
+        console.info(`[RBAC] Default admin ${adminEmail} status, role, and password synchronized.`);
       }
     }
   } catch (adminErr) {
