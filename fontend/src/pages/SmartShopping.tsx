@@ -168,7 +168,7 @@ const SmartShopping: React.FC = () => {
         unit_price: Number(item?.price || 0),
         quantity: 1,
         product_name: item?.name,
-        product_image: item?.images?.[0] || item?.thumbnail || '',
+        product_image: item?.image || item?.thumbnail || '',
         branchProduct: item,
       })).unwrap();
       toast.success(t('product.addedToCart', { name: item?.name }));
@@ -187,7 +187,7 @@ const SmartShopping: React.FC = () => {
         <Link to={getProductUrl(item)} className="block">
           <div className="aspect-square bg-slate-50 overflow-hidden relative">
             <img
-              src={item?.images?.[0] || item?.thumbnail || 'https://via.placeholder.com/300'}
+              src={item?.image || 'https://via.placeholder.com/300'}
               alt={item?.name}
               className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
             />
@@ -527,7 +527,7 @@ const SmartShopping: React.FC = () => {
 
             <div className="flex gap-4 p-3 bg-slate-50 dark:bg-slate-800 rounded-2xl mb-4">
               <img
-                src={selectedWatchItem.images?.[0] || selectedWatchItem.thumbnail || 'https://via.placeholder.com/300'}
+                src={selectedWatchItem.image || 'https://via.placeholder.com/300'}
                 alt={selectedWatchItem.name}
                 className="w-16 h-16 object-cover rounded-xl"
               />

@@ -52,6 +52,7 @@ import priceWatchRoutes from './routes/priceWatch.js';
 import Order from './models/Order.js';
 import SearchHistory from './models/SearchHistory.js';
 import MembershipTier from './models/MembershipTier.js';
+import { AdminSetting, AuditLog, Banner, HotDeal, FeaturedCollection, DeliverySlot, NotificationTemplate } from './models/Misc.js';
 import popupAdRoutes from './routes/popupAds.js';
 
 // Enterprise Modules

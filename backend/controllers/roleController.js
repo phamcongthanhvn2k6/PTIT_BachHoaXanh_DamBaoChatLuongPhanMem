@@ -41,11 +41,20 @@ export const create = async (req, res) => {
 
     const safePerms = await sanitizePermissions(permissions || []);
 
+    // Auto-assign a numeric role_id if not provided.
+    // System roles use 1-5; custom roles start at 100.
+    let assignedRoleId = Number(role_id) || null;
+    if (!assignedRoleId) {
+      const maxRole = await Role.findOne({ role_id: { $gte: 100 } }).sort({ role_id: -1 }).lean();
+      assignedRoleId = maxRole?.role_id ? maxRole.role_id + 1 : 100;
+    }
+
     const role = await Role.create({
       key,
       name,
       description: description || '',
-      role_id: Number(role_id) || null,
+      role_id: assignedRoleId,
+      level: 30, // custom roles default to 'staff' level
       permissions: safePerms,
       is_system: false,
       is_active: true,
@@ -126,7 +135,7 @@ export const updateUserRole = async (req, res) => {
     const user = await User.findById(user_id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    const oldData = user.toObject();
+    const oldData = user.toPublic ? user.toPublic() : user.toObject();
 
     user.role_key = role.key;
     if (role.role_id) user.role_id = role.role_id;
@@ -139,7 +148,7 @@ export const updateUserRole = async (req, res) => {
       action: 'UPDATE',
       entity: 'user_role',
       entityId: user._id,
-      details: { old_data: oldData, new_data: user.toObject() },
+      details: { old_data: oldData, new_data: user.toPublic ? user.toPublic() : user.toObject() },
       ip: req.ip,
     });
 

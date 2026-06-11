@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppSelector, useAppDispatch } from '../../store';
 import { logout } from '../../slices/authSlice';
+import { resetOrders } from '../../slices/orderSlice';
 import { loadNotifications } from '../../slices/notificationSlice';
 import { selectCurrentBranchItems } from '../../slices/cartSlice';
 
@@ -48,6 +49,7 @@ const HeaderProfile: React.FC = () => {
 
   const handleLogout = () => {
     dispatch(logout());
+    dispatch(resetOrders());
     setIsOpen(false);
     navigate('/');
   };

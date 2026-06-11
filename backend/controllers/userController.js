@@ -17,6 +17,29 @@ const normalizeAndValidatePhone = (phone) => {
   return normalized;
 };
 
+const generateSecurePassword = () => {
+  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const digits = '0123456789';
+  const special = '!@#$%^&*';
+  const allChars = lowercase + uppercase + digits + special;
+  
+  let password = '';
+  // Ensure at least one character from each set to satisfy complexity rules
+  password += lowercase[Math.floor(Math.random() * lowercase.length)];
+  password += uppercase[Math.floor(Math.random() * uppercase.length)];
+  password += digits[Math.floor(Math.random() * digits.length)];
+  password += special[Math.floor(Math.random() * special.length)];
+  
+  // Fill the rest up to 10 characters
+  for (let i = 0; i < 6; i++) {
+    password += allChars[Math.floor(Math.random() * allChars.length)];
+  }
+  
+  // Shuffle the password characters
+  return password.split('').sort(() => 0.5 - Math.random()).join('');
+};
+
 export const me = async (req, res) => {
   try {
     const user = await User.findById(req.userId);
@@ -49,9 +72,16 @@ export const updateMe = async (req, res) => {
 
 export const list = async (req, res) => {
   try {
-    const { page = 1, limit = 100, search, status } = req.query;
+    const { page = 1, limit = 100, search, status, role_type } = req.query;
     const filter = {};
     if (status) filter.status = status;
+    
+    if (role_type === 'staff') {
+      filter.role_id = { $ne: 3 }; // Exclude standard customers
+    } else if (role_type === 'customer') {
+      filter.role_id = 3; // Only standard customers
+    }
+
     if (search) {
       filter.$or = [
         { email: { $regex: search, $options: 'i' } },
@@ -65,14 +95,10 @@ export const list = async (req, res) => {
     }
     const p = Math.max(1, parseInt(page)); const l = Math.min(200, Math.max(1, parseInt(limit)));
     const total = await User.countDocuments(filter);
-    const raw = await User.find(filter).select('-password_hash -refresh_token').sort('-created_at').skip((p - 1) * l).limit(l);
-    // Normalize: map _id → id, include signup_method as provider
-    const data = raw.map(u => {
-      const obj = u.toObject();
-      obj.id = obj._id;
-      if (!obj.provider) obj.provider = obj.signup_method || (obj.googleId ? 'google' : 'email');
-      return obj;
-    });
+    const raw = await User.find(filter).sort('-created_at').skip((p - 1) * l).limit(l);
+    
+    // Normalize and sanitize: strictly map toPublic()
+    const data = raw.map(u => u.toPublic());
     return res.json({ success: true, data, meta: paginateMeta(total, { page: p, limit: l }) });
   } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
 };
@@ -84,25 +110,41 @@ export const detail = async (req, res) => {
     if (!isSelf && !isAdmin) {
       return res.status(403).json({ success: false, message: 'Không thể xem thông tin người dùng khác' });
     }
-    const user = await User.findById(req.params.id).select('-password_hash -refresh_token');
+    const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    const obj = user.toObject(); obj.id = obj._id;
-    if (!obj.provider) obj.provider = obj.signup_method || (obj.googleId ? 'google' : 'email');
-    return res.json({ success: true, data: obj });
+    return res.json({ success: true, data: user.toPublic() });
   } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
 };
 
 export const update = async (req, res) => {
   try {
+    const targetUser = await User.findById(req.params.id);
+    if (!targetUser) return res.status(404).json({ success: false, message: 'User not found' });
+
     const isSelf = String(req.params.id) === String(req.userId);
-    const isAdmin = req.user && [1, 2].includes(Number(req.user.role_id));
-    if (!isSelf && !isAdmin) {
-      return res.status(403).json({ success: false, message: 'Không thể cập nhật người dùng khác' });
+    const requestorIsSuperAdmin = req.user && (Number(req.user.role_id) === 1 || req.user.role_key === 'super_admin');
+    const targetIsStaff = targetUser.role_id !== 3;
+
+    if (!isSelf) {
+      const isAdmin = req.user && [1, 2].includes(Number(req.user.role_id));
+      if (!isAdmin) {
+        return res.status(403).json({ success: false, message: 'Không thể cập nhật người dùng khác' });
+      }
+      if (targetIsStaff && !requestorIsSuperAdmin) {
+        return res.status(403).json({ success: false, message: 'Forbidden: Only super admin can update staff accounts' });
+      }
     }
+
     const updates = { ...req.body };
     if (updates.phone !== undefined) {
       updates.phone = normalizeAndValidatePhone(updates.phone);
     }
+    // Protect role_id / role_key from standard updates endpoint (must use updateRole)
+    delete updates.role_id;
+    delete updates.role_key;
+    delete updates.permissions;
+    delete updates.password_hash;
+
     // Handle employee info explicitly
     if (updates.employee_info) {
       updates['employee_info.employee_code'] = updates.employee_info.employee_code;
@@ -112,10 +154,9 @@ export const update = async (req, res) => {
       delete updates.employee_info;
     }
 
-    const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true }).select('-password_hash -refresh_token');
+    const user = await User.findByIdAndUpdate(req.params.id, updates, { new: true });
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    const obj = user.toObject(); obj.id = obj._id;
-    return res.json({ success: true, data: obj, message: 'Cập nhật thành công' });
+    return res.json({ success: true, data: user.toPublic(), message: 'Cập nhật thành công' });
   } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
 };
 
@@ -123,9 +164,32 @@ export const toggleStatus = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    
+    const targetIsStaff = user.role_id !== 3;
+    const requestorIsSuperAdmin = req.user && (Number(req.user.role_id) === 1 || req.user.role_key === 'super_admin');
+    
+    if (targetIsStaff && !requestorIsSuperAdmin) {
+      return res.status(403).json({ success: false, message: 'Forbidden: Only super admin can toggle staff account status' });
+    }
+
     user.is_active = !user.is_active;
     user.status = user.is_active ? 'ACTIVE' : 'INACTIVE';
     await user.save();
+
+    await logActivity({
+      userId: req.userId,
+      userName: req.user?.full_name || req.user?.username || 'Admin',
+      action: 'STATUS_TOGGLE',
+      entity: 'user',
+      entityId: user._id,
+      details: {
+        target_user: user.email || user.username,
+        is_active: user.is_active,
+        status: user.status
+      },
+      ip: req.ip,
+    });
+
     return res.json({ success: true, data: user.toPublic(), message: `Tài khoản đã ${user.is_active ? 'mở' : 'khóa'}` });
   } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
 };
@@ -134,9 +198,18 @@ export const resetPassword = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-    const newPassword = req.body.newPassword || 'LotteMart@123';
+
+    const targetIsStaff = user.role_id !== 3;
+    const requestorIsSuperAdmin = req.user && (Number(req.user.role_id) === 1 || req.user.role_key === 'super_admin');
+    
+    if (targetIsStaff && !requestorIsSuperAdmin) {
+      return res.status(403).json({ success: false, message: 'Forbidden: Only super admin can reset staff credentials' });
+    }
+
+    // Allow custom password if provided, otherwise generate a secure temporary password
+    const newPassword = req.body.password || generateSecurePassword();
     user.password_hash = newPassword;
-    user.force_password_change = req.body.forceChange !== false; // default true
+    user.force_password_change = true;
     user.password_changed_at = new Date();
     await user.save();
 
@@ -153,7 +226,8 @@ export const resetPassword = async (req, res) => {
       ip: req.ip,
     });
 
-    return res.json({ success: true, message: 'Đặt lại mật khẩu thành công' });
+    // Return the generated temp password once
+    return res.json({ success: true, newPassword, message: 'Đặt lại mật khẩu thành công' });
   } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
 };
 
@@ -162,6 +236,11 @@ export const adjustPoints = async (req, res) => {
     const { points, reason } = req.body;
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    
+    if (user.role_id !== 3) {
+      return res.status(400).json({ success: false, message: 'Không thể điều chỉnh điểm cho tài khoản nhân viên' });
+    }
+
     user.lotte_points = Math.max(0, user.lotte_points + points);
     await user.save();
 
@@ -182,8 +261,17 @@ export const adjustPoints = async (req, res) => {
 
 export const updateMembership = async (req, res) => {
   try {
-    const user = await User.findByIdAndUpdate(req.params.id, { membership_level: req.body.membership_level }, { new: true }).select('-password_hash -refresh_token');
-    return res.json({ success: true, data: user, message: 'Cập nhật hạng thành viên' });
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    if (user.role_id !== 3) {
+      return res.status(400).json({ success: false, message: 'Không thể cập nhật hạng thành viên cho tài khoản nhân viên' });
+    }
+
+    user.membership_level = req.body.membership_level;
+    await user.save();
+
+    return res.json({ success: true, data: user.toPublic(), message: 'Cập nhật hạng thành viên' });
   } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
 };
 
@@ -195,7 +283,6 @@ export const updateSettings = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Không thể cập nhật cài đặt người dùng khác' });
     }
     
-    // Support nested updates from frontend using dot notation to prevent overwriting
     const setQuery = {};
     const changedPrefs = [];
     if (req.body.preferences) {
@@ -211,15 +298,15 @@ export const updateSettings = async (req, res) => {
       for (const key in req.body.settings) setQuery[`settings.${key}`] = req.body.settings[key];
     }
     
-    // Also support root fields if sent directly
     if (req.body.full_name) setQuery.full_name = req.body.full_name;
     if (req.body.phone !== undefined) setQuery.phone = normalizeAndValidatePhone(req.body.phone);
     
     if (Object.keys(setQuery).length === 0) {
-      return res.json({ success: true, data: req.user });
+      const u = await User.findById(req.params.id);
+      return res.json({ success: true, data: u ? u.toPublic() : null });
     }
     
-    const user = await User.findByIdAndUpdate(req.params.id, { $set: setQuery }, { new: true }).select('-password_hash -refresh_token');
+    const user = await User.findByIdAndUpdate(req.params.id, { $set: setQuery }, { new: true });
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     
     if (changedPrefs.length > 0) {
@@ -230,7 +317,7 @@ export const updateSettings = async (req, res) => {
       }
     }
 
-    return res.json({ success: true, data: user });
+    return res.json({ success: true, data: user.toPublic() });
   } catch (err) {
     const statusCode = err.statusCode || 500;
     return res.status(statusCode).json({ success: false, message: err.message });
@@ -239,14 +326,22 @@ export const updateSettings = async (req, res) => {
 
 export const updateRole = async (req, res) => {
   try {
+    const requestorIsSuperAdmin = req.user && (Number(req.user.role_id) === 1 || req.user.role_key === 'super_admin');
+    if (!requestorIsSuperAdmin) {
+      return res.status(403).json({ success: false, message: 'Forbidden: Only super admin can manage user roles' });
+    }
+
     const oldUser = await User.findById(req.params.id);
     if (!oldUser) return res.status(404).json({ success: false, message: 'User not found' });
 
+    const role = await Role.findOne({ key: req.body.role_key || req.body.role, is_active: true });
+    if (!role) return res.status(400).json({ success: false, message: 'Role không hợp lệ hoặc đã bị khóa' });
+
     const user = await User.findByIdAndUpdate(
       req.params.id,
-      { role_id: req.body.role_id, role: req.body.role, role_key: req.body.role_key || req.body.role },
+      { role_id: role.role_id, role_key: role.key, permissions: role.permissions || [] },
       { new: true }
-    ).select('-password_hash -refresh_token');
+    );
 
     try {
       await logActivity({
@@ -268,27 +363,55 @@ export const updateRole = async (req, res) => {
       console.error('[Audit] Failed to log role change:', auditErr.message);
     }
 
-    return res.json({ success: true, data: user, message: 'Cập nhật phân quyền thành công' });
+    return res.json({ success: true, data: user.toPublic(), message: 'Cập nhật phân quyền thành công' });
   } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
 };
 
 export const remove = async (req, res) => {
   try {
-    const user = await User.findByIdAndDelete(req.params.id);
+    const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const targetIsStaff = user.role_id !== 3;
+    const requestorIsSuperAdmin = req.user && (Number(req.user.role_id) === 1 || req.user.role_key === 'super_admin');
+
+    if (targetIsStaff && !requestorIsSuperAdmin) {
+      return res.status(403).json({ success: false, message: 'Forbidden: Only super admin can delete staff accounts' });
+    }
+
+    await User.findByIdAndDelete(req.params.id);
+
+    await logActivity({
+      userId: req.userId,
+      userName: req.user?.full_name || req.user?.username || 'Admin',
+      action: 'DELETE_USER',
+      entity: 'user',
+      entityId: user._id,
+      details: {
+        target_user: user.email || user.username,
+        role_key: user.role_key
+      },
+      ip: req.ip,
+    });
+
     return res.json({ success: true, message: 'Đã xóa người dùng thành công' });
   } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
 };
 
 export const createStaff = async (req, res) => {
   try {
+    const requestorIsSuperAdmin = req.user && (Number(req.user.role_id) === 1 || req.user.role_key === 'super_admin');
+    if (!requestorIsSuperAdmin) {
+      return res.status(403).json({ success: false, message: 'Forbidden: Only super admin can create staff accounts' });
+    }
+
     const {
-      username, email, phone, full_name, password,
+      username, email, phone, full_name,
       role_key, branch_id, status, employee_code, department, notes, work_type
     } = req.body;
 
-    if (!username || !password || !role_key) {
-      return res.status(400).json({ success: false, message: 'Thiếu thông tin bắt buộc (username, password, role)' });
+    if (!username || !role_key) {
+      return res.status(400).json({ success: false, message: 'Thiếu thông tin bắt buộc (username, role)' });
     }
 
     // Check duplicates
@@ -310,12 +433,15 @@ export const createStaff = async (req, res) => {
     const role = await Role.findOne({ key: role_key, is_active: true });
     if (!role) return res.status(400).json({ success: false, message: 'Role không hợp lệ hoặc đã bị khóa' });
 
+    // Use custom password if provided, otherwise generate a secure temporary password
+    const tempPassword = req.body.password || generateSecurePassword();
+
     const newUser = new User({
       username,
       email: email || undefined,
       phone: normalizedPhone || '',
       full_name: full_name || '',
-      password_hash: password, // Will be hashed by pre-save
+      password_hash: tempPassword, // Will be hashed by pre-save
       role_key: role.key,
       role_id: role.role_id,
       permissions: role.permissions || [],
@@ -348,7 +474,7 @@ export const createStaff = async (req, res) => {
     });
 
     const publicUser = newUser.toPublic();
-    return res.status(201).json({ success: true, data: publicUser, message: 'Tạo tài khoản nhân viên thành công' });
+    return res.status(201).json({ success: true, data: publicUser, tempPassword, message: 'Tạo tài khoản nhân viên thành công' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

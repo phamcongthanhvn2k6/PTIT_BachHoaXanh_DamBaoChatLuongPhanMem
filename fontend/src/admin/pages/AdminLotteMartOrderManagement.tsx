@@ -3,8 +3,10 @@ import { dataService } from "../../services/dataService";
 import type { Order } from "../../types";
 import { toast } from "../../components/Toast/toastEvent";
 import { useAppSelector } from '../../store';
+import { useTranslation } from "react-i18next";
 
 const AdminLotteMartOrderManagement: React.FC = () => {
+  const { t } = useTranslation();
   // State for data
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -73,10 +75,10 @@ const AdminLotteMartOrderManagement: React.FC = () => {
     if (searchTerm.trim()) {
       const lower = searchTerm.toLowerCase();
       result = result.filter(o => 
-        o.id.toLowerCase().includes(lower) || 
-        o.order_address?.receiver_name.toLowerCase().includes(lower) ||
-        o.order_address?.phone.includes(lower) ||
-        o.tracking_number?.toLowerCase().includes(lower)
+        (o.id || '').toLowerCase().includes(lower) || 
+        (o.order_address?.receiver_name || '').toLowerCase().includes(lower) ||
+        (o.order_address?.phone || '').includes(lower) ||
+        (o.tracking_number || '').toLowerCase().includes(lower)
       );
     }
 
@@ -137,7 +139,7 @@ const AdminLotteMartOrderManagement: React.FC = () => {
     orders.forEach(o => {
       if (o.status === "PENDING" || o.status === "CONFIRMED") pendingCount++;
       if (o.status === "SHIPPING" || o.status === "PROCESSING") shippingCount++;
-      if (o.created_at.startsWith(today) && o.status !== "CANCELLED") {
+      if ((o.created_at || '').startsWith(today) && o.status !== "CANCELLED") {
         todayRevenue += o.total_amount;
       }
     });
@@ -294,24 +296,66 @@ const AdminLotteMartOrderManagement: React.FC = () => {
 
 
   const getStatusBadge = (status: string) => {
+    const statusText = t('orderStatuses.' + status, status) as string;
     switch(status) {
       case "PENDING":
-        return <span className="px-3 py-1 bg-amber-50 text-amber-700 text-[10px] font-black uppercase rounded-full ring-1 ring-amber-200 whitespace-nowrap inline-flex items-center justify-center min-w-max">Chờ xác nhận</span>;
+        return <span className="px-3 py-1 bg-amber-50 text-amber-700 text-[10px] font-black uppercase rounded-full ring-1 ring-amber-200 whitespace-nowrap inline-flex items-center justify-center min-w-max">{statusText}</span>;
       case "CONFIRMED":
-        return <span className="px-3 py-1 bg-blue-50 text-blue-700 text-[10px] font-black uppercase rounded-full ring-1 ring-blue-200 whitespace-nowrap inline-flex items-center justify-center min-w-max">Đã xác nhận</span>;
+        return <span className="px-3 py-1 bg-blue-50 text-blue-700 text-[10px] font-black uppercase rounded-full ring-1 ring-blue-200 whitespace-nowrap inline-flex items-center justify-center min-w-max">{statusText}</span>;
       case "PROCESSING":
-        return <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase rounded-full ring-1 ring-indigo-200 whitespace-nowrap inline-flex items-center justify-center min-w-max">Đang chuẩn bị</span>;
+        return <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-[10px] font-black uppercase rounded-full ring-1 ring-indigo-200 whitespace-nowrap inline-flex items-center justify-center min-w-max">{statusText}</span>;
       case "SHIPPING":
-        return <span className="px-3 py-1 bg-cyan-50 text-cyan-700 text-[10px] font-black uppercase rounded-full ring-1 ring-cyan-200 whitespace-nowrap inline-flex items-center justify-center min-w-max">Đang giao</span>;
+        return <span className="px-3 py-1 bg-cyan-50 text-cyan-700 text-[10px] font-black uppercase rounded-full ring-1 ring-cyan-200 whitespace-nowrap inline-flex items-center justify-center min-w-max">{statusText}</span>;
       case "DELIVERED":
-        return <span className="px-3 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase rounded-full ring-1 ring-emerald-200 whitespace-nowrap inline-flex items-center justify-center min-w-max">Hoàn thành</span>;
+        return <span className="px-3 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase rounded-full ring-1 ring-emerald-200 whitespace-nowrap inline-flex items-center justify-center min-w-max">{statusText}</span>;
       case "CANCELLED":
-        return <span className="px-3 py-1 bg-red-50 text-red-700 text-[10px] font-black uppercase rounded-full ring-1 ring-red-200 whitespace-nowrap inline-flex items-center justify-center min-w-max">Đã hủy</span>;
+        return <span className="px-3 py-1 bg-red-50 text-red-700 text-[10px] font-black uppercase rounded-full ring-1 ring-red-200 whitespace-nowrap inline-flex items-center justify-center min-w-max">{statusText}</span>;
       case "RETURNED":
-        return <span className="px-3 py-1 bg-purple-50 text-purple-700 text-[10px] font-black uppercase rounded-full ring-1 ring-purple-200 whitespace-nowrap inline-flex items-center justify-center min-w-max">Đã hoàn tiền/trả hàng</span>;
+        return <span className="px-3 py-1 bg-purple-50 text-purple-700 text-[10px] font-black uppercase rounded-full ring-1 ring-purple-200 whitespace-nowrap inline-flex items-center justify-center min-w-max">{statusText}</span>;
       default:
-        return <span className="px-3 py-1 bg-slate-50 text-slate-700 text-[10px] font-black uppercase rounded-full ring-1 ring-slate-200 whitespace-nowrap inline-flex items-center justify-center min-w-max">{status}</span>;
+        return <span className="px-3 py-1 bg-slate-50 text-slate-700 text-[10px] font-black uppercase rounded-full ring-1 ring-slate-200 whitespace-nowrap inline-flex items-center justify-center min-w-max">{statusText}</span>;
     }
+  };
+
+  const getPaymentBadge = (order: Order) => {
+    const method = (order.payment?.method || order.payment_method || 'COD').toUpperCase();
+    const status = (order.payment?.status || order.payment_status || 'PENDING').toUpperCase();
+    
+    const isCOD = method === 'COD';
+    
+    let statusLabel = status;
+    let statusClass = "bg-slate-50 text-slate-700 ring-slate-200";
+    
+    if (status === 'PAID' || status === 'COMPLETED') {
+      statusLabel = t('paymentStatus.PAID', 'Đã thanh toán') as string;
+      statusClass = "bg-emerald-50 text-emerald-700 ring-emerald-200";
+    } else if (status === 'PENDING') {
+      statusLabel = (isCOD 
+        ? t('paymentStatus.COD_PENDING', 'COD')
+        : t('paymentStatus.UNPAID', 'Chờ thanh toán')) as string;
+      statusClass = isCOD 
+        ? "bg-blue-50 text-blue-700 ring-blue-200"
+        : "bg-amber-50 text-amber-700 ring-amber-200";
+    } else if (status === 'EXPIRED') {
+      statusLabel = t('paymentStatus.EXPIRED', 'Hết hạn') as string;
+      statusClass = "bg-red-50 text-red-700 ring-red-200";
+    } else if (status === 'REFUNDED') {
+      statusLabel = t('paymentStatus.REFUNDED', 'Đã hoàn tiền') as string;
+      statusClass = "bg-purple-50 text-purple-700 ring-purple-200";
+    }
+
+    const methodLabel = (isCOD 
+      ? t('paymentMethod.COD', 'Tiền mặt (COD)') 
+      : (method === 'VNPAY' ? 'VNPAY' : t('paymentMethod.PREPAID_QR', 'Chuyển khoản QR'))) as string;
+
+    return (
+      <div className="flex flex-col items-start gap-1">
+        <span className="text-[11px] font-bold text-on-surface">{methodLabel}</span>
+        <span className={`px-2 py-0.5 text-[9px] font-bold uppercase rounded-full ring-1 ${statusClass}`}>
+          {statusLabel}
+        </span>
+      </div>
+    );
   };
 
   return (
@@ -389,34 +433,34 @@ const AdminLotteMartOrderManagement: React.FC = () => {
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
                 >
-                  <option value="ALL">Tất cả Trạng thái</option>
-                  <option value="PENDING">Chờ xác nhận</option>
-                  <option value="CONFIRMED">Đã xác nhận</option>
-                  <option value="PROCESSING">Đang chuẩn bị</option>
-                  <option value="SHIPPING">Đang giao hàng</option>
-                  <option value="DELIVERED">Hoàn thành</option>
-                  <option value="CANCELLED">Đã hủy</option>
-                  <option value="RETURNED">Đã hoàn trả/hoàn tiền</option>
+                  <option value="ALL">{t('orders.allStatus', 'Tất cả Trạng thái')}</option>
+                  <option value="PENDING">{t('orderStatuses.PENDING', 'Chờ xác nhận')}</option>
+                  <option value="CONFIRMED">{t('orderStatuses.CONFIRMED', 'Đã xác nhận')}</option>
+                  <option value="PROCESSING">{t('orderStatuses.PROCESSING', 'Đang chuẩn bị')}</option>
+                  <option value="SHIPPING">{t('orderStatuses.SHIPPING', 'Đang giao hàng')}</option>
+                  <option value="DELIVERED">{t('orderStatuses.DELIVERED', 'Hoàn thành')}</option>
+                  <option value="CANCELLED">{t('orderStatuses.CANCELLED', 'Đã hủy')}</option>
+                  <option value="RETURNED">{t('orderStatuses.RETURNED', 'Đã hoàn trả/hoàn tiền')}</option>
                 </select>
                 <select 
                   className="bg-surface-container-low border-none rounded-xl text-xs font-semibold py-2.5 px-3 focus:ring-2 focus:ring-primary/20"
                   value={paymentFilter}
                   onChange={(e) => setPaymentFilter(e.target.value)}
                 >
-                  <option value="ALL">All Thanh toán</option>
-                  <option value="COD">Tiền mặt (COD)</option>
-                  <option value="CARD">Thẻ Tín Dụng</option>
-                  <option value="VNPAY">Hoặc Ví điện tử</option>
+                  <option value="ALL">{t('orders.allPayments', 'Tất cả Thanh toán')}</option>
+                  <option value="COD">{t('paymentMethod.COD', 'Tiền mặt (COD)')}</option>
+                  <option value="CARD">{t('paymentMethod.CARD', 'Thẻ Tín Dụng')}</option>
+                  <option value="VNPAY">{t('paymentMethod.PREPAID_QR', 'Chuyển khoản QR')}</option>
                 </select>
                 <select 
                   className="bg-surface-container-low border-none rounded-xl text-xs font-semibold py-2.5 px-3 focus:ring-2 focus:ring-primary/20"
                   value={sortOption}
                   onChange={(e) => setSortOption(e.target.value)}
                 >
-                  <option value="NEWEST">Mới nhất</option>
-                  <option value="OLDEST">Cũ nhất</option>
-                  <option value="PRICE_HIGH">Tổng tiền Cao {'->'} Thấp</option>
-                  <option value="PRICE_LOW">Tổng tiền Thấp {'->'} Cao</option>
+                  <option value="NEWEST">{t('orders.sortNewest', 'Mới nhất')}</option>
+                  <option value="OLDEST">{t('orders.sortOldest', 'Cũ nhất')}</option>
+                  <option value="PRICE_HIGH">{t('orders.sortPriceHigh', 'Tổng tiền Cao -> Thấp')}</option>
+                  <option value="PRICE_LOW">{t('orders.sortPriceLow', 'Tổng tiền Thấp -> Cao')}</option>
                 </select>
                 <button className="flex items-center justify-center gap-2 bg-surface-container-low border-none rounded-xl text-xs font-semibold py-2.5 hover:bg-surface-container-high transition-colors text-slate-400" onClick={() => {
                   setSearchTerm(''); setStatusFilter("ALL"); setPaymentFilter("ALL"); setSortOption("NEWEST");
@@ -460,17 +504,38 @@ const AdminLotteMartOrderManagement: React.FC = () => {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold">
-                            {order.order_address?.receiver_name.substring(0,2).toUpperCase() || "KH"}
+                            {((order.order_address && order.order_address.receiver_name) || 'KH').substring(0,2).toUpperCase()}
                           </div>
                           <div>
-                            <p className="text-xs font-bold text-on-surface">{order.order_address?.receiver_name || "N/A"}</p>
-                            <p className="text-[10px] text-slate-400">{order.order_address?.phone || ""}</p>
+                            <p className="text-xs font-bold text-on-surface">{(order.order_address && order.order_address.receiver_name) || "N/A"}</p>
+                            <p className="text-[10px] text-slate-400">{(order.order_address && order.order_address.phone) || ""}</p>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-xs text-slate-500">{new Date(order.created_at).toLocaleString('vi-VN')}</td>
                       <td className="px-6 py-4 text-xs font-medium text-center">{order.items?.length || 0}</td>
-                      <td className="px-6 py-4 text-sm font-black text-right">{(order.total_amount || 0).toLocaleString('vi-VN')} ₫</td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex flex-col items-end">
+                          <p className="text-sm font-black text-on-surface">{(order.total_amount || 0).toLocaleString('vi-VN')} ₫</p>
+                          {(() => {
+                            const method = (order.payment?.method || order.payment_method || 'COD').toUpperCase();
+                            const status = (order.payment?.status || order.payment_status || 'PENDING').toUpperCase();
+                            const isCOD = method === 'COD';
+                            const isPaid = status === 'PAID' || status === 'COMPLETED';
+                            return (
+                              <span className={`text-[9px] font-bold uppercase mt-0.5 ${
+                                isPaid ? 'text-emerald-600' : isCOD ? 'text-blue-600' : 'text-amber-600'
+                              }`}>
+                                {isCOD ? 'COD' : method} - {
+                                  isPaid ? t('paymentStatus.PAID', 'Đã thanh toán') : (
+                                    status === 'PENDING' ? (isCOD ? t('paymentStatus.COD_PENDING', 'Chờ xác nhận đơn') : t('paymentStatus.UNPAID', 'Chờ thanh toán')) : status
+                                  )
+                                }
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      </td>
                       <td className="px-6 py-4 text-center">
                         <div className="flex justify-center">
                           {getStatusBadge(order.status)}
@@ -552,7 +617,7 @@ const AdminLotteMartOrderManagement: React.FC = () => {
                         <span className={`absolute -left-[13px] top-1 w-3 h-3 rounded-full ring-2 ring-white ${point.status === 'CANCELLED' ? 'bg-red-500' : point.status === 'DELIVERED' ? 'bg-emerald-500' : idx === unique.length - 1 ? 'bg-primary' : 'bg-slate-300'}`}></span>
                         <div className="flex-1 flex justify-between items-baseline min-w-0">
                           <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-800">{STATUS_LABEL[point.status] || point.status}</p>
+                            <p className="text-xs font-bold text-slate-800">{t('orderStatuses.' + point.status, STATUS_LABEL[point.status] || point.status) as string}</p>
                             {point.note && point.note !== 'Cập nhật hệ thống' && (
                               <p className="text-[10px] text-slate-400 truncate">{point.note}</p>
                             )}
@@ -584,7 +649,7 @@ const AdminLotteMartOrderManagement: React.FC = () => {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium text-slate-400">Thanh toán:</span>
-                    <span className="text-xs font-bold uppercase">{selectedOrder.payment?.method || selectedOrder.payment_method} - {selectedOrder.payment?.status || selectedOrder.payment_status}</span>
+                    {getPaymentBadge(selectedOrder)}
                   </div>
                   {selectedOrder.tracking?.tracking_number && (
                     <div className="flex items-center justify-between">

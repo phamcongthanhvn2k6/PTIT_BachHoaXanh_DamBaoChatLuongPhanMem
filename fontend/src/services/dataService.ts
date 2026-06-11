@@ -59,8 +59,8 @@ export const dataService = {
   // ═══════════════════════════════════════════════
   // USERS
   // ═══════════════════════════════════════════════
-  getUsers: async (): Promise<Types.User[]> => {
-    return safeArr(httpClient.get(endpoints.users.list));
+  getUsers: async (params?: { role_type?: string }): Promise<Types.User[]> => {
+    return safeArr(httpClient.get(endpoints.users.list, { params }));
   },
   searchUsers: async (query: string): Promise<Types.User[]> => {
     return safeArr(httpClient.get(endpoints.users.list, { params: { search: query, limit: 10 } }));
@@ -88,9 +88,14 @@ export const dataService = {
     const res = await httpClient.post(endpoints.users.toggleStatus(userId));
     return obj(res);
   },
-  resetUserPassword: async (userId: number | string): Promise<{ success: boolean; newPass: string }> => {
-    const res = await httpClient.post(endpoints.users.resetPassword(userId));
-    return obj(res) || { success: true, newPass: 'RESET' };
+  resetUserPassword: async (userId: number | string, password?: string): Promise<{ success: boolean; newPass: string }> => {
+    const res = await httpClient.post(endpoints.users.resetPassword(userId), { password });
+    const data = obj(res);
+    return { success: true, newPass: data?.newPassword || 'RESET' };
+  },
+  deleteUser: async (userId: number | string): Promise<boolean> => {
+    await httpClient.delete(`/users/${userId}`);
+    return true;
   },
   adjustUserPoints: async (userId: number | string, points: number, reason: string): Promise<Types.User> => {
     const res = await httpClient.post(endpoints.users.adjustPoints(userId), { points, reason });

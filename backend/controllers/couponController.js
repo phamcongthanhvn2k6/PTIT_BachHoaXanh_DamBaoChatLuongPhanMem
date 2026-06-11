@@ -399,110 +399,110 @@ export const usage = async (req, res) => {
 
 export const create = async (req, res) => {
   try {
-      const body = normalizeCouponPayload(req.body);
-      if (body.code) body.code = String(body.code).toUpperCase();
-      if (req.user) body.created_by = req.user._id || req.user.id;
+    const body = normalizeCouponPayload(req.body);
+    if (body.code) body.code = String(body.code).toUpperCase();
+    if (req.user) body.created_by = req.user._id || req.user.id;
 
-      const validationError = validateCouponPayload(body, { isUpdate: false });
-      if (validationError) {
-        return res.status(400).json({ success: false, message: validationError });
-      }
+    const validationError = validateCouponPayload(body, { isUpdate: false });
+    if (validationError) {
+      return res.status(400).json({ success: false, message: validationError });
+    }
 
-      if ((body.total_quantity === undefined || body.total_quantity === null || body.total_quantity === '') && body.usage_limit) {
-        body.total_quantity = Number(body.usage_limit) || null;
-      }
-      if (body.total_quantity !== undefined && body.total_quantity !== null && body.total_quantity !== '') {
-        body.total_quantity = Math.max(0, Number(body.total_quantity) || 0);
-      }
+    if ((body.total_quantity === undefined || body.total_quantity === null || body.total_quantity === '') && body.usage_limit) {
+      body.total_quantity = Number(body.usage_limit) || null;
+    }
+    if (body.total_quantity !== undefined && body.total_quantity !== null && body.total_quantity !== '') {
+      body.total_quantity = Math.max(0, Number(body.total_quantity) || 0);
+    }
 
-      const c = await Coupon.create(body);
+    const c = await Coupon.create(body);
 
+    try {
+      const { logActivity } = await import('../services/auditService.js');
+      await logActivity({
+        userId: req.userId,
+        userName: req.user?.full_name || req.user?.username || 'Admin',
+        action: 'CREATE',
+        entity: 'coupon',
+        entityId: c._id,
+        details: { code: c.code, title: c.title },
+        ip: req.ip
+      });
+    } catch (auditErr) {
+      console.error('[Audit] Failed to log coupon creation:', auditErr.message);
+    }
+
+    if (c.is_active) {
       try {
-        const { logActivity } = await import('../services/auditService.js');
-        await logActivity({
-          userId: req.userId,
-          userName: req.user?.full_name || req.user?.username || 'Admin',
-          action: 'CREATE',
-          entity: 'coupon',
-          entityId: c._id,
-          details: { code: c.code, title: c.title },
-          ip: req.ip
+        await broadcastCampaignCreated({
+          campaignType: 'coupon',
+          campaignId: c._id,
+          title: c.title || c.code,
+          description: c.description,
+          link: '/promotions',
+          createdBy: req.user?._id || req.user?.id || null,
         });
-      } catch (auditErr) {
-        console.error('[Audit] Failed to log coupon creation:', auditErr.message);
+      } catch (broadcastErr) {
+        console.error('[CouponCreate] Broadcast failed:', broadcastErr.message);
       }
+    }
 
-      if (c.is_active) {
-        try {
-          await broadcastCampaignCreated({
-            campaignType: 'coupon',
-            campaignId: c._id,
-            title: c.title || c.code,
-            description: c.description,
-            link: '/promotions',
-            createdBy: req.user?._id || req.user?.id || null,
-          });
-        } catch (broadcastErr) {
-          console.error('[CouponCreate] Broadcast failed:', broadcastErr.message);
-        }
-      }
-
-      return res.status(201).json({ success: true, data: decorateCoupon(c), message: 'Tạo mã thành công' });
+    return res.status(201).json({ success: true, data: decorateCoupon(c), message: 'Tạo mã thành công' });
   } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
 };
 
 export const update = async (req, res) => {
   try {
-      const body = normalizeCouponPayload(req.body);
-      if (body.code) body.code = String(body.code).toUpperCase();
+    const body = normalizeCouponPayload(req.body);
+    if (body.code) body.code = String(body.code).toUpperCase();
 
-      const validationError = validateCouponPayload(body, { isUpdate: true });
-      if (validationError) {
-        return res.status(400).json({ success: false, message: validationError });
-      }
+    const validationError = validateCouponPayload(body, { isUpdate: true });
+    if (validationError) {
+      return res.status(400).json({ success: false, message: validationError });
+    }
 
-      if (body.total_quantity !== undefined && body.total_quantity !== null && body.total_quantity !== '') {
-        body.total_quantity = Math.max(0, Number(body.total_quantity) || 0);
-      }
+    if (body.total_quantity !== undefined && body.total_quantity !== null && body.total_quantity !== '') {
+      body.total_quantity = Math.max(0, Number(body.total_quantity) || 0);
+    }
 
-      // Check if this update is activating the coupon
-      const previousDoc = body.is_active === true ? await Coupon.findById(req.params.id).lean() : null;
-      const wasInactive = previousDoc && !previousDoc.is_active;
+    // Check if this update is activating the coupon
+    const previousDoc = body.is_active === true ? await Coupon.findById(req.params.id).lean() : null;
+    const wasInactive = previousDoc && !previousDoc.is_active;
 
-      const c = await Coupon.findByIdAndUpdate(req.params.id, body, { new: true });
-      if (!c) return res.status(404).json({ success: false, message: 'Coupon not found' });
+    const c = await Coupon.findByIdAndUpdate(req.params.id, body, { new: true });
+    if (!c) return res.status(404).json({ success: false, message: 'Coupon not found' });
 
+    try {
+      const { logActivity } = await import('../services/auditService.js');
+      await logActivity({
+        userId: req.userId,
+        userName: req.user?.full_name || req.user?.username || 'Admin',
+        action: 'UPDATE',
+        entity: 'coupon',
+        entityId: c._id,
+        details: { code: c.code, title: c.title },
+        ip: req.ip
+      });
+    } catch (auditErr) {
+      console.error('[Audit] Failed to log coupon update:', auditErr.message);
+    }
+
+    // Broadcast when coupon transitions from inactive → active
+    if (wasInactive && c.is_active) {
       try {
-        const { logActivity } = await import('../services/auditService.js');
-        await logActivity({
-          userId: req.userId,
-          userName: req.user?.full_name || req.user?.username || 'Admin',
-          action: 'UPDATE',
-          entity: 'coupon',
-          entityId: c._id,
-          details: { code: c.code, title: c.title },
-          ip: req.ip
+        await broadcastCampaignCreated({
+          campaignType: 'coupon',
+          campaignId: c._id,
+          title: c.title || c.code,
+          description: c.description,
+          link: '/promotions',
+          createdBy: req.user?._id || req.user?.id || null,
         });
-      } catch (auditErr) {
-        console.error('[Audit] Failed to log coupon update:', auditErr.message);
+      } catch (broadcastErr) {
+        console.error('[CouponActivate] Broadcast failed:', broadcastErr.message);
       }
+    }
 
-      // Broadcast when coupon transitions from inactive → active
-      if (wasInactive && c.is_active) {
-        try {
-          await broadcastCampaignCreated({
-            campaignType: 'coupon',
-            campaignId: c._id,
-            title: c.title || c.code,
-            description: c.description,
-            link: '/promotions',
-            createdBy: req.user?._id || req.user?.id || null,
-          });
-        } catch (broadcastErr) {
-          console.error('[CouponActivate] Broadcast failed:', broadcastErr.message);
-        }
-      }
-
-      return res.json({ success: true, data: decorateCoupon(c), message: 'Cập nhật thành công' });
+    return res.json({ success: true, data: decorateCoupon(c), message: 'Cập nhật thành công' });
   } catch (err) { return res.status(500).json({ success: false, message: err.message }); }
 };

@@ -11,6 +11,17 @@ import {
 
 const PAGE_SIZE = 10;
 
+const generateSlug = (str: string) => {
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .replace(/[^a-z0-9\s_]/g, '')
+    .trim()
+    .replace(/\s+/g, '_');
+};
+
 /* Permission module grouping */
 const PERMISSION_MODULES: Record<string, string> = {
   dashboard: '📊 Dashboard',
@@ -63,13 +74,18 @@ const ACTION_COLORS: Record<string, string> = {
 
 const AdminRolesPermissions: React.FC = () => {
   const { t } = useTranslation();
+  const [activeTab, setActiveTab] = useState<'roles' | 'staff'>('roles');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
   const [roles, setRoles] = useState<any[]>([]);
   const [permissions, setPermissions] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
+  
+  // Staff tab states
+  const [staffList, setStaffList] = useState<any[]>([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [createdStaffCreds, setCreatedStaffCreds] = useState<{ username: string; tempPass: string } | null>(null);
 
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -77,6 +93,7 @@ const AdminRolesPermissions: React.FC = () => {
   /* Create/Edit role modal */
   const [roleModalOpen, setRoleModalOpen] = useState(false);
   const [editingRoleId, setEditingRoleId] = useState('');
+  const [autoGenKey, setAutoGenKey] = useState(true);
   const [roleForm, setRoleForm] = useState<any>({ key: '', name: '', description: '', permissions: [] as string[] });
 
   /* Assign role modal */
@@ -86,7 +103,7 @@ const AdminRolesPermissions: React.FC = () => {
   /* Create staff modal */
   const [createStaffOpen, setCreateStaffOpen] = useState(false);
   const [staffForm, setStaffForm] = useState<any>({
-    username: '', full_name: '', email: '', phone: '', password: '', 
+    username: '', full_name: '', email: '', phone: '', password: '',
     role_key: '', branch_id: '', status: 'ACTIVE', employee_code: '', department: ''
   });
 
@@ -164,7 +181,29 @@ const AdminRolesPermissions: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => { loadData(); }, []);
+  const loadStaff = useCallback(async () => {
+    try {
+      setLoadingStaff(true);
+      const res = await dataService.getUsers({ role_type: 'staff' });
+      setStaffList(res);
+    } catch (err: any) {
+      toast.error(err?.message || 'Không tải được danh sách nhân viên');
+    } finally {
+      setLoadingStaff(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    setSearch('');
+    setPage(1);
+    if (activeTab === 'staff') {
+      loadStaff();
+    }
+  }, [activeTab, loadStaff]);
 
   /* Grouped permissions */
   const permissionGroups = useMemo(() => groupPermissions(permissions), [permissions]);
@@ -187,12 +226,41 @@ const AdminRolesPermissions: React.FC = () => {
     return filteredRoles.slice(start, start + PAGE_SIZE);
   }, [filteredRoles, page]);
 
+  /* Filtered staff */
+  const filteredStaff = useMemo(() => {
+    let data = [...staffList];
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      data = data.filter((s) =>
+        (s.full_name || '').toLowerCase().includes(q) ||
+        (s.username || '').toLowerCase().includes(q) ||
+        (s.email || '').toLowerCase().includes(q) ||
+        (s.phone || '').includes(q) ||
+        (s.employee_info?.employee_code || '').toLowerCase().includes(q) ||
+        (s.employee_info?.department || '').toLowerCase().includes(q)
+      );
+    }
+    return data;
+  }, [staffList, search]);
+
+  const paginatedStaff = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredStaff.slice(start, start + PAGE_SIZE);
+  }, [filteredStaff, page]);
+
   const stats = useMemo(() => ({
     totalRoles: roles.length,
     systemRoles: roles.filter((r) => r.is_system).length,
     customRoles: roles.filter((r) => !r.is_system).length,
     totalPerms: permissions.length,
   }), [roles, permissions]);
+
+  const staffStats = useMemo(() => ({
+    totalStaff: staffList.length,
+    activeStaff: staffList.filter((s) => s.is_active !== false).length,
+    lockedStaff: staffList.filter((s) => s.is_active === false).length,
+    superAdmins: staffList.filter((s) => s.role_id === 1).length,
+  }), [staffList]);
 
   /* Toggle permission */
   const togglePermission = (key: string) => {
@@ -225,6 +293,7 @@ const AdminRolesPermissions: React.FC = () => {
   /* Open create modal */
   const openCreateRole = () => {
     setEditingRoleId('');
+    setAutoGenKey(true);
     setRoleForm({ key: '', name: '', description: '', permissions: [], is_active: true });
     setRoleModalOpen(true);
   };
@@ -232,6 +301,7 @@ const AdminRolesPermissions: React.FC = () => {
   /* Open edit modal */
   const openEditRole = (role: any) => {
     setEditingRoleId(String(role._id || role.id));
+    setAutoGenKey(false);
     setRoleForm({
       key: role.key || '',
       name: role.name || '',
@@ -245,7 +315,14 @@ const AdminRolesPermissions: React.FC = () => {
   /* Save role */
   const saveRole = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!roleForm.key || !roleForm.name) return toast.error('Nhập key và name cho role');
+    if (!roleForm.key || !roleForm.name) {
+      return toast.error('Vui lòng điền đầy đủ Tên vai trò và Role Key');
+    }
+
+    const keyRegex = /^[a-z0-9_]+$/;
+    if (!keyRegex.test(roleForm.key)) {
+      return toast.error('Role Key không hợp lệ (chỉ dùng chữ thường, số và dấu gạch dưới, ví dụ: procurement_staff)');
+    }
     try {
       setSubmitting(true);
       if (editingRoleId) {
@@ -272,7 +349,6 @@ const AdminRolesPermissions: React.FC = () => {
     if (!selectedUser || !selectedUser._id) return toast.error(t('roles.selectUserFirst', 'Chọn người dùng cần gán'));
     if (!assignRoleKey) return toast.error(t('roles.selectRoleFirst', 'Chọn vai trò cần gán'));
     
-    // Check if confirming sensitive assignment
     const targetRole = roles.find(r => r.key === assignRoleKey);
     if (targetRole?.is_system && !window.confirm(t('roles.confirmSystemRole', `Xác nhận gán vai trò HỆ THỐNG ({{roleName}}) cho {{userName}}?`, { roleName: targetRole.name, userName: selectedUser.full_name }))) {
       return;
@@ -286,6 +362,7 @@ const AdminRolesPermissions: React.FC = () => {
       setSelectedUser(null);
       setUserQuery('');
       setAssignRoleKey('');
+      if (activeTab === 'staff') await loadStaff();
       await loadData();
     } catch (err: any) {
       toast.error(err?.message || 'Không thể gán role');
@@ -297,24 +374,103 @@ const AdminRolesPermissions: React.FC = () => {
   /* Create Staff */
   const createStaff = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!staffForm.username || !staffForm.password || !staffForm.role_key) {
-      return toast.error('Vui lòng điền các trường bắt buộc (Username, Mật khẩu, Vai trò)');
+    if (!staffForm.username || !staffForm.role_key) {
+      return toast.error('Vui lòng điền các trường bắt buộc (Username, Vai trò)');
+    }
+
+    const usernameRegex = /^[a-zA-Z0-9._-]+$/;
+    if (!usernameRegex.test(staffForm.username)) {
+      return toast.error('Tên đăng nhập không hợp lệ (chỉ được dùng chữ, số, dấu chấm, gạch ngang, gạch dưới, không có khoảng trắng)');
+    }
+
+    if (staffForm.email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(staffForm.email)) {
+        return toast.error('Địa chỉ email không hợp lệ');
+      }
+    }
+
+    if (staffForm.phone) {
+      const phoneRegex = /^[0-9+() -]+$/;
+      if (!phoneRegex.test(staffForm.phone)) {
+        return toast.error('Số điện thoại không hợp lệ');
+      }
     }
     try {
       setSubmitting(true);
-      await enterpriseService.createStaff(staffForm);
+      const res = await enterpriseService.createStaff(staffForm);
       toast.success('Đã tạo tài khoản nhân viên thành công!');
       setCreateStaffOpen(false);
       setStaffForm({
-        username: '', full_name: '', email: '', phone: '', password: '', 
+        username: '', full_name: '', email: '', phone: '', password: '',
         role_key: '', branch_id: '', status: 'ACTIVE', employee_code: '', department: ''
       });
-      // Optionally trigger user reload if we add a user table
+      // Set generated credentials to display once
+      setCreatedStaffCreds({ username: res.data.username, tempPass: res.tempPassword });
+      if (activeTab === 'staff') await loadStaff();
     } catch (err: any) {
       toast.error(err?.message || 'Không thể tạo tài khoản nhân viên');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  /* Toggle User Account Status */
+  const handleToggleUserStatus = async (user: any) => {
+    try {
+      setLoading(true);
+      await dataService.toggleUserStatus(user._id || user.id);
+      toast.success('Cập nhật trạng thái thành công');
+      await loadStaff();
+    } catch (err: any) {
+      toast.error(err?.message || 'Không thể cập nhật trạng thái');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* Secure Password Reset Flow */
+  const handleResetPassword = async (user: any) => {
+    const customPass = window.prompt(
+      `Nhập mật khẩu mới cho nhân viên ${user.full_name || user.username} (Để trống để hệ thống tự động sinh ngẫu nhiên):`
+    );
+    if (customPass === null) return; // cancelled
+
+    try {
+      setLoading(true);
+      const res = await dataService.resetUserPassword(user._id || user.id, customPass.trim() || undefined);
+      setCreatedStaffCreds({ username: user.username, tempPass: res.newPass });
+      toast.success('Đã đặt lại mật khẩu nhân viên thành công!');
+      await loadStaff();
+    } catch (err: any) {
+      toast.error(err?.message || 'Không thể đặt lại mật khẩu');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* Delete Staff Account */
+  const handleDeleteStaff = async (user: any) => {
+    if (!window.confirm(`Xác nhận XÓA vĩnh viễn tài khoản nhân viên ${user.full_name || user.username}? Hành động này sẽ được ghi vào nhật ký kiểm toán và không thể hoàn tác.`)) {
+      return;
+    }
+    try {
+      setLoading(true);
+      await dataService.deleteUser(user._id || user.id);
+      toast.success('Đã xóa tài khoản nhân viên thành công!');
+      await loadStaff();
+    } catch (err: any) {
+      toast.error(err?.message || 'Không thể xóa tài khoản');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* Quick action to assign role directly from Staff list */
+  const handleAssignRoleDirectly = (user: any) => {
+    setSelectedUser(user);
+    setAssignRoleKey(user.role_key || '');
+    setAssignOpen(true);
   };
 
   return (
@@ -341,113 +497,284 @@ const AdminRolesPermissions: React.FC = () => {
         }
       />
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <StatCard label={t('roles.totalRoles', 'Tổng vai trò')} value={stats.totalRoles} icon="badge" color="blue" />
-        <StatCard label={t('roles.systemRoles', 'Vai trò hệ thống')} value={stats.systemRoles} icon="lock" color="violet" />
-        <StatCard label={t('roles.customRoles', 'Vai trò tùy chỉnh')} value={stats.customRoles} icon="edit" color="emerald" />
-        <StatCard label={t('roles.totalPerms', 'Tổng quyền')} value={stats.totalPerms} icon="key" color="amber" />
+      {/* Dynamic Stats Cards Based on Tab */}
+      {activeTab === 'roles' ? (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <StatCard label={t('roles.totalRoles', 'Tổng vai trò')} value={stats.totalRoles} icon="badge" color="blue" />
+          <StatCard label={t('roles.systemRoles', 'Vai trò hệ thống')} value={stats.systemRoles} icon="lock" color="violet" />
+          <StatCard label={t('roles.customRoles', 'Vai trò tùy chỉnh')} value={stats.customRoles} icon="edit" color="emerald" />
+          <StatCard label={t('roles.totalPerms', 'Tổng quyền')} value={stats.totalPerms} icon="key" color="amber" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <StatCard label="Tổng nhân sự" value={staffStats.totalStaff} icon="groups" color="blue" />
+          <StatCard label="Hoạt động" value={staffStats.activeStaff} icon="check_circle" color="emerald" />
+          <StatCard label="Bị khóa" value={staffStats.lockedStaff} icon="block" color="red" />
+          <StatCard label="Super Admin" value={staffStats.superAdmins} icon="admin_panel_settings" color="violet" />
+        </div>
+      )}
+
+      {/* Tab Selector */}
+      <div className="flex gap-2 border-b border-slate-200 mb-6">
+        <button
+          onClick={() => setActiveTab('roles')}
+          className={`pb-3 px-4 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
+            activeTab === 'roles'
+              ? 'border-red-500 text-red-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">lock</span>
+          Vai trò & Quyền hạn
+        </button>
+        <button
+          onClick={() => setActiveTab('staff')}
+          className={`pb-3 px-4 font-bold text-sm border-b-2 transition-all flex items-center gap-2 ${
+            activeTab === 'staff'
+              ? 'border-red-500 text-red-600'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">badge</span>
+          Tài khoản nhân viên
+        </button>
       </div>
 
-      {/* Search */}
+      {/* Search Bar & Refresh */}
       <div className="flex flex-col md:flex-row gap-3 mb-6">
-        <SearchBar value={search} onChange={setSearch} placeholder="Tìm theo tên vai trò, key..." />
-        <button onClick={loadData} className={cls.btnSecondary}>
+        <SearchBar
+          value={search}
+          onChange={setSearch}
+          placeholder={activeTab === 'roles' ? 'Tìm theo tên vai trò, key...' : 'Tìm nhân viên theo tên, SĐT, email, mã nhân viên...'}
+        />
+        <button onClick={activeTab === 'roles' ? loadData : loadStaff} className={cls.btnSecondary}>
           <span className="material-symbols-outlined text-sm">refresh</span> Làm mới
         </button>
       </div>
 
-      {/* Table */}
+      {/* MAIN CONTAINER */}
       <div className={`${cls.card} overflow-hidden relative`}>
-        <LoadingOverlay visible={loading} />
-        {!loading && filteredRoles.length === 0 ? (
-          <EmptyState
-            icon="admin_panel_settings"
-            title="Chưa có vai trò nào"
-            description="Tạo vai trò mới để bắt đầu phân quyền"
-            action={
-              <button onClick={openCreateRole} className={cls.btnPrimary}>
-                <span className="material-symbols-outlined text-sm">add</span> Tạo vai trò
-              </button>
-            }
-          />
+        <LoadingOverlay visible={loading || (activeTab === 'staff' && loadingStaff)} />
+
+        {activeTab === 'roles' ? (
+          /* ==================== ROLES TABLE ==================== */
+          !loading && filteredRoles.length === 0 ? (
+            <EmptyState
+              icon="admin_panel_settings"
+              title="Chưa có vai trò nào"
+              description="Tạo vai trò mới để bắt đầu phân quyền"
+              action={
+                <button onClick={openCreateRole} className={cls.btnPrimary}>
+                  <span className="material-symbols-outlined text-sm">add</span> Tạo vai trò
+                </button>
+              }
+            />
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-100">
+                      <th className={cls.thCell}>#</th>
+                      <th className={cls.thCell}>Tên vai trò</th>
+                      <th className={cls.thCell}>Cấp bậc</th>
+                      <th className={cls.thCell}>Key</th>
+                      <th className={cls.thCell}>Trạng thái</th>
+                      <th className={cls.thCell}>Quyền</th>
+                      <th className={cls.thCell}>Loại</th>
+                      <th className={cls.thCell}>Cập nhật</th>
+                      <th className={`${cls.thCell} text-right`}>Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {paginatedRoles.map((r, idx) => {
+                      const permCount = Array.isArray(r.permissions) ? r.permissions.length : 0;
+                      return (
+                        <tr key={String(r._id)} className="hover:bg-slate-50/60 transition-colors group">
+                          <td className={`${cls.tdCell} text-slate-400`}>{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                          <td className={cls.tdCell}>
+                            <button onClick={() => setDetailRole(r)} className="font-semibold text-slate-900 hover:text-red-600 transition-colors text-left">
+                              {r.name}
+                            </button>
+                          </td>
+                          <td className={cls.tdCell}>
+                            {(() => {
+                              const lvl = ROLE_LEVEL_LABELS[r.level] || ROLE_LEVEL_LABELS[99];
+                              return (
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border ${lvl.color}`}>
+                                  <span className="material-symbols-outlined text-[10px]">shield</span>
+                                  Lv.{r.level ?? 99}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                          <td className={cls.tdCell}>
+                            <span className="font-mono text-xs bg-slate-100 px-2 py-1 rounded-lg">{r.key}</span>
+                          </td>
+                          <td className={cls.tdCell}>
+                            <StatusBadge status={r.is_active !== false ? 'active' : 'inactive'} label={r.is_active !== false ? 'Hoạt động' : 'Tạm khóa'} />
+                          </td>
+                          <td className={cls.tdCell}>
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                              <span className="material-symbols-outlined text-[12px]">key</span>
+                              {permCount}
+                            </span>
+                          </td>
+                          <td className={cls.tdCell}>
+                            <StatusBadge status={r.is_system ? 'yes' : 'no'} label={r.is_system ? 'Hệ thống' : 'Tùy chỉnh'} />
+                          </td>
+                          <td className={cls.tdCell}>
+                            <span className="text-[10px] text-slate-400">
+                              {r.updated_at ? new Date(r.updated_at).toLocaleDateString('vi-VN') : '—'}
+                            </span>
+                          </td>
+                          <td className={`${cls.tdCell} text-right`}>
+                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => setDetailRole(r)} className={cls.btnGhost} title="Xem">
+                                <span className="material-symbols-outlined text-[16px]">visibility</span>
+                              </button>
+                              <button onClick={() => openEditRole(r)} className={cls.btnGhost} title="Sửa">
+                                <span className="material-symbols-outlined text-[16px]">edit</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <PaginationControl page={page} pageSize={PAGE_SIZE} total={filteredRoles.length} onChange={setPage} />
+            </>
+          )
         ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-100">
-                    <th className={cls.thCell}>#</th>
-                    <th className={cls.thCell}>Tên vai trò</th>
-                    <th className={cls.thCell}>Cấp bậc</th>
-                    <th className={cls.thCell}>Key</th>
-                    <th className={cls.thCell}>Trạng thái</th>
-                    <th className={cls.thCell}>Quyền</th>
-                    <th className={cls.thCell}>Loại</th>
-                    <th className={cls.thCell}>Cập nhật</th>
-                    <th className={`${cls.thCell} text-right`}>Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {paginatedRoles.map((r, idx) => {
-                    const permCount = Array.isArray(r.permissions) ? r.permissions.length : 0;
-                    return (
-                      <tr key={String(r._id)} className="hover:bg-slate-50/60 transition-colors group">
-                        <td className={`${cls.tdCell} text-slate-400`}>{(page - 1) * PAGE_SIZE + idx + 1}</td>
-                        <td className={cls.tdCell}>
-                          <button onClick={() => setDetailRole(r)} className="font-semibold text-slate-900 hover:text-red-600 transition-colors text-left">
-                            {r.name}
-                          </button>
-                        </td>
-                        <td className={cls.tdCell}>
-                          {(() => {
-                            const lvl = ROLE_LEVEL_LABELS[r.level] || ROLE_LEVEL_LABELS[99];
-                            return (
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border ${lvl.color}`}>
-                                <span className="material-symbols-outlined text-[10px]">shield</span>
-                                Lv.{r.level ?? 99}
-                              </span>
-                            );
-                          })()}
-                        </td>
-                        <td className={cls.tdCell}>
-                          <span className="font-mono text-xs bg-slate-100 px-2 py-1 rounded-lg">{r.key}</span>
-                        </td>
-                        <td className={cls.tdCell}>
-                          <StatusBadge status={r.is_active !== false ? 'active' : 'inactive'} label={r.is_active !== false ? 'Hoạt động' : 'Tạm khóa'} />
-                        </td>
-                        <td className={cls.tdCell}>
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                            <span className="material-symbols-outlined text-[12px]">key</span>
-                            {permCount}
-                          </span>
-                        </td>
-                        <td className={cls.tdCell}>
-                          <StatusBadge status={r.is_system ? 'yes' : 'no'} label={r.is_system ? 'Hệ thống' : 'Tùy chỉnh'} />
-                        </td>
-                        <td className={cls.tdCell}>
-                          <span className="text-[10px] text-slate-400">
-                            {r.updated_at ? new Date(r.updated_at).toLocaleDateString('vi-VN') : '—'}
-                          </span>
-                        </td>
-                        <td className={`${cls.tdCell} text-right`}>
-                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => setDetailRole(r)} className={cls.btnGhost} title="Xem">
-                              <span className="material-symbols-outlined text-[16px]">visibility</span>
-                            </button>
-                            <button onClick={() => openEditRole(r)} className={cls.btnGhost} title="Sửa">
-                              <span className="material-symbols-outlined text-[16px]">edit</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <PaginationControl page={page} pageSize={PAGE_SIZE} total={filteredRoles.length} onChange={setPage} />
-          </>
+          /* ==================== STAFF TABLE ==================== */
+          !loadingStaff && filteredStaff.length === 0 ? (
+            <EmptyState
+              icon="groups"
+              title="Không tìm thấy nhân viên"
+              description="Chưa có nhân viên nào phù hợp với bộ lọc tìm kiếm của bạn"
+              action={
+                <button onClick={() => setCreateStaffOpen(true)} className={cls.btnPrimary}>
+                  <span className="material-symbols-outlined text-sm">add</span> Thêm nhân viên mới
+                </button>
+              }
+            />
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-100">
+                      <th className={cls.thCell}>#</th>
+                      <th className={cls.thCell}>Họ tên / Tài khoản</th>
+                      <th className={cls.thCell}>Phòng ban / Vai trò</th>
+                      <th className={cls.thCell}>Liên hệ</th>
+                      <th className={cls.thCell}>Chi nhánh</th>
+                      <th className={cls.thCell}>Trạng thái</th>
+                      <th className={cls.thCell}>Ngày tạo</th>
+                      <th className={`${cls.thCell} text-right`}>Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {paginatedStaff.map((s, idx) => {
+                      const branch = branches.find(b => String(b._id || b.id) === String(s.branch_id));
+                      return (
+                        <tr key={String(s._id)} className="hover:bg-slate-50/60 transition-colors group">
+                          <td className={`${cls.tdCell} text-slate-400`}>{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                          <td className={cls.tdCell}>
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-full bg-slate-100 overflow-hidden flex-shrink-0 flex items-center justify-center border border-slate-200">
+                                {s.avatar || s.profile_picture ? (
+                                  <img src={s.avatar || s.profile_picture} alt="avatar" className="w-full h-full object-cover" />
+                                ) : (
+                                  <span className="material-symbols-outlined text-slate-400 text-[18px]">person</span>
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-semibold text-slate-900 leading-tight">
+                                  {s.full_name || '—'}
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <span className="font-mono text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{s.username}</span>
+                                  {s.employee_info?.employee_code && (
+                                    <span className="text-[10px] text-slate-400 font-bold border border-slate-200 px-1 rounded bg-white">{s.employee_info.employee_code}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className={cls.tdCell}>
+                            <div className="space-y-0.5">
+                              <div className="text-xs text-slate-500 font-medium">
+                                {s.employee_info?.department || '—'}
+                              </div>
+                              <div>
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border bg-slate-100 text-slate-700 border-slate-200`}>
+                                  <span className="material-symbols-outlined text-[10px]">shield</span>
+                                  {s.role_key || 'staff'}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className={cls.tdCell}>
+                            <div className="text-xs space-y-0.5">
+                              <div className="text-slate-700 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[11px] text-slate-400">mail</span>
+                                {s.email || '—'}
+                              </div>
+                              <div className="text-slate-500 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[11px] text-slate-400">phone</span>
+                                {s.phone || '—'}
+                              </div>
+                            </div>
+                          </td>
+                          <td className={cls.tdCell}>
+                            <span className="text-xs text-slate-600 font-medium">
+                              {branch ? branch.name : 'Tất cả chi nhánh'}
+                            </span>
+                          </td>
+                          <td className={cls.tdCell}>
+                            <StatusBadge status={s.is_active !== false ? 'active' : 'inactive'} label={s.is_active !== false ? 'Hoạt động' : 'Đã khóa'} />
+                          </td>
+                          <td className={cls.tdCell}>
+                            <span className="text-[10px] text-slate-400">
+                              {s.created_at ? new Date(s.created_at).toLocaleDateString('vi-VN') : '—'}
+                            </span>
+                          </td>
+                          <td className={`${cls.tdCell} text-right`}>
+                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => handleToggleUserStatus(s)} className={cls.btnGhost} title={s.is_active !== false ? 'Khóa tài khoản' : 'Kích hoạt'}>
+                                <span className={`material-symbols-outlined text-[16px] ${s.is_active !== false ? 'text-red-500' : 'text-emerald-500'}`}>
+                                  {s.is_active !== false ? 'block' : 'check_circle'}
+                                </span>
+                              </button>
+                              <button onClick={() => handleAssignRoleDirectly(s)} className={cls.btnGhost} title="Thay đổi vai trò">
+                                <span className="material-symbols-outlined text-[16px] text-blue-500">
+                                  manage_accounts
+                                </span>
+                              </button>
+                              <button onClick={() => handleResetPassword(s)} className={cls.btnGhost} title="Đặt lại mật khẩu">
+                                <span className="material-symbols-outlined text-[16px] text-amber-500">
+                                  lock_reset
+                                </span>
+                              </button>
+                              <button onClick={() => handleDeleteStaff(s)} className={cls.btnGhost} title="Xóa nhân viên">
+                                <span className="material-symbols-outlined text-[16px] text-rose-500">
+                                  delete
+                                </span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <PaginationControl page={page} pageSize={PAGE_SIZE} total={filteredStaff.length} onChange={setPage} />
+            </>
+          )
         )}
       </div>
 
@@ -474,11 +801,48 @@ const AdminRolesPermissions: React.FC = () => {
       >
         <form id="role-form" onSubmit={saveRole}>
           <FormSection title="Thông tin vai trò">
-            <FormField label="Role Key" required>
-              <input className={cls.input} placeholder="VD: procurement_staff" value={roleForm.key} onChange={(e) => setRoleForm({ ...roleForm, key: e.target.value })} disabled={!!editingRoleId} />
-            </FormField>
             <FormField label="Tên vai trò" required>
-              <input className={cls.input} placeholder="VD: Nhân viên thu mua" value={roleForm.name} onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })} />
+              <input 
+                className={cls.input} 
+                placeholder="VD: Nhân viên thu mua" 
+                value={roleForm.name} 
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setRoleForm((prev: any) => {
+                    const next = { ...prev, name: val };
+                    if (autoGenKey && !editingRoleId) {
+                      next.key = generateSlug(val);
+                    }
+                    return next;
+                  });
+                }} 
+              />
+            </FormField>
+            <FormField label="Role Key (Mã vai trò)" required>
+              <input 
+                className={cls.input} 
+                placeholder="VD: procurement_staff" 
+                value={roleForm.key} 
+                onChange={(e) => {
+                  setAutoGenKey(false);
+                  setRoleForm({ ...roleForm, key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') });
+                }} 
+                disabled={!!editingRoleId} 
+              />
+              <span className="text-[11px] text-slate-400 mt-1 block">
+                Mã định danh dùng cho logic hệ thống (chữ thường, số, dấu gạch dưới).
+                {!editingRoleId && (
+                  <label className="inline-flex items-center gap-1 ml-2 text-red-500 font-semibold cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={autoGenKey} 
+                      onChange={(e) => setAutoGenKey(e.target.checked)} 
+                      className="w-3 h-3 rounded border-slate-300 text-red-650 focus:ring-red-500 cursor-pointer" 
+                    />
+                    Tự động tạo từ tên
+                  </label>
+                )}
+              </span>
             </FormField>
             <FormField label="Trạng thái">
               <select className={cls.select + ' w-full'} value={roleForm.is_active ? '1' : '0'} onChange={(e) => setRoleForm({ ...roleForm, is_active: e.target.value === '1' })}>
@@ -532,7 +896,6 @@ const AdminRolesPermissions: React.FC = () => {
                           'bg-slate-50 text-slate-400 border-slate-200'
                         }`}>{checkedCount}/{perms.length}</span>
                       </button>
-                      {/* Compact action chip preview when collapsed */}
                       {!isExpanded && (
                         <div className="flex gap-1 flex-shrink-0">
                           {perms.map((p) => {
@@ -554,7 +917,6 @@ const AdminRolesPermissions: React.FC = () => {
                       </span>
                     </div>
 
-                    {/* Expanded detail */}
                     {isExpanded && (
                       <div className="flex flex-wrap gap-1.5 px-4 py-2 pl-8 bg-white">
                         {perms.map((p) => {
@@ -670,9 +1032,9 @@ const AdminRolesPermissions: React.FC = () => {
                       </span>
                     </div>
                     <div className="text-xs text-slate-500 mt-0.5">{selectedUser.email} • {selectedUser.phone || '—'}</div>
-                    {selectedUser.role && selectedUser.role !== 'user' && (
+                    {selectedUser.role_key && (
                       <div className="mt-1.5 text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-lg inline-block">
-                        {t('roles.currentRole', 'Đang có vai trò:')} {selectedUser.role}
+                        {t('roles.currentRole', 'Đang có vai trò:')} {selectedUser.role_key}
                       </div>
                     )}
                   </div>
@@ -696,12 +1058,12 @@ const AdminRolesPermissions: React.FC = () => {
         </form>
       </Modal>
 
-      {/* ========== CREATE STAFF MODAL ========== */}
+      {/* ========== CREATE STAFF MODAL (NO password input) ========== */}
       <Modal
         open={createStaffOpen}
         onClose={() => setCreateStaffOpen(false)}
         title="Tạo tài khoản nhân viên"
-        subtitle="Thêm tài khoản nhân sự nội bộ (không dành cho khách hàng)"
+        subtitle="Hệ thống sẽ tự động tạo mật khẩu tạm thời cho tài khoản này"
         icon="badge"
         size="lg"
         footer={
@@ -719,27 +1081,6 @@ const AdminRolesPermissions: React.FC = () => {
             <FormField label="Tên đăng nhập" required>
               <input className={cls.input} placeholder="Ví dụ: nva.warehouse" value={staffForm.username} onChange={(e) => setStaffForm({ ...staffForm, username: e.target.value })} />
             </FormField>
-            <FormField label="Mật khẩu" required>
-              <div className="relative">
-                <input type={showPassword ? 'text' : 'password'} className={cls.input + ' pr-10'} placeholder="Nhập mật khẩu tạm thời" value={staffForm.password} onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })} />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                  <span className="material-symbols-outlined text-[18px]">{showPassword ? 'visibility_off' : 'visibility'}</span>
-                </button>
-              </div>
-              <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
-                <span className="material-symbols-outlined text-[10px]">warning</span>
-                Mật khẩu tạm thời — nhân viên phải đổi khi đăng nhập lần đầu
-              </p>
-            </FormField>
-            <FormField label="Họ và tên">
-              <input className={cls.input} placeholder="Nguyễn Văn A" value={staffForm.full_name} onChange={(e) => setStaffForm({ ...staffForm, full_name: e.target.value })} />
-            </FormField>
-            <FormField label="Số điện thoại">
-              <input className={cls.input} placeholder="09xxxxxxx" value={staffForm.phone} onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })} />
-            </FormField>
-            <FormField label="Email">
-              <input type="email" className={cls.input} placeholder="nva@lottemart.com" value={staffForm.email} onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })} />
-            </FormField>
             <FormField label="Vai trò hệ thống" required>
               <select className={cls.select + ' w-full'} value={staffForm.role_key} onChange={(e) => setStaffForm({ ...staffForm, role_key: e.target.value })}>
                 <option value="">-- Chọn vai trò --</option>
@@ -749,6 +1090,15 @@ const AdminRolesPermissions: React.FC = () => {
                   </option>
                 ))}
               </select>
+            </FormField>
+            <FormField label="Họ và tên">
+              <input className={cls.input} placeholder="Nguyễn Văn A" value={staffForm.full_name} onChange={(e) => setStaffForm({ ...staffForm, full_name: e.target.value })} />
+            </FormField>
+            <FormField label="Số điện thoại">
+              <input className={cls.input} placeholder="09xxxxxxx" value={staffForm.phone} onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })} />
+            </FormField>
+            <FormField label="Email">
+              <input type="email" className={cls.input} placeholder="nva@lottemart.com" value={staffForm.email} onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })} />
             </FormField>
             <FormField label="Chi nhánh (Tùy chọn)">
               <select className={cls.select + ' w-full'} value={staffForm.branch_id} onChange={(e) => setStaffForm({ ...staffForm, branch_id: e.target.value })}>
@@ -772,8 +1122,75 @@ const AdminRolesPermissions: React.FC = () => {
                 <option value="INACTIVE">Khóa tạm thời</option>
               </select>
             </FormField>
+            <FormField label="Mật khẩu tạm thời (Để trống hệ thống tự động sinh)">
+              <input
+                type="text"
+                className={cls.input}
+                placeholder="Nhập mật khẩu hoặc để trống"
+                value={staffForm.password || ''}
+                onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })}
+              />
+            </FormField>
           </div>
         </form>
+      </Modal>
+
+      {/* ========== SECURE CREDENTIALS DISPLAY MODAL (Shown once) ========== */}
+      <Modal
+        open={!!createdStaffCreds}
+        onClose={() => setCreatedStaffCreds(null)}
+        title="Thông tin tài khoản tạm thời"
+        subtitle="Vui lòng sao chép thông tin đăng nhập mới để bàn giao"
+        icon="key"
+        size="sm"
+        footer={
+          <button type="button" onClick={() => setCreatedStaffCreds(null)} className={cls.btnPrimary}>
+            Xác nhận & Đóng
+          </button>
+        }
+      >
+        <div className="space-y-4">
+          <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl space-y-3 border border-slate-100 dark:border-slate-700">
+            <div>
+              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tên đăng nhập</div>
+              <div className="text-sm font-semibold text-slate-850 dark:text-slate-100 font-mono mt-1 flex items-center justify-between">
+                <span>{createdStaffCreds?.username}</span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(createdStaffCreds?.username || '');
+                    toast.success('Đã sao chép tên đăng nhập');
+                  }}
+                  className="text-slate-400 hover:text-slate-650 p-1 rounded-lg hover:bg-slate-200/50 transition-colors"
+                  title="Sao chép"
+                >
+                  <span className="material-symbols-outlined text-sm">content_copy</span>
+                </button>
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Mật khẩu tạm thời</div>
+              <div className="text-sm font-bold text-red-600 dark:text-red-400 font-mono mt-1 flex items-center justify-between">
+                <span>{createdStaffCreds?.tempPass}</span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(createdStaffCreds?.tempPass || '');
+                    toast.success('Đã sao chép mật khẩu');
+                  }}
+                  className="text-slate-400 hover:text-slate-650 p-1 rounded-lg hover:bg-slate-200/50 transition-colors"
+                  title="Sao chép"
+                >
+                  <span className="material-symbols-outlined text-sm">content_copy</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="text-xs text-amber-700 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/50 p-3 rounded-xl flex gap-2">
+            <span className="material-symbols-outlined text-base flex-shrink-0 text-amber-500">warning</span>
+            <span>
+              Thông tin mật khẩu này chỉ hiển thị <strong>MỘT LẦN DUY NHẤT</strong>. Nhân viên bắt buộc phải đổi mật khẩu ngay trong lần đăng nhập đầu tiên để bảo mật tài khoản.
+            </span>
+          </div>
+        </div>
       </Modal>
 
       {/* ========== DETAIL DRAWER ========== */}
@@ -786,7 +1203,6 @@ const AdminRolesPermissions: React.FC = () => {
       >
         {detailRole && (
           <div className="space-y-5">
-            {/* Badges */}
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status={detailRole.is_system ? 'yes' : 'no'} label={detailRole.is_system ? t('roles.system', 'Hệ thống') : t('roles.custom', 'Tùy chỉnh')} />
               {(() => {
@@ -803,7 +1219,6 @@ const AdminRolesPermissions: React.FC = () => {
               </span>
             </div>
 
-            {/* Info */}
             <div>
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t('roles.roleInfo', 'Thông tin vai trò')}</h4>
               <div className="space-y-1">
@@ -815,7 +1230,6 @@ const AdminRolesPermissions: React.FC = () => {
               </div>
             </div>
 
-            {/* Compact permissions by module with access level */}
             <div>
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                 {t('roles.permissions', 'Quyền hạn')} ({Array.isArray(detailRole.permissions) ? detailRole.permissions.length : 0})
@@ -829,7 +1243,6 @@ const AdminRolesPermissions: React.FC = () => {
                       if (!grouped[mod]) grouped[mod] = [];
                       grouped[mod].push(perm);
                     });
-                    // Also show modules with NO permissions
                     const allModuleKeys = Object.keys(PERMISSION_MODULES);
                     return allModuleKeys.map((mod) => {
                       const perms = grouped[mod] || [];
@@ -865,7 +1278,6 @@ const AdminRolesPermissions: React.FC = () => {
               )}
             </div>
 
-            {/* Actions */}
             <div className="flex gap-3 pt-4 border-t border-slate-100">
               <button onClick={() => { openEditRole(detailRole); setDetailRole(null); }} className={cls.btnPrimary + ' flex-1 justify-center'}>
                 <span className="material-symbols-outlined text-sm">edit</span> {t('roles.edit', 'Chỉnh sửa')}

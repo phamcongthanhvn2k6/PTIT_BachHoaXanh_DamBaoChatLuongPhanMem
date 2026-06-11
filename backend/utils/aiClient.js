@@ -87,10 +87,13 @@ export const callOpenRouter = async (messages, options = {}, isJson = false) => 
   let modelsToTry = [];
   try {
     if (mongoose.connection.readyState === 1) {
-      const AdminSettingModel = mongoose.models.AdminSetting || mongoose.model('AdminSetting');
-      const settingDoc = await AdminSettingModel.findOne({ key: 'qa_active_models' }).lean();
-      if (settingDoc && Array.isArray(settingDoc.value) && settingDoc.value.length > 0) {
-        modelsToTry = settingDoc.value;
+      await import('../models/Misc.js');
+      const AdminSettingModel = mongoose.models.AdminSetting;
+      if (AdminSettingModel) {
+        const settingDoc = await AdminSettingModel.findOne({ key: 'qa_active_models' }).lean();
+        if (settingDoc && Array.isArray(settingDoc.value) && settingDoc.value.length > 0) {
+          modelsToTry = settingDoc.value;
+        }
       }
     }
   } catch (err) {
@@ -181,9 +184,9 @@ export const callOpenRouter = async (messages, options = {}, isJson = false) => 
 
       lastError = normError;
 
-      // If it's an authorization error (401/403), do not retry other models because the API key itself is bad!
-      if (normError.code === 'AI_AUTH_FAILED') {
-        console.warn(`[aiClient] Auth failure. Skipping other fallback models.`);
+      // If it's an authorization error (401/403) or quota/rate-limit error (429), do not retry other models because the API key/limit itself is bad!
+      if (normError.code === 'AI_AUTH_FAILED' || normError.code === 'AI_QUOTA_EXCEEDED') {
+        console.warn(`[aiClient] ${normError.code} failure. Skipping other fallback models.`);
         throw normError;
       }
 

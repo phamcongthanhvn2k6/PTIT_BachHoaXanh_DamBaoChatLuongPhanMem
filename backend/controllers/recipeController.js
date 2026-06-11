@@ -371,8 +371,12 @@ export const generateUserRecipe = async (req, res) => {
     generatedData.normalized_name = canonicalKey;
     generatedData.canonical_key = canonicalKey;
     generatedData.servings = srv;
-    generatedData.ai_generated = true;
-    generatedData.source_type = 'ai_generated';
+    if (generatedData.source_type !== 'fallback') {
+      generatedData.ai_generated = true;
+      generatedData.source_type = 'ai_generated';
+    } else {
+      generatedData.ai_generated = false;
+    }
     generatedData.status = 'active';
     generatedData.completeness_status = 'complete';
     generatedData.last_checked_at = new Date();
@@ -498,8 +502,12 @@ export const previewUserRecipe = async (req, res) => {
     generatedData.normalized_name = canonicalKey;
     generatedData.canonical_key = canonicalKey;
     generatedData.servings = srv;
-    generatedData.ai_generated = true;
-    generatedData.source_type = 'ai_generated';
+    if (generatedData.source_type !== 'fallback') {
+      generatedData.ai_generated = true;
+      generatedData.source_type = 'ai_generated';
+    } else {
+      generatedData.ai_generated = false;
+    }
     generatedData.status = 'active';
     generatedData.completeness_status = 'complete';
     generatedData.last_checked_at = new Date();

@@ -229,7 +229,7 @@ const RecipeDetail: React.FC = () => {
         branchId: currentBranchId,
         branch_product_id: String(item?.branch_product_id || item?._id || item?.id),
         price: Number(item?.price || 0), unit_price: Number(item?.price || 0), quantity: 1,
-        product_name: item?.name, product_image: item?.images?.[0] || item?.thumbnail || '',
+        product_name: item?.name, product_image: item?.image || item?.thumbnail || '',
         branchProduct: item,
       })).unwrap();
       toast.success(`${t('product.added')} ${item?.name}`);
@@ -404,6 +404,10 @@ const RecipeDetail: React.FC = () => {
                 <span className="bg-green-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg shadow-green-600/25">
                   <span className="material-symbols-outlined !text-sm">check_circle</span> {t('recipe.savedBadge')}
                 </span>
+              ) : (recipe.source_type === 'fallback' || recipe.ai_generated === false) ? (
+                <span className="bg-amber-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg shadow-amber-600/25 animate-pulse">
+                  <span className="material-symbols-outlined !text-sm">restaurant</span> {t('recipe.fallbackTitleShort', 'Đầu Bếp Đề Xuất')}
+                </span>
               ) : (
                 <span className="bg-indigo-600/90 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg shadow-indigo-600/25">
                   <span className="material-symbols-outlined !text-sm">smart_toy</span> {t('recipe.sourceAiBadge')}
@@ -414,6 +418,17 @@ const RecipeDetail: React.FC = () => {
           </div>
 
           <div className="p-6 md:p-10">
+            {/* Fallback Warning Alert */}
+            {(recipe.source_type === 'fallback' || recipe.ai_generated === false) && (
+              <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-2xl text-amber-800 dark:text-amber-300 flex items-start gap-3 shadow-md shadow-amber-500/5">
+                <span className="material-symbols-outlined shrink-0 text-amber-500 animate-bounce">warning</span>
+                <div>
+                  <h4 className="font-bold text-sm mb-1 text-amber-900 dark:text-amber-300">{t('recipe.fallbackTitle')}</h4>
+                  <p className="text-sm leading-relaxed text-amber-800 dark:text-amber-400">{t('recipe.fallbackDesc')}</p>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
               <h1 className="text-3xl md:text-4xl font-black text-slate-900 dark:text-white">{recipe.title}</h1>
               {!isSaved && (
@@ -504,7 +519,7 @@ const RecipeDetail: React.FC = () => {
                       <div className="ml-4 mt-2">
                         {m.product ? (
                           <div className="flex items-center gap-2 bg-white dark:bg-slate-700 p-2 rounded-lg border border-green-100 dark:border-green-800 shadow-sm">
-                            <img src={m.product.images?.[0] || m.product.thumbnail || ''} alt="" className="w-8 h-8 rounded-md object-cover bg-slate-100" />
+                            <img src={m.product.image || m.product.thumbnail || ''} alt="" className="w-8 h-8 rounded-md object-cover bg-slate-100" />
                             <div className="flex-1 min-w-0">
                               <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{m.product.name}</p>
                               <p className="text-xs font-black text-rose-600">{formatPrice(m.product.price)}₫</p>
@@ -526,7 +541,7 @@ const RecipeDetail: React.FC = () => {
                                 <div className="space-y-1.5">
                                   {m.substitutes.slice(0, 3).map((sub: any) => (
                                     <div key={sub._id} className="flex items-center gap-2 bg-white dark:bg-slate-700 p-1.5 rounded border border-slate-100 dark:border-slate-750 shadow-sm">
-                                      <img src={sub.images?.[0] || sub.thumbnail || ''} alt="" className="w-6 h-6 rounded object-cover" />
+                                      <img src={sub.image || sub.thumbnail || ''} alt="" className="w-6 h-6 rounded object-cover" />
                                       <div className="flex-1 min-w-0">
                                         <p className="text-[10px] font-bold text-slate-700 dark:text-slate-200 truncate">{sub.name}</p>
                                         <p className="text-[10px] font-black text-rose-600">{formatPrice(sub.price)}₫</p>

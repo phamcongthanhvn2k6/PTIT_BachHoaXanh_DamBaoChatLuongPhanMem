@@ -28,7 +28,7 @@ const RecipeSchema = new mongoose.Schema({
   notes: [{ type: String }],
   tags: [{ type: String }],
   image_url: { type: String, default: '' },
-  source_type: { type: String, enum: ['ai_generated', 'user_submitted', 'admin'], default: 'ai_generated' },
+  source_type: { type: String, enum: ['ai_generated', 'user_submitted', 'admin', 'fallback'], default: 'ai_generated' },
   ai_generated: { type: Boolean, default: false },
   created_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   status: { type: String, enum: ['draft', 'active', 'archived'], default: 'active' },

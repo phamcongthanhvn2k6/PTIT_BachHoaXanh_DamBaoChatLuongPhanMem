@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch } from '../../store';
 import { logout } from '../../slices/authSlice';
+import { resetOrders } from '../../slices/orderSlice';
 import type { User } from '../../types';
 
 interface AccountSidebarProps {
@@ -64,6 +65,7 @@ const AccountSidebar: React.FC<AccountSidebarProps> = ({
 
   const handleLogout = useCallback(() => {
     dispatch(logout());
+    dispatch(resetOrders());
     navigate('/login');
     if (onNavigate) onNavigate('/login');
   }, [dispatch, navigate, onNavigate]);

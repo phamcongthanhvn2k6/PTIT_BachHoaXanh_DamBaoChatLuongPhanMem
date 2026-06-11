@@ -36,7 +36,11 @@ const AdminGuard: React.FC = () => {
   }
 
   // Verification complete — check if admin is valid
-  if (!token || !admin || Number(admin.role_id || 3) === 3) {
+  // Allow any authenticated non-customer user. role_id === 3 or role_key === 'customer' means customer.
+  const isCustomer =
+    admin?.role_key === 'customer' ||
+    (!admin?.role_key && Number(admin?.role_id || 3) === 3);
+  if (!token || !admin || isCustomer) {
     return <Navigate to="/admin/login" replace />;
   }
 

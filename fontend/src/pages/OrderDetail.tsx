@@ -257,7 +257,7 @@ const OrderDetail: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
                 <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-slate-100 flex flex-wrap items-center gap-2">
-                  {String(t('orders.userFriendlyStatus.' + order.status, STATUS_LABEL[order.status] || order.status))}
+                  {String(t('orderStatuses.' + order.status, STATUS_LABEL[order.status] || order.status))}
                 </h1>
                 <p className="text-xs md:text-sm font-mono text-slate-500 mt-2 break-all">
                   {t('orders.orderCode', { code: order.id })}
@@ -480,17 +480,53 @@ const OrderDetail: React.FC = () => {
                     <span className="material-symbols-outlined text-primary">payment</span>
                     Thanh toán
                  </h3>
-                 {order.payment ? (
-                     <div className="text-sm space-y-2">
-                         <div className="flex justify-between"><span className="text-slate-500">{t('orderDetail.method')}</span><span className="font-bold">{order.payment.method}</span></div>
-                         <div className="flex justify-between"><span className="text-slate-500">{t('orderDetail.transactionId')}</span><span className="font-bold">{order.payment.transaction_id || 'N/A'}</span></div>
-                         <div className="flex justify-between"><span className="text-slate-500">{t('orderDetail.status')}</span>
-                            <span className={`font-bold ${order.payment.status === 'PAID' ? 'text-green-600' : 'text-orange-500'}`}>{order.payment.status}</span>
-                         </div>
-                     </div>
-                 ) : (
-                     <p className="text-sm text-slate-500">Thanh toán khi nhận hàng (COD)</p>
-                 )}
+                 {
+                  (() => {
+                    const method = (order.payment?.method || order.payment_method || 'COD').toUpperCase();
+                    const status = (order.payment?.status || order.payment_status || 'PENDING').toUpperCase();
+                    const isCOD = method === 'COD';
+                    
+                    let statusLabel = status;
+                    let statusColor = 'text-slate-600';
+                    
+                    if (status === 'PAID' || status === 'COMPLETED') {
+                      statusLabel = t('paymentStatus.PAID', 'Đã thanh toán');
+                      statusColor = 'text-green-600';
+                    } else if (status === 'PENDING') {
+                      statusLabel = isCOD 
+                        ? t('paymentStatus.COD_PENDING', 'Thanh toán khi nhận hàng')
+                        : t('paymentStatus.UNPAID', 'Chờ thanh toán');
+                      statusColor = isCOD ? 'text-blue-600' : 'text-orange-500';
+                    } else if (status === 'EXPIRED') {
+                      statusLabel = t('paymentStatus.EXPIRED', 'Hết hạn');
+                      statusColor = 'text-red-500';
+                    } else if (status === 'REFUNDED') {
+                      statusLabel = t('paymentStatus.REFUNDED', 'Đã hoàn tiền');
+                      statusColor = 'text-purple-600';
+                    }
+                    const methodLabel = isCOD 
+                      ? t('paymentMethod.COD', 'Tiền mặt (COD)') 
+                      : (method === 'VNPAY' ? 'VNPAY' : t('paymentMethod.PREPAID_QR', 'Chuyển khoản QR'));
+                    return (
+                      <div className="text-sm space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">{t('orderDetail.method')}</span>
+                          <span className="font-bold">{methodLabel}</span>
+                        </div>
+                        {!isCOD && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-500">{t('orderDetail.transactionId')}</span>
+                            <span className="font-bold">{order.payment?.transaction_id || 'N/A'}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">{t('orderDetail.status')}</span>
+                          <span className={"font-bold uppercase " + statusColor}>{statusLabel}</span>
+                        </div>
+                      </div>
+                    );
+                  })()
+                }
              </div>
 
              {/* Price Breakdown */}

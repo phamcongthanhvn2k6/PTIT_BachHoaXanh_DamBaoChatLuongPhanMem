@@ -499,7 +499,7 @@ export const create = async (req, res) => {
 
     const orderData = {
       _id: orderId,
-      user_id: userId,
+      user_id: toObjectIdIfValid(userId),
       branch_id: branch_id_val,
       branch_name: branchName,
       items: serverPricing.items,
@@ -759,14 +759,16 @@ export const list = async (req, res) => {
     const roleId = Number(req.user?.role_id);
     if (roleId === 1 || roleId === 2) {
       // Admin — optionally filter by user_id or branch_id
-      if (user_id) filter.user_id = user_id;
+      if (user_id) {
+        filter.user_id = { $in: [toObjectIdIfValid(user_id), String(user_id)] };
+      }
       if (branch_id && branch_id !== 'ALL') {
         // Match branch_id as string OR ObjectId
         filter.branch_id = branch_id;
       }
     } else {
       // Regular user — only own orders
-      filter.user_id = req.userId;
+      filter.user_id = { $in: [toObjectIdIfValid(req.userId), String(req.userId)] };
     }
 
     if (status && status !== 'ALL') filter.status = status;

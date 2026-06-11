@@ -247,7 +247,7 @@ export const ShopAtHome: React.FC = () => {
         unit_price: unitPrice,
         quantity: 1,
         product_name: product?.name || item?.name || t('common.product'),
-        product_image: item?.image || product?.images?.[0] || '',
+        product_image: item?.image || product?.image || product?.thumbnail || '',
         branchProduct: bp,
       })).unwrap();
 
@@ -313,7 +313,7 @@ export const ShopAtHome: React.FC = () => {
     return validBranchProducts.map((bp: any) => {
       const sourceProduct = productMap.get(String(bp.product_id));
       const sourceImages = Array.isArray(sourceProduct?.images) ? sourceProduct.images : [];
-      const mainImg = sourceImages[0] || sourceProduct?.thumbnail || bp?.image || bp?.thumbnail || '';
+      const mainImg = sourceProduct?.thumbnail || sourceImages[0] || bp?.thumbnail || bp?.image || '';
       return normalizeShopProduct({
         ...bp,
         branchProduct: bp,
@@ -323,7 +323,7 @@ export const ShopAtHome: React.FC = () => {
         category: sourceProduct?.category,
         images: sourceImages,
         image: mainImg,
-        thumbnail: sourceProduct?.thumbnail || mainImg || '',
+        thumbnail: sourceProduct?.thumbnail || bp?.thumbnail || mainImg || '',
       }, categoryLookup);
     });
   }, [validBranchProducts, productMap, categoryLookup]);
@@ -357,7 +357,7 @@ export const ShopAtHome: React.FC = () => {
         const originalPrice = Number(deal?.original_price ?? matchedBp?.original_price ?? productAny?.original_price ?? dealPrice);
         
         const dealImages = Array.isArray(productAny?.images) ? productAny.images : [];
-        const dealImage = deal?.image || deal?.image_url || productAny?.thumbnail || dealImages[0] || '';
+        const dealImage = productAny?.thumbnail || deal?.image || deal?.image_url || dealImages[0] || '';
 
         return {
           ...deal,

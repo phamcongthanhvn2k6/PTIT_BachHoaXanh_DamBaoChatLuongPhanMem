@@ -181,9 +181,9 @@ export const update = async (req, res) => {
 
     // Enterprise Audit Lock: Only draft orders can be edited
     if (['ordered', 'partially_received', 'received', 'cancelled'].includes(order.status)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: `Không thể chỉnh sửa đơn hàng đã duyệt, đã nhận hoặc đã hủy (Trạng thái: ${order.status}). Chỉ được phép sửa đơn Nháp.` 
+      return res.status(400).json({
+        success: false,
+        message: `Không thể chỉnh sửa đơn hàng đã duyệt, đã nhận hoặc đã hủy (Trạng thái: ${order.status}). Chỉ được phép sửa đơn Nháp.`
       });
     }
 
@@ -272,9 +272,9 @@ export const updateStatus = async (req, res) => {
 
     // 2. Frozen state check (Received or Cancelled orders are final)
     if (['received', 'cancelled'].includes(current)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: `Không thể thay đổi trạng thái của đơn hàng đã ${current === 'received' ? 'hoàn thành nhận hàng' : 'bị hủy'}.` 
+      return res.status(400).json({
+        success: false,
+        message: `Không thể thay đổi trạng thái của đơn hàng đã ${current === 'received' ? 'hoàn thành nhận hàng' : 'bị hủy'}.`
       });
     }
 
@@ -285,9 +285,9 @@ export const updateStatus = async (req, res) => {
 
     // 4. Rollback to Ordered check
     if (status === 'ordered' && ['partially_received', 'received'].includes(current)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Không thể chuyển đơn hàng đã nhận một phần hoặc toàn bộ về trạng thái đã duyệt/đặt hàng.' 
+      return res.status(400).json({
+        success: false,
+        message: 'Không thể chuyển đơn hàng đã nhận một phần hoặc toàn bộ về trạng thái đã duyệt/đặt hàng.'
       });
     }
 

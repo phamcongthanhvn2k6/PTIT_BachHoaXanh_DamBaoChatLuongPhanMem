@@ -112,7 +112,7 @@ const Products: React.FC = () => {
         unit_price: item.price,
         quantity: 1,
         product_name: item.name,
-        product_image: item.images?.[0] || '',
+        product_image: item.image || item.thumbnail || '',
         branchProduct: item,
       })).unwrap();
       toast.success(t('product.addedToCart', { name: item.name }));
@@ -149,7 +149,7 @@ const Products: React.FC = () => {
       product_id: productId,
       branch_product_id: String(item.branch_product_id || item.id || ''),
       name: item.name || t('common.product'),
-      image: item.images?.[0] || item.thumbnail || '',
+      image: item.image || item.thumbnail || '',
       price: Number(item.price) || 0,
       original_price: Number(item.original_price) || 0,
       discount_percent: Number(item.discount_percent) || 0,
@@ -364,7 +364,7 @@ const Products: React.FC = () => {
                       <img
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                         alt={item.name}
-                        src={item.images?.[0] || 'https://via.placeholder.com/400x400?text=San+pham'}
+                        src={item.image || 'https://via.placeholder.com/400x400?text=San+pham'}
                       />
 
                       {/* Badges */}

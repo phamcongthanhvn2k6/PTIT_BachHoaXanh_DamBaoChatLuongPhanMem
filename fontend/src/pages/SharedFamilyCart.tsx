@@ -80,7 +80,7 @@ const SharedFamilyCart: React.FC = () => {
     const item: FamilyCartItem = {
       id: String(product?.branch_product_id || product?.id || product?._id || Date.now()),
       name: product?.name || 'Sản phẩm',
-      image: product?.images?.[0] || product?.thumbnail || '',
+      image: product?.image || product?.thumbnail || '',
       price: Number(product?.price || 0),
       qty: 1,
       addedBy: userName,
@@ -204,7 +204,7 @@ const SharedFamilyCart: React.FC = () => {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {filteredProducts.map((p: any, i: number) => (
                 <div key={i} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-100 p-3 flex items-center gap-3">
-                  <img src={p?.images?.[0] || p?.thumbnail || ''} alt={p?.name} className="w-10 h-10 rounded-lg object-cover"/>
+                  <img src={p?.image || p?.thumbnail || ''} alt={p?.name} className="w-10 h-10 rounded-lg object-cover"/>
                   <div className="flex-1 min-w-0"><p className="text-xs font-bold truncate">{p?.name}</p><p className="text-xs text-rose-600 font-bold">{fmt(Number(p?.price||0))}₫</p></div>
                   <button onClick={() => addItemLocal(p)} className="w-7 h-7 bg-indigo-600 text-white rounded-lg flex items-center justify-center hover:bg-indigo-700 text-xs">+</button>
                 </div>

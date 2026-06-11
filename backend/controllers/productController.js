@@ -1120,25 +1120,36 @@ const processProductData = (data) => {
     return [];
   };
 
-  // Merge all image sources into a single deduplicated list
-  const allUrls = [
+  // Normalize image fields
+  let thumbnail = '';
+  if (data.thumbnail && typeof data.thumbnail === 'string') {
+    const trimmed = data.thumbnail.trim();
+    if (trimmed && trimmed !== 'null' && trimmed !== 'undefined' && trimmed !== '[object Object]') {
+      thumbnail = trimmed;
+    }
+  }
+
+  const rawImages = [
     ...parseImageArray(data.images),
-    ...parseImageArray(data.gallery),
-    ...parseImageArray(data.thumbnail),
+    ...parseImageArray(data.gallery)
   ];
-  const uniqueUrls = [...new Set(allUrls)].filter(url => {
+  let uniqueImages = [...new Set(rawImages)].filter(url => {
     if (!url || typeof url !== 'string') return false;
     const lower = url.toLowerCase().trim();
     return lower.length > 0 && lower !== 'null' && lower !== 'undefined' && lower !== 'nan';
   });
 
-  if (uniqueUrls.length > 0) {
-    data.images = uniqueUrls;
-    data.gallery = uniqueUrls;
-    data.thumbnail = data.thumbnail && typeof data.thumbnail === 'string' && data.thumbnail.trim() && data.thumbnail.trim() !== 'null'
-      ? data.thumbnail.trim()
-      : uniqueUrls[0];
+  if (!thumbnail && uniqueImages.length > 0) {
+    thumbnail = uniqueImages[0];
   }
+
+  if (thumbnail) {
+    uniqueImages = [thumbnail, ...uniqueImages.filter(img => img !== thumbnail)];
+  }
+
+  data.thumbnail = thumbnail;
+  data.images = uniqueImages;
+  data.gallery = uniqueImages;
 
   // ── Normalize ID fields ────────────────────────────────────────────
   const normalizeId = (id) => {

@@ -374,6 +374,219 @@ export async function expireStalePayments() {
 }
 
 /**
+ * Scan for stale pending orders older than 15 minutes.
+ * - For COD orders: Auto-confirm them.
+ * - For prepaid/QR orders: Cancel them and roll back resources (inventory, coupons, promos, hot deals).
+ */
+export async function expireStaleOrders() {
+  const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+
+  // Find orders in PENDING status older than 15 minutes
+  const staleOrders = await Order.find({
+    status: 'PENDING',
+    created_at: { $lte: fifteenMinutesAgo }
+  });
+
+  if (staleOrders.length === 0) {
+    return { processedCount: 0 };
+  }
+
+  console.log(`[PAYMENT_TIMEOUT] Found ${staleOrders.length} stale pending orders to process.`);
+  let processedCount = 0;
+
+  for (const order of staleOrders) {
+    let session = null;
+    try {
+      // Start database transaction for safety
+      try {
+        session = await mongoose.startSession();
+        session.startTransaction();
+      } catch (err) {
+        session = null;
+      }
+
+      // Re-fetch order under lock/session to ensure idempotency
+      const currentOrder = session
+        ? await Order.findById(order._id).session(session)
+        : await Order.findById(order._id);
+
+      if (!currentOrder || currentOrder.status !== 'PENDING') {
+        if (session) {
+          await session.abortTransaction();
+          session.endSession();
+        }
+        continue; // Already processed
+      }
+
+      const isCOD = currentOrder.payment?.method === 'COD';
+
+      if (isCOD) {
+        // Auto-confirm COD order
+        currentOrder.status = 'CONFIRMED';
+        currentOrder.tracking.history.push({
+          status: 'CONFIRMED',
+          note: 'Hệ thống tự động xác nhận đơn hàng COD sau 15 phút',
+          timestamp: new Date()
+        });
+
+        if (session) {
+          await currentOrder.save({ session });
+        } else {
+          await currentOrder.save();
+        }
+
+        // Notify user about status change
+        try {
+          await notifyOrderStatusChanged({
+            userId: currentOrder.user_id,
+            orderId: String(currentOrder._id),
+            status: 'CONFIRMED',
+            note: 'Hệ thống tự động xác nhận đơn hàng COD sau 15 phút'
+          });
+        } catch (notifyErr) {
+          console.warn(`[PAYMENT_TIMEOUT] Order status change notification failed for order ${currentOrder._id}:`, notifyErr.message);
+        }
+
+        // Audit Log for automatic confirmation
+        await logActivity({
+          userId: null,
+          userName: 'SYSTEM_ORDER_SWEEPER',
+          action: 'STATUS_CHANGE',
+          entity: 'order',
+          entityId: currentOrder._id,
+          details: {
+            from_status: 'PENDING',
+            to_status: 'CONFIRMED',
+            note: 'Hệ thống tự động xác nhận đơn hàng COD sau 15 phút'
+          }
+        });
+
+        console.log(`[PAYMENT_TIMEOUT] Auto-confirmed stale COD order ${currentOrder._id}`);
+      } else {
+        // Prepaid order (Bank, Card, Momo, etc.)
+        // Roll back resources and CANCEL
+        
+        // A. Restore inventory
+        if (!currentOrder.is_inventory_restored) {
+          await inventoryService.restoreInventoryFromOrder(currentOrder.items, session, currentOrder._id);
+          for (const item of currentOrder.items) {
+            try {
+              const bp = session
+                ? await BranchProduct.findById(item.branch_product_id).session(session)
+                : await BranchProduct.findById(item.branch_product_id);
+              if (bp) {
+                bp.sold_count = Math.max(0, (bp.sold_count || 0) - item.quantity);
+                if (session) {
+                  await bp.save({ session });
+                } else {
+                  await bp.save();
+                }
+
+                const p = session
+                  ? await Product.findById(bp.product_id).session(session)
+                  : await Product.findById(bp.product_id);
+                if (p) {
+                  p.sold_count = Math.max(0, (p.sold_count || 0) - item.quantity);
+                  if (session) {
+                    await p.save({ session });
+                  } else {
+                    await p.save();
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn(`[PAYMENT_TIMEOUT] sold_count revert error for item ${item.branch_product_id}:`, e.message);
+            }
+          }
+          currentOrder.is_inventory_restored = true;
+        }
+
+        // B. Restore Hot Deals
+        if (!currentOrder.is_hot_deal_restored) {
+          await restoreHotDealsForOrderItems(currentOrder.items, session);
+          currentOrder.is_hot_deal_restored = true;
+        }
+
+        // C. Restore coupon/promotions
+        if (!currentOrder.is_coupon_restored || !currentOrder.is_promotion_restored) {
+          await restorePromotionsAndCoupons(currentOrder, session);
+          currentOrder.is_coupon_restored = true;
+          currentOrder.is_promotion_restored = true;
+        }
+
+        // D. Cancel the order
+        currentOrder.status = 'CANCELLED';
+        currentOrder.cancel_reason = 'Hủy tự động do không hoàn thành thanh toán prepaid sau 15 phút';
+        if (currentOrder.payment) {
+          currentOrder.payment.status = 'EXPIRED';
+        }
+        currentOrder.tracking.history.push({
+          status: 'CANCELLED',
+          note: 'Hủy tự động do không hoàn thành thanh toán prepaid sau 15 phút',
+          timestamp: new Date()
+        });
+
+        if (session) {
+          await currentOrder.save({ session });
+        } else {
+          await currentOrder.save();
+        }
+
+        // Notify user about status change
+        try {
+          await notifyOrderStatusChanged({
+            userId: currentOrder.user_id,
+            orderId: String(currentOrder._id),
+            status: 'CANCELLED',
+            note: 'Hủy tự động do không hoàn thành thanh toán prepaid sau 15 phút'
+          });
+        } catch (notifyErr) {
+          console.warn(`[PAYMENT_TIMEOUT] Order status change notification failed for order ${currentOrder._id}:`, notifyErr.message);
+        }
+
+        // Audit Log for automatic cancellation
+        await logActivity({
+          userId: null,
+          userName: 'SYSTEM_ORDER_SWEEPER',
+          action: 'STATUS_CHANGE',
+          entity: 'order',
+          entityId: currentOrder._id,
+          details: {
+            from_status: 'PENDING',
+            to_status: 'CANCELLED',
+            note: 'Hủy tự động do không hoàn thành thanh toán prepaid sau 15 phút'
+          }
+        });
+
+        console.log(`[PAYMENT_TIMEOUT] Auto-cancelled stale prepaid order ${currentOrder._id}`);
+      }
+
+      // Commit Mongoose transaction
+      if (session) {
+        await session.commitTransaction();
+        session.endSession();
+        session = null;
+      }
+
+      processedCount++;
+    } catch (err) {
+      console.error(`[PAYMENT_TIMEOUT] Failed to process stale order ${order._id}:`, err.stack);
+      if (session) {
+        try {
+          await session.abortTransaction();
+        } catch (e) {
+          console.error('[PAYMENT_TIMEOUT] Failed to abort transaction:', e.message);
+        }
+        session.endSession();
+        session = null;
+      }
+    }
+  }
+
+  return { processedCount };
+}
+
+/**
  * Start cron job scheduler running every minute.
  */
 export function startPaymentTimeoutScheduler() {
@@ -390,6 +603,7 @@ export function startPaymentTimeoutScheduler() {
         return;
       }
       await expireStalePayments();
+      await expireStaleOrders();
     } catch (err) {
       console.error('[PAYMENT_TIMEOUT] Scheduled timeout sweep failed:', err.message);
     }

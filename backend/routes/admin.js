@@ -103,17 +103,26 @@ router.post('/auth/login', async (req, res) => {
   try {
     await ensureRbacSeed();
     const { email, password } = req.body;
-    const normalizedEmail = email?.toLowerCase().trim();
+    const loginInput = email?.trim();
+    if (!loginInput) {
+      return res.status(400).json({ success: false, message: 'Vui lòng cung cấp tài khoản đăng nhập' });
+    }
+    const normalizedInput = loginInput.toLowerCase();
     
     // Log if seed account is missing
-    if (normalizedEmail === 'admin@lottemart.vn') {
-      const exists = await User.findOne({ email: normalizedEmail });
+    if (normalizedInput === 'admin@lottemart.vn') {
+      const exists = await User.findOne({ email: normalizedInput });
       if (!exists) {
         console.warn(`[Admin Auth] Warning: Seed admin account 'admin@lottemart.vn' is missing from the database.`);
       }
     }
 
-    let user = await User.findOne({ email: normalizedEmail });
+    let user = await User.findOne({
+      $or: [
+        { email: normalizedInput },
+        { username: loginInput }
+      ]
+    });
 
     if (!user) {
       return res.status(401).json({ success: false, message: 'Tài khoản không tồn tại' });
@@ -132,7 +141,7 @@ router.post('/auth/login', async (req, res) => {
     }
 
     if (!user.password_hash) {
-      console.error(`[Admin Auth] User ${normalizedEmail} has no password hash.`);
+      console.error(`[Admin Auth] User ${normalizedInput} has no password hash.`);
       return res.status(401).json({ success: false, message: 'Tài khoản chưa thiết lập mật khẩu' });
     }
 

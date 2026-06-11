@@ -36,7 +36,6 @@ const menuItems: MenuItem[] = [
   { to: '/admin/import-orders', icon: 'shopping_cart', labelKey: 'sidebar.importOrders', fallbackLabel: 'Đơn nhập hàng', permission: 'imports.read', section: 'Enterprise' },
   { to: '/admin/import-receipts', icon: 'inventory', labelKey: 'sidebar.importReceipts', fallbackLabel: 'Phiếu nhận hàng', permission: 'imports.read', section: 'Enterprise' },
   { to: '/admin/inventory-batches', icon: 'calendar_month', labelKey: 'sidebar.batches', fallbackLabel: 'Batch & Hạn dùng', permission: 'inventory.read', section: 'Enterprise' },
-  { to: '/admin/stock-movements', icon: 'swap_vert', labelKey: 'sidebar.stockMovements', fallbackLabel: 'Luân chuyển tồn kho', permission: 'inventory.read', section: 'Enterprise' },
   { to: '/admin/roles', icon: 'admin_panel_settings', labelKey: 'sidebar.roles', fallbackLabel: 'Vai trò & Quyền', superAdminOnly: true, section: 'Enterprise' },
   { to: '/admin/audit-logs', icon: 'history', labelKey: 'sidebar.auditLogs', fallbackLabel: 'Nhật ký hệ thống', permission: 'audit.read', section: 'Enterprise' },
   { to: '/admin/branch-locations', icon: 'location_on', labelKey: 'sidebar.branches', fallbackLabel: 'Vị trí chi nhánh', permission: 'branches.read', section: 'Enterprise' },

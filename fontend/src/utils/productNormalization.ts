@@ -76,6 +76,35 @@ const deriveBadges = (raw: any, discountPercent: number, isOutOfStock: boolean):
   return Array.from(new Set([...badges, ...semanticBadges]));
 };
 
+const resolveProductImage = (merged: any, product: any, branchProduct: any): string => {
+  const checkUrl = (url: any): string => {
+    if (!url || typeof url !== 'string') return '';
+    const trimmed = url.trim();
+    if (!trimmed || ['null', 'undefined', 'nan', '[object object]'].includes(trimmed.toLowerCase())) return '';
+    return trimmed;
+  };
+
+  // 1. Try thumbnail
+  let chosen = checkUrl(merged.thumbnail || product?.thumbnail || branchProduct?.thumbnail || '');
+  if (chosen) return resolveImageUrl(chosen) || fallbackProductImage;
+
+  // 2. Try primaryImage / image / imageUrl
+  chosen = checkUrl(merged.primaryImage || product?.primaryImage || branchProduct?.primaryImage || merged.image || product?.image || merged.imageUrl || product?.imageUrl || '');
+  if (chosen) return resolveImageUrl(chosen) || fallbackProductImage;
+
+  // 3. Try first gallery image
+  const rawImages = Array.isArray(merged.images) ? merged.images : (Array.isArray(product?.images) ? product.images : []);
+  const rawGallery = Array.isArray(merged.gallery) ? merged.gallery : (Array.isArray(product?.gallery) ? product.gallery : []);
+  const allRaw = [...rawImages, ...rawGallery];
+  for (const img of allRaw) {
+    const valid = checkUrl(img);
+    if (valid) return resolveImageUrl(valid) || fallbackProductImage;
+  }
+
+  // 4. Fallback placeholder
+  return fallbackProductImage;
+};
+
 export const normalizeProduct = (raw: any, categoryLookup?: Record<string, string>): any => {
   const merged = raw || {};
   const id = toId(merged.id || merged._id);
@@ -91,8 +120,12 @@ export const normalizeProduct = (raw: any, categoryLookup?: Record<string, strin
     : (product?.supplier_id !== undefined && product?.supplier_id !== null ? toId(product.supplier_id) : '');
 
   const categoryShop = deriveCategoryShop(merged, categoryLookup);
-  const images = toImageArray(merged).length > 0 ? toImageArray(merged) : toImageArray(product);
-  const image = images[0] || fallbackProductImage;
+  const image = resolveProductImage(merged, product, branchProduct);
+  const rawImagesList = toImageArray(merged).length > 0 ? toImageArray(merged) : toImageArray(product);
+  const images = [
+    image,
+    ...rawImagesList.filter(img => img !== image)
+  ].filter(Boolean);
 
   const price = toNumber(
     merged.effective_price ??
@@ -204,7 +237,7 @@ export const normalizeBranchProduct = (raw: any): any => {
     : (normalizedProduct?.supplier_id || '');
 
   const categoryShop = merged.categoryShop || merged.category_name || normalizedProduct?.categoryShop || i18n.t('common.other');
-  const image = normalizedProduct?.image || toImageArray(merged)[0] || fallbackProductImage;
+  const image = normalizedProduct?.image || resolveProductImage(merged, null, null);
   const stock = toNumber(merged.stock, 0);
 
   const price = toNumber(

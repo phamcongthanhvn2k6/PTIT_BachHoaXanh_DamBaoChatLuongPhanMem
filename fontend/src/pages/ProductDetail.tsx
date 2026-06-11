@@ -65,8 +65,7 @@ const ProductDetail: React.FC = () => {
   const [isTogglingWishlist, setIsTogglingWishlist] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [aiSummary, setAiSummary] = useState<any>(null);
-  const [loadingSummary, setLoadingSummary] = useState(false);
+
   // Whether the product exists but has no branch data
   const [branchUnavailable, setBranchUnavailable] = useState(false);
   const [allBranchProducts, setAllBranchProducts] = useState<any[]>([]);
@@ -149,7 +148,7 @@ const ProductDetail: React.FC = () => {
         unit_price: newBp.effective_price !== undefined ? newBp.effective_price : newBp.price,
         quantity: quantity,
         product_name: product?.name || 'Sản phẩm',
-        product_image: resolveImageUrl(product?.images?.[0] || product?.thumbnail || ''),
+        product_image: resolveImageUrl(product?.thumbnail || product?.images?.[0] || product?.image || ''),
         branchProduct: { ...newBp, product: product as any } as any,
       })).unwrap();
       toast.success(t('cart.addedToCart', { name: product?.name || 'Sản phẩm' }));
@@ -335,88 +334,7 @@ const ProductDetail: React.FC = () => {
     return () => { active = false; };
   }, [productId, activeBranchId, branches]);
 
-  const currentLocale = useMemo(
-    () => {
-      const normalized = String(i18n.language || 'vi').trim().toLowerCase();
-      if (normalized.startsWith('en')) return 'en';
-      if (normalized.startsWith('ja')) return 'ja';
-      return 'vi';
-    },
-    [i18n.language],
-  );
 
-  const uiText = useMemo(() => {
-    if (currentLocale === 'en') {
-      return {
-        aiSummaryTitle: 'AI Product Summary',
-        overview: 'Overview',
-        strengths: 'Key Strengths',
-        cautions: 'Cautions & Warnings',
-        recommendation: 'Recommendation',
-        notes: 'Important Notes',
-        loadingSummary: 'Analyzing product data with AI...',
-        aiNotConfigured: 'AI summary is currently unavailable (missing credentials).',
-        generateFailed: 'Failed to generate AI summary.',
-        groundedHint: 'Grounded strictly in product specifications.',
-      };
-    } else if (currentLocale === 'ja') {
-      return {
-        aiSummaryTitle: 'AI製品要約',
-        overview: '概要',
-        strengths: '主な特長',
-        cautions: '注意事項・警告',
-        recommendation: '推奨事項',
-        notes: '重要なメモ',
-        loadingSummary: 'AIで製品データを分析中...',
-        aiNotConfigured: 'AI概要は現在利用できません（設定がありません）。',
-        generateFailed: 'AI概要の生成に失敗しました。',
-        groundedHint: '製品の仕様情報のみに基づいています。',
-      };
-    } else {
-      return {
-        aiSummaryTitle: 'Tóm tắt sản phẩm AI',
-        overview: 'Tổng quan',
-        strengths: 'Điểm mạnh nổi bật',
-        cautions: 'Lưu ý & Cảnh báo',
-        recommendation: 'Khuyến nghị mua sắm',
-        notes: 'Ghi chú quan trọng',
-        loadingSummary: 'Đang phân tích dữ liệu sản phẩm bằng AI...',
-        aiNotConfigured: 'Tóm tắt sản phẩm AI hiện không khả dụng (chưa cấu hình API).',
-        generateFailed: 'Không thể tạo tóm tắt AI.',
-        groundedHint: 'Nội dung dựa trên dữ liệu sản phẩm chính thức.',
-      };
-    }
-  }, [currentLocale]);
-
-  React.useEffect(() => {
-    let active = true;
-    const fetchSummary = async () => {
-      if (!productId || productId === '0' || error || !product) {
-        return;
-      }
-      setLoadingSummary(true);
-      try {
-        const res = await productService.getProductSummary(productId, currentLocale);
-        if (active) {
-          if (res && res.success) {
-            setAiSummary(res.data);
-          } else {
-            setAiSummary(null);
-          }
-        }
-      } catch (e) {
-        console.error("Failed to load AI summary:", e);
-        if (active) setAiSummary(null);
-      } finally {
-        if (active) setLoadingSummary(false);
-      }
-    };
-
-    fetchSummary();
-    return () => {
-      active = false;
-    };
-  }, [productId, product, currentLocale, error]);
 
   // Reset selected image when product changes
   React.useEffect(() => {
@@ -555,7 +473,7 @@ const ProductDetail: React.FC = () => {
         unit_price: displayPrice,
         quantity: safeQuantity,
         product_name: product.name,
-        product_image: resolveImageUrl(product.images?.[0] || product.thumbnail || ''),
+        product_image: resolveImageUrl(product.thumbnail || product.images?.[0] || product.image || ''),
         branchProduct: { ...branchProduct, product: product as any } as any,
       })).unwrap();
       toast.success(t('cart.addedToCart', { name: product.name }));
@@ -601,7 +519,7 @@ const ProductDetail: React.FC = () => {
         discount_amount: 0,
         quantity: safeQuantity,
         product_name: product.name || 'Sản phẩm',
-        product_image: resolveImageUrl(product.images?.[0] || product.thumbnail || ''),
+        product_image: resolveImageUrl(product.thumbnail || product.images?.[0] || product.image || ''),
         branchProduct: { ...branchProduct, product: product as any },
         branch_id: currentBranchId,
         branch_name: currentBranch?.name || '',
@@ -634,7 +552,7 @@ const ProductDetail: React.FC = () => {
       product_id: productId,
       branch_product_id: String(branchProduct?.id || branchProduct?._id || ''),
       name: product?.name || 'Sản phẩm',
-      image: product?.images?.[0] || product?.thumbnail || '',
+      image: product?.thumbnail || product?.images?.[0] || product?.image || '',
       price: displayPrice,
       original_price: displayOriginalPrice,
       discount_percent: displayDiscount,
@@ -872,10 +790,10 @@ const ProductDetail: React.FC = () => {
                   }
                 };
 
+                if (prod.thumbnail) processValue(prod.thumbnail);
+                if (prod.image) processValue(prod.image);
                 if (prod.images) processValue(prod.images);
                 if (prod.gallery) processValue(prod.gallery);
-                if (prod.image) processValue(prod.image);
-                if (prod.thumbnail) processValue(prod.thumbnail);
 
                 return urls;
               };
@@ -1285,128 +1203,6 @@ const ProductDetail: React.FC = () => {
             {/* Tab Mô tả */}
             {activeTab === 'mo-ta' && (
               <>
-                {/* AI Product Summary */}
-                <div className="mb-10 overflow-hidden rounded-2xl border border-indigo-100 dark:border-slate-800 bg-gradient-to-br from-indigo-50/40 via-white to-purple-50/20 dark:from-slate-900/40 dark:to-slate-800/20 p-6 shadow-sm">
-                  <div className="flex items-center justify-between mb-4 border-b border-indigo-100/50 dark:border-slate-800/80 pb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-200 dark:shadow-none animate-pulse">
-                        <span className="material-symbols-outlined">auto_awesome</span>
-                      </div>
-                      <div>
-                        <h3 className="font-extrabold text-lg text-slate-800 dark:text-slate-200">
-                          {uiText.aiSummaryTitle}
-                        </h3>
-                        <p className="text-xs text-slate-400 dark:text-slate-500">
-                          {uiText.groundedHint}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {loadingSummary ? (
-                    <div className="space-y-4 animate-pulse">
-                      <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
-                      <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-5/6"></div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                        <div className="space-y-2">
-                          <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2"></div>
-                          <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-5/6"></div>
-                        </div>
-                        <div className="space-y-2">
-                          <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-1/2"></div>
-                          <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-5/6"></div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : aiSummary ? (
-                    <div className="space-y-6">
-                      {/* Overview */}
-                      <div className="text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
-                        {aiSummary.overview}
-                      </div>
-
-                      {/* Strengths & Cautions */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Strengths */}
-                        <div className="rounded-xl border border-emerald-100/60 dark:border-emerald-950/40 bg-emerald-50/20 dark:bg-emerald-950/10 p-4">
-                          <h4 className="flex items-center gap-2 font-bold text-sm text-emerald-800 dark:text-emerald-400 mb-3 uppercase tracking-wider">
-                            <span className="material-symbols-outlined text-emerald-500">task_alt</span>
-                            {uiText.strengths}
-                          </h4>
-                          {aiSummary.strengths && aiSummary.strengths.length > 0 ? (
-                            <ul className="space-y-2">
-                              {aiSummary.strengths.map((str: string, i: number) => (
-                                <li key={i} className="flex gap-2 items-start text-sm text-slate-600 dark:text-slate-300">
-                                  <span className="material-symbols-outlined text-[16px] text-emerald-500 shrink-0 mt-0.5">check</span>
-                                  <span>{str}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <span className="text-xs text-slate-400">---</span>
-                          )}
-                        </div>
-
-                        {/* Cautions */}
-                        <div className="rounded-xl border border-amber-100/60 dark:border-amber-950/40 bg-amber-50/20 dark:bg-amber-950/10 p-4">
-                          <h4 className="flex items-center gap-2 font-bold text-sm text-amber-800 dark:text-amber-400 mb-3 uppercase tracking-wider">
-                            <span className="material-symbols-outlined text-amber-500">warning</span>
-                            {uiText.cautions}
-                          </h4>
-                          {aiSummary.cautions && aiSummary.cautions.length > 0 ? (
-                            <ul className="space-y-2">
-                              {aiSummary.cautions.map((cau: string, i: number) => (
-                                <li key={i} className="flex gap-2 items-start text-sm text-slate-600 dark:text-slate-300">
-                                  <span className="material-symbols-outlined text-[16px] text-amber-500 shrink-0 mt-0.5">info</span>
-                                  <span>{cau}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <span className="text-xs text-slate-400">---</span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Recommendation */}
-                      {aiSummary.recommendation && (
-                        <div className="rounded-xl border border-indigo-100/80 dark:border-indigo-950/40 bg-indigo-50/30 dark:bg-indigo-950/10 p-4 flex gap-3">
-                          <span className="material-symbols-outlined text-indigo-500 shrink-0 mt-0.5">lightbulb</span>
-                          <div>
-                            <h4 className="font-bold text-sm text-indigo-900 dark:text-indigo-400 mb-1">
-                              {uiText.recommendation}
-                            </h4>
-                            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                              {aiSummary.recommendation}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Notes */}
-                      {aiSummary.notes && aiSummary.notes.length > 0 && (
-                        <div className="pt-2 border-t border-indigo-100/30 dark:border-slate-800">
-                          <h4 className="font-bold text-xs text-slate-500 uppercase tracking-widest mb-2">
-                            {uiText.notes}
-                          </h4>
-                          <ul className="space-y-1">
-                            {aiSummary.notes.map((n: string, i: number) => (
-                              <li key={i} className="text-xs text-slate-500 flex gap-2 items-start">
-                                <span className="text-indigo-400 font-bold">•</span>
-                                <span>{n}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-slate-500 text-sm italic py-2">
-                      {uiText.aiNotConfigured}
-                    </div>
-                  )}
-                </div>
-
                 <article className="prose prose-slate dark:prose-invert max-w-none">
                   <h3 className="text-xl font-bold mb-4">Đặc điểm nổi bật</h3>
                   <p className="mb-6">{product.description || product.short_description || 'Chưa có mô tả cho sản phẩm này.'}</p>
