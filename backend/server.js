@@ -5,6 +5,7 @@ import http from 'http';
 import express from 'express';
 import connectDB from './config/db.js';
 import { Server } from 'socket.io';
+import { isOriginAllowed } from './config/cors.js';
 
 import mongoose from 'mongoose';
 
@@ -71,7 +72,13 @@ const start = async () => {
   try {
     const io = new Server(server, {
       cors: {
-        origin: [process.env.FRONTEND_URL || 'http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'],
+        origin: (origin, callback) => {
+          if (isOriginAllowed(origin)) {
+            callback(null, true);
+          } else {
+            callback(null, false);
+          }
+        },
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
         credentials: true,
       },
