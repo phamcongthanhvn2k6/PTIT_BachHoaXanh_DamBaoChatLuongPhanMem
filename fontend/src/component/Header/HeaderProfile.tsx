@@ -6,6 +6,7 @@ import { logout } from '../../slices/authSlice';
 import { resetOrders } from '../../slices/orderSlice';
 import { loadNotifications } from '../../slices/notificationSlice';
 import { selectCurrentBranchItems } from '../../slices/cartSlice';
+import UserAvatar from '../../components/UserAvatar/UserAvatar';
 
 const HeaderProfile: React.FC = () => {
   const { t } = useTranslation();
@@ -90,7 +91,7 @@ const HeaderProfile: React.FC = () => {
               {unreadNotifs > 9 ? '9+' : unreadNotifs}
             </span>
           )}
-          <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-0 h-0.5 bg-white group-hover:w-1/2 transition-all"></span>
+          <span className="absolute -bottom-1 left-5 w-0 h-0.5 bg-white transition-all group-hover:left-2 group-hover:w-6"></span>
         </Link>
 
         {/* Cart */}
@@ -117,10 +118,10 @@ const HeaderProfile: React.FC = () => {
           aria-expanded={isOpen}
         >
           <div className="size-10 rounded-full border-2 border-white/30 overflow-hidden shadow-sm group-hover:border-white transition-all">
-            <img
-              src={user.avatar || 'https://i.pravatar.cc/100?img=12'}
-              alt={user.full_name || user.username}
-              className="w-full h-full object-cover"
+            <UserAvatar
+              src={user.avatar}
+              name={user.full_name || user.username}
+              size={40}
             />
           </div>
           

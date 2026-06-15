@@ -4,7 +4,8 @@ import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { orderService } from '../services/orderService';
 import { supportService } from '../services/supportService';
 import { toast } from '../components/Toast/toastEvent';
-import { useAppSelector } from '../store';
+import { useAppSelector, useAppDispatch } from '../store';
+import { validateLoyaltyBalance } from '../slices/authSlice';
 import type { Order } from '../types';
 
 const OrderTracking: React.FC = () => {
@@ -14,6 +15,7 @@ const OrderTracking: React.FC = () => {
     const queryParams = new URLSearchParams(location.search);
     const orderIdParam = queryParams.get('id') || pathOrderId || '';
     const navigate = useNavigate();
+    const dispatch = useAppDispatch();
     const { user } = useAppSelector(state => state.auth);
     const [order, setOrder] = React.useState<Order | null>(null);
     const [trackingData, setTrackingData] = React.useState<any>(null);
@@ -78,6 +80,7 @@ const OrderTracking: React.FC = () => {
       setIsProcessing(true);
       try {
         await orderService.cancel(orderIdParam, cancelReason);
+        dispatch(validateLoyaltyBalance() as any);
         setShowCancelModal(false);
         setCancelReason('');
         toast.success('Hủy đơn hàng thành công!');

@@ -386,3 +386,325 @@ export const draftPromotionFromAlert = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+
+// GET /api/inventory-batches/reconciliation/drift-report
+export const driftReport = async (req, res) => {
+  try {
+    const branchId = req.query.branch_id;
+    const query = {};
+    if (branchId && branchId !== 'ALL') {
+      const parseBranchId = (id) => {
+        if (!id) return null;
+        if (id === 'HCM01' || String(id) === '1') return new mongoose.Types.ObjectId('000000000000000000000001');
+        if (mongoose.Types.ObjectId.isValid(id)) return new mongoose.Types.ObjectId(id);
+        return id;
+      };
+      const parsed = parseBranchId(branchId);
+      if (parsed) query.branch_id = parsed;
+    }
+
+    const bps = await BranchProduct.find(query).lean();
+    const bpIds = bps.map(bp => bp._id);
+
+    // Get all batches for these branch products
+    const allBatches = await InventoryBatch.find({ branch_product_id: { $in: bpIds } }).lean();
+    
+    // Group batches by branch_product_id
+    const batchesMap = {};
+    allBatches.forEach(b => {
+      const bpIdStr = String(b.branch_product_id);
+      if (!batchesMap[bpIdStr]) batchesMap[bpIdStr] = [];
+      batchesMap[bpIdStr].push(b);
+    });
+
+    // Enrich products
+    const productIds = [...new Set(bps.map(bp => String(bp.product_id)).filter(Boolean))];
+    const products = await Product.find({ _id: { $in: productIds } }).select('name sku thumbnail').lean();
+    const productMap = {};
+    products.forEach(p => { productMap[String(p._id)] = p; });
+
+    // Enrich branches
+    const branchIds = [...new Set(bps.map(bp => String(bp.branch_id)).filter(Boolean))];
+    const branches = await Branch.find({ _id: { $in: branchIds } }).select('name').lean();
+    const branchMap = {};
+    branches.forEach(b => { branchMap[String(b._id)] = b; });
+
+    const report = [];
+    let totalChecked = 0;
+    let totalDrifts = 0;
+    const now = new Date();
+
+    bps.forEach(bp => {
+      totalChecked++;
+      const bpIdStr = String(bp._id);
+      const product = productMap[String(bp.product_id)] || {};
+      const branch = branchMap[String(bp.branch_id)] || {};
+      const batches = batchesMap[bpIdStr] || [];
+
+      let batchSum = 0;
+      let activeBatchSum = 0;
+      let expiredBatchSum = 0;
+
+      batches.forEach(b => {
+        const qty = Number(b.quantity || 0);
+        batchSum += qty;
+        if (b.exp_date && new Date(b.exp_date) <= now) {
+          expiredBatchSum += qty;
+        } else {
+          activeBatchSum += qty;
+        }
+      });
+
+      const stock = Number(bp.stock || 0);
+      const reserved = Number(bp.reserved_quantity || 0);
+      const diff = stock - batchSum;
+      const hasDrift = diff !== 0 || (batches.length === 0 && stock > 0);
+
+      // Sellable stock logic
+      let effectiveActiveQty = activeBatchSum;
+      if (batches.length === 0 && stock > 0) {
+        effectiveActiveQty = stock;
+      }
+      const sellable = Math.max(0, Math.min(stock, effectiveActiveQty) - reserved);
+
+      if (hasDrift) {
+        totalDrifts++;
+        report.push({
+          branch_product_id: bpIdStr,
+          product_name: product.name || bp.name || '—',
+          sku: product.sku || bp.sku || '—',
+          thumbnail: product.thumbnail || '',
+          branch_id: String(bp.branch_id),
+          branch_name: branch.name || bp.branch_name || '—',
+          stock,
+          reserved,
+          batchSum,
+          activeBatchSum,
+          expiredBatchSum,
+          sellable,
+          diff,
+          batchesCount: batches.length,
+          type: batches.length === 0 ? 'no_batches' : 'quantity_mismatch'
+        });
+      }
+    });
+
+    return res.json({
+      success: true,
+      summary: {
+        totalChecked,
+        totalDrifts,
+        healthScore: totalChecked > 0 ? Math.round(((totalChecked - totalDrifts) / totalChecked) * 100) : 100
+      },
+      data: report
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/inventory-batches/reconciliation/auto-heal
+export const autoHealProduct = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const { branch_product_id } = req.body;
+    if (!branch_product_id) {
+      await session.abortTransaction(); session.endSession();
+      return res.status(400).json({ success: false, message: 'branch_product_id is required' });
+    }
+
+    const bp = await BranchProduct.findById(branch_product_id).session(session);
+    if (!bp) {
+      await session.abortTransaction(); session.endSession();
+      return res.status(404).json({ success: false, message: 'Branch product not found' });
+    }
+
+    const batches = await InventoryBatch.find({ branch_product_id }).session(session);
+    const stock = Number(bp.stock || 0);
+
+    const now = new Date();
+    const oneYearFromNow = new Date();
+    oneYearFromNow.setFullYear(now.getFullYear() + 1);
+
+    if (batches.length === 0) {
+      // Case 1: Stock > 0 but no batches exist. Auto-create a batch.
+      if (stock > 0) {
+        const batchCode = `HEAL-${Date.now().toString(36).toUpperCase()}`;
+        await InventoryBatch.create([{
+          branch_product_id: bp._id,
+          batch_code: batchCode,
+          quantity: stock,
+          exp_date: oneYearFromNow,
+          received_date: now,
+          cost_price: 0,
+          note: 'Auto-healed: Missing batch created'
+        }], { session });
+      }
+    } else {
+      // Case 2: Mismatch between bp.stock and sum of batches.
+      const batchSum = batches.reduce((sum, b) => sum + Number(b.quantity || 0), 0);
+      const diff = stock - batchSum;
+
+      if (diff > 0) {
+        // We have more stock in BranchProduct than batches.
+        // Add the diff to the latest unexpired batch, or create a new one.
+        const activeBatches = batches.filter(b => !b.exp_date || new Date(b.exp_date) > now);
+        if (activeBatches.length > 0) {
+          // Sort active batches by exp_date ascending (FIFO style, edit the newest one)
+          activeBatches.sort((a, b) => new Date(b.exp_date || 0).getTime() - new Date(a.exp_date || 0).getTime());
+          const targetBatch = activeBatches[0];
+          targetBatch.quantity = (targetBatch.quantity || 0) + diff;
+          targetBatch.note = `${targetBatch.note || ''} (Auto-healed: added ${diff} drift)`.trim();
+          await targetBatch.save({ session });
+        } else {
+          // No active batches, create a new one for the diff
+          const batchCode = `HEAL-${Date.now().toString(36).toUpperCase()}`;
+          await InventoryBatch.create([{
+            branch_product_id: bp._id,
+            batch_code: batchCode,
+            quantity: diff,
+            exp_date: oneYearFromNow,
+            received_date: now,
+            cost_price: 0,
+            note: `Auto-healed: Created batch for ${diff} drift`
+          }], { session });
+        }
+      } else if (diff < 0) {
+        // We have fewer stock in BranchProduct than batches (batches sum is higher).
+        // Reduce the quantity from batches starting from the newest ones.
+        let toReduce = Math.abs(diff);
+        // Sort batches: newest received_date or exp_date first, to deduct from newer batches
+        const sortedBatches = [...batches].sort((a, b) => new Date(b.received_date || 0).getTime() - new Date(a.received_date || 0).getTime());
+        
+        for (const batch of sortedBatches) {
+          if (toReduce <= 0) break;
+          const currentQty = Number(batch.quantity || 0);
+          if (currentQty >= toReduce) {
+            batch.quantity = currentQty - toReduce;
+            batch.note = `${batch.note || ''} (Auto-healed: reduced ${toReduce} drift)`.trim();
+            await batch.save({ session });
+            toReduce = 0;
+          } else {
+            batch.quantity = 0;
+            batch.note = `${batch.note || ''} (Auto-healed: cleared ${currentQty} drift)`.trim();
+            await batch.save({ session });
+            toReduce -= currentQty;
+          }
+        }
+      }
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+    return res.json({ success: true, message: 'Tự động sửa lỗi lệch kho thành công' });
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/inventory-batches/reconciliation/auto-heal-all
+export const autoHealAll = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const branchId = req.body.branch_id;
+    const query = {};
+    if (branchId && branchId !== 'ALL') {
+      const parseBranchId = (id) => {
+        if (!id) return null;
+        if (id === 'HCM01' || String(id) === '1') return new mongoose.Types.ObjectId('000000000000000000000001');
+        if (mongoose.Types.ObjectId.isValid(id)) return new mongoose.Types.ObjectId(id);
+        return id;
+      };
+      const parsed = parseBranchId(branchId);
+      if (parsed) query.branch_id = parsed;
+    }
+
+    const bps = await BranchProduct.find(query).session(session);
+    const now = new Date();
+    const oneYearFromNow = new Date();
+    oneYearFromNow.setFullYear(now.getFullYear() + 1);
+
+    let healedCount = 0;
+
+    for (const bp of bps) {
+      const batches = await InventoryBatch.find({ branch_product_id: bp._id }).session(session);
+      const stock = Number(bp.stock || 0);
+      const batchSum = batches.reduce((sum, b) => sum + Number(b.quantity || 0), 0);
+
+      const hasDrift = batchSum !== stock || (batches.length === 0 && stock > 0);
+      if (!hasDrift) continue;
+
+      healedCount++;
+
+      if (batches.length === 0) {
+        if (stock > 0) {
+          const batchCode = `HEAL-${Date.now().toString(36).toUpperCase()}`;
+          await InventoryBatch.create([{
+            branch_product_id: bp._id,
+            batch_code: batchCode,
+            quantity: stock,
+            exp_date: oneYearFromNow,
+            received_date: now,
+            cost_price: 0,
+            note: 'Auto-healed: Missing batch created'
+          }], { session });
+        }
+      } else {
+        const diff = stock - batchSum;
+        if (diff > 0) {
+          const activeBatches = batches.filter(b => !b.exp_date || new Date(b.exp_date) > now);
+          if (activeBatches.length > 0) {
+            activeBatches.sort((a, b) => new Date(b.exp_date || 0).getTime() - new Date(a.exp_date || 0).getTime());
+            const targetBatch = activeBatches[0];
+            targetBatch.quantity = (targetBatch.quantity || 0) + diff;
+            targetBatch.note = `${targetBatch.note || ''} (Auto-healed: added ${diff} drift)`.trim();
+            await targetBatch.save({ session });
+          } else {
+            const batchCode = `HEAL-${Date.now().toString(36).toUpperCase()}`;
+            await InventoryBatch.create([{
+              branch_product_id: bp._id,
+              batch_code: batchCode,
+              quantity: diff,
+              exp_date: oneYearFromNow,
+              received_date: now,
+              cost_price: 0,
+              note: `Auto-healed: Created batch for ${diff} drift`
+            }], { session });
+          }
+        } else if (diff < 0) {
+          let toReduce = Math.abs(diff);
+          const sortedBatches = [...batches].sort((a, b) => new Date(b.received_date || 0).getTime() - new Date(a.received_date || 0).getTime());
+          
+          for (const batch of sortedBatches) {
+            if (toReduce <= 0) break;
+            const currentQty = Number(batch.quantity || 0);
+            if (currentQty >= toReduce) {
+              batch.quantity = currentQty - toReduce;
+              batch.note = `${batch.note || ''} (Auto-healed: reduced ${toReduce} drift)`.trim();
+              await batch.save({ session });
+              toReduce = 0;
+            } else {
+              batch.quantity = 0;
+              batch.note = `${batch.note || ''} (Auto-healed: cleared ${currentQty} drift)`.trim();
+              await batch.save({ session });
+              toReduce -= currentQty;
+            }
+          }
+        }
+      }
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+    return res.json({ success: true, message: `Đã tự động sửa lệch kho cho ${healedCount} sản phẩm` });
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+

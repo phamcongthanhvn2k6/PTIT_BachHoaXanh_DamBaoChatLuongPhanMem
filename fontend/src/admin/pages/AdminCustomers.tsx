@@ -1,8 +1,8 @@
-// src/pages/AdminCustomers.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { dataService } from '../../services/dataService';
 import { toast } from '../../components/Toast/toastEvent';
 import * as Types from '../../types';
+import UserAvatar from '../../components/UserAvatar/UserAvatar';
 
 const AdminCustomers: React.FC = () => {
   const [customers, setCustomers] = useState<Types.User[]>([]);
@@ -361,10 +361,12 @@ const AdminCustomers: React.FC = () => {
                       >
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <img
-                              alt={user.full_name || user.username}
-                              className={`w-10 h-10 rounded-full object-cover border-2 shadow-sm ${!isActive ? 'grayscale opacity-60 border-slate-200' : 'border-white'}`}
-                              src={user.avatar || 'https://ui-avatars.com/api/?background=random&name=' + user.username}
+                            <UserAvatar
+                              src={user.avatar}
+                              name={user.full_name || user.username}
+                              size={40}
+                              userId={user.id || user._id}
+                              className={`rounded-full border-2 shadow-sm ${!isActive ? 'grayscale opacity-60 border-slate-200' : 'border-white'}`}
                             />
                             <div>
                             <p className={`text-sm font-bold ${!isActive ? 'text-slate-400 line-through' : 'text-slate-900'}`}>{user.full_name || user.username}</p>
@@ -474,9 +476,13 @@ const AdminCustomers: React.FC = () => {
                 <div className="p-6 border-b border-slate-200/50 bg-slate-50/50 flex-shrink-0">
                   <div className="flex justify-between items-start mb-5 relative pr-10">
                     <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-white shadow-sm flex-shrink-0">
-                        <img className="w-full h-full object-cover" src={selectedCustomer.avatar || 'https://ui-avatars.com/api/?background=random&name=' + selectedCustomer.username} alt="Profile" />
-                      </div>
+                      <UserAvatar
+                        src={selectedCustomer.avatar}
+                        name={selectedCustomer.full_name || selectedCustomer.username}
+                        size={64}
+                        userId={selectedCustomer.id || selectedCustomer._id}
+                        className="rounded-2xl border-2 border-white shadow-sm flex-shrink-0"
+                      />
                       <div>
                         <h5 className="text-lg font-black text-slate-900 leading-tight flex items-center gap-2">
                           {selectedCustomer.full_name || selectedCustomer.username}

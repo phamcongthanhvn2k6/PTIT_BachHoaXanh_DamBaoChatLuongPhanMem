@@ -5,6 +5,7 @@ import { logActivity } from '../services/auditService.js';
 export const listPopupAds = async (req, res) => {
   try {
     const isClient = req.query.client === 'true';
+    const { page, limit, search, status, sort } = req.query;
     const query = {};
     
     if (isClient) {
@@ -22,9 +23,53 @@ export const listPopupAds = async (req, res) => {
       return res.json({ success: true, data });
     } else {
       // Admin sees everything
-      if (req.query.status && req.query.status !== 'all') {
-        query.status = req.query.status;
+      if (status && status !== 'all') {
+        if (status === 'active') {
+          query.status = 'active';
+        } else if (status === 'inactive') {
+          query.status = 'inactive';
+        } else if (status === 'expired') {
+          query.end_date = { $lt: new Date() };
+        } else {
+          query.status = status;
+        }
       }
+      
+      if (search) {
+        query.$or = [
+          { title: { $regex: search, $options: 'i' } },
+          { description: { $regex: search, $options: 'i' } },
+        ];
+      }
+
+      let sortQuery = { created_at: -1 };
+      if (sort === 'expiring') {
+        sortQuery = { end_date: 1 };
+      } else if (sort === 'newest') {
+        sortQuery = { created_at: -1 };
+      }
+
+      if (page !== undefined || limit !== undefined) {
+        const pageNum = Math.max(1, Number(page || 1));
+        const limitNum = Math.min(100, Math.max(1, Number(limit || 10)));
+        
+        const [total, data] = await Promise.all([
+          PopupAd.countDocuments(query),
+          PopupAd.find(query).sort(sortQuery).skip((pageNum - 1) * limitNum).limit(limitNum)
+        ]);
+        
+        return res.json({
+          success: true,
+          data,
+          pagination: {
+            page: pageNum,
+            limit: limitNum,
+            total,
+            totalPages: Math.ceil(total / limitNum) || 1
+          }
+        });
+      }
+
       const data = await PopupAd.find(query).sort({ created_at: -1 });
       return res.json({ success: true, data });
     }

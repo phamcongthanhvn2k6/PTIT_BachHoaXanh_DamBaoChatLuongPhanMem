@@ -13,7 +13,12 @@ export const bannerService = {
   getBanners: async (params?: Record<string, any>) => {
     try {
       const res = await httpClient.get(endpoints.banners.list, { params });
-      return { success: true, data: asArray(res?.data || res) };
+      const rawData = res?.data || res;
+      return {
+        success: true,
+        data: asArray(rawData?.data !== undefined ? rawData.data : rawData),
+        pagination: rawData?.pagination,
+      };
     } catch (err: any) {
       console.error('getBanners error:', err);
       return { success: false, data: [] };

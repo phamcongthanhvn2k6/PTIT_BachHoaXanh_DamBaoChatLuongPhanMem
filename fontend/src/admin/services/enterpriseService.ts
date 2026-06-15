@@ -40,6 +40,9 @@ export const enterpriseService = {
   updateInventoryBatch: async (id: string, payload: any) => asObject(await httpClient.put(endpoints.inventoryBatches.update(id), payload)),
   getExpiringAlerts: async (days: number = 30) => asArray(await httpClient.get(endpoints.inventoryBatches.alertsExpiring, { params: { days } })),
   draftPromotionFromAlert: async (payload: any) => asObject(await httpClient.post(endpoints.inventoryBatches.draftPromotion, payload)),
+  getDriftReport: async (params: any = {}) => asObject(await httpClient.get(endpoints.inventoryBatches.driftReport, { params })),
+  autoHealProduct: async (branchProductId: string) => asObject(await httpClient.post(endpoints.inventoryBatches.autoHeal, { branch_product_id: branchProductId })),
+  autoHealAll: async (branchId?: string) => asObject(await httpClient.post(endpoints.inventoryBatches.autoHealAll, { branch_id: branchId })),
 
   getStockMovements: async (params: any = {}) => withPagination(await httpClient.get(endpoints.stockMovements.list, { params })),
   getStockMovementSummary: async (params: any = {}) => asArray(await httpClient.get(endpoints.stockMovements.summary, { params })),

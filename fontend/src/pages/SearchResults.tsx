@@ -10,6 +10,7 @@ import { useBranchData } from '../hooks/useBranchData';
 import { productService } from '../services/productService';
 import { resolveImageUrl } from '../utils/imageUrl';
 import { getProductUrl } from '../utils/productUrl';
+import { CategoryIcon } from '../components/CategoryIcon';
 const SearchResults: React.FC = () => {
   const { t } = useTranslation();
   const location = useLocation();
@@ -250,7 +251,7 @@ const SearchResults: React.FC = () => {
                     <select
                       value={sortBy}
                       onChange={(e) => setSortBy(e.target.value)}
-                      className="w-full h-11 pl-4 pr-10 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg appearance-none focus:ring-2 focus:ring-primary/20 outline-none"
+                      className="w-full h-11 pl-4 pr-10 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg appearance-none bg-none focus:ring-2 focus:ring-primary/20 outline-none"
                     >
                       <option value="Mới nhất">{t('product.newest', 'Mới nhất')}</option>
                       <option value="Bán chạy">{t('product.bestSeller', 'Bán chạy')}</option>
@@ -289,7 +290,7 @@ const SearchResults: React.FC = () => {
                           }`}
                         >
                           <span className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-lg">eco</span>
+                            <CategoryIcon category={cat} className="w-5 h-5 shrink-0" iconClass="material-symbols-outlined text-lg" size={18} />
                             {cat.name}
                           </span>
                           <span className="text-xs bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded-full">

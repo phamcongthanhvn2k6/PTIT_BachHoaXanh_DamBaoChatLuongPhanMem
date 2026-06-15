@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store';
 import { createOrder } from '../slices/orderSlice';
 import { clearCart, selectCurrentBranchItems, loadAllBranchCarts } from '../slices/cartSlice';
-import { verifySession } from '../slices/authSlice';
+import { verifySession, validateLoyaltyBalance } from '../slices/authSlice';
 import { loadLoyaltyTransactions } from '../slices/loyaltySlice';
 import { paymentService } from '../services/paymentService';
 import { orderService } from '../services/orderService';
@@ -176,6 +176,7 @@ const Payment: React.FC = () => {
     dispatch(createOrder(paidOrder));
     dispatch(clearCart());
     dispatch(verifySession() as any);
+    dispatch(validateLoyaltyBalance() as any);
     dispatch(loadLoyaltyTransactions() as any);
 
     setPaymentStatus('paid');

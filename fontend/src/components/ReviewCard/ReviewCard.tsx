@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { Review } from '../../types';
 import StarRating from '../StarRating/StarRating';
 import ReviewReplyForm from '../ReviewReplyForm/ReviewReplyForm';
+import UserAvatar from '../UserAvatar/UserAvatar';
 
 interface ReviewCardProps {
   review: Review;
@@ -19,10 +20,11 @@ const ReviewCard: React.FC<ReviewCardProps> = ({ review, canReply, onReply }) =>
 
   return (
     <div className="flex gap-4">
-      <div
-        className="size-12 rounded-full bg-slate-200 dark:bg-slate-700 flex-shrink-0 bg-cover bg-center"
-        style={{ backgroundImage: `url(${review.avatar || 'https://i.pravatar.cc/100'})` }}
-        aria-label={`Avatar of ${review.user_name || 'Khách hàng'}`}
+      <UserAvatar
+        src={review.user_avatar || review.avatar}
+        name={review.user_name || 'Khách hàng'}
+        size={48}
+        userId={review.user_id}
       />
       <div className="flex-1">
         <div className="flex items-center justify-between mb-1">

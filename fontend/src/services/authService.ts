@@ -239,4 +239,9 @@ export const authService = {
     const response = await httpClient.post(endpoints.auth.resetPassword, payload);
     return response.data;
   },
+  validateBalance: async (): Promise<{ points: number; corrected: boolean; previousPoints?: number }> => {
+    const response = await httpClient.get(endpoints.auth.validateBalance);
+    const data = response.data?.data ?? response.data;
+    return data;
+  },
 };

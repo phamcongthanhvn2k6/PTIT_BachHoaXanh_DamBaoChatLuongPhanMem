@@ -105,11 +105,29 @@ const validateCouponPayload = (body = {}, { isUpdate = false } = {}) => {
 // ─────────────────────────────────────────────
 export const list = async (req, res) => {
   try {
-    const { is_active, search, voucher_type } = req.query;
+    const { is_active, search, voucher_type, page, limit, status, sort } = req.query;
     const isPrivileged = isPrivilegedRequest(req);
     const filter = {};
-    if (is_active !== undefined) filter.is_active = is_active === 'true';
-    if (voucher_type && ['product', 'shipping'].includes(voucher_type)) filter.voucher_type = voucher_type;
+    
+    if (is_active !== undefined) {
+      filter.is_active = is_active === 'true';
+    }
+    
+    if (status && status !== 'all') {
+      const now = new Date();
+      if (status === 'active') {
+        filter.is_active = true;
+      } else if (status === 'inactive') {
+        filter.is_active = false;
+      } else if (status === 'expired') {
+        filter.end_date = { $lt: now };
+      }
+    }
+    
+    if (voucher_type && ['product', 'shipping'].includes(voucher_type)) {
+      filter.voucher_type = voucher_type;
+    }
+    
     if (search) {
       filter.$or = [
         { code: { $regex: search, $options: 'i' } },
@@ -117,7 +135,37 @@ export const list = async (req, res) => {
         { description: { $regex: search, $options: 'i' } },
       ];
     }
-    const rows = await Coupon.find(filter).sort('-created_at');
+
+    let sortQuery = '-created_at';
+    if (sort === 'expiring') {
+      sortQuery = 'end_date';
+    } else if (sort === 'newest') {
+      sortQuery = '-created_at';
+    }
+
+    if (page !== undefined || limit !== undefined) {
+      const pageNum = Math.max(1, Number(page || 1));
+      const limitNum = Math.min(100, Math.max(1, Number(limit || 10)));
+      const [total, rows] = await Promise.all([
+        Coupon.countDocuments(filter),
+        Coupon.find(filter).sort(sortQuery).skip((pageNum - 1) * limitNum).limit(limitNum)
+      ]);
+      const mapped = rows.map(decorateCoupon);
+      const data = isPrivileged ? mapped : mapped.filter((coupon) => coupon.is_active && coupon.is_visible_public);
+      
+      return res.json({
+        success: true,
+        data,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum) || 1
+        }
+      });
+    }
+
+    const rows = await Coupon.find(filter).sort(sortQuery);
     const mapped = rows.map(decorateCoupon);
 
     if (!isPrivileged) {

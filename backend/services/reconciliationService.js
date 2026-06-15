@@ -79,21 +79,7 @@ export async function runReconciliationAudit() {
       {
         $group: {
           _id: '$user_id',
-          earned: {
-            $sum: {
-              $cond: [{ $eq: ['$type', 'earn'] }, '$points', 0]
-            }
-          },
-          spent: {
-            $sum: {
-              $cond: [{ $eq: ['$type', 'spend'] }, '$points', 0]
-            }
-          },
-          reversed: {
-            $sum: {
-              $cond: [{ $eq: ['$type', 'reverse'] }, '$points', 0]
-            }
-          }
+          totalPoints: { $sum: '$points' }
         }
       }
     ]);
@@ -103,7 +89,7 @@ export async function runReconciliationAudit() {
       const user = await User.findById(item._id).lean();
       if (!user) continue;
 
-      const calculatedBalance = Math.max(0, item.earned - item.spent - item.reversed);
+      const calculatedBalance = Math.max(0, item.totalPoints || 0);
       const actualBalance = user.lotte_points || 0;
       
       if (calculatedBalance !== actualBalance) {

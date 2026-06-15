@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 import RefreshToken from '../models/RefreshToken.js';
 import { generateToken, generateRefreshToken, verifyRefreshToken } from '../utils/jwt.js';
@@ -1131,3 +1132,77 @@ export const profileSummary = async (req, res) => {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+
+// GET /api/auth/validate-balance
+export const validateBalance = async (req, res) => {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const toObjectIdIfValid = (id) => {
+      if (!id) return id;
+      if (mongoose.Types.ObjectId.isValid(id)) return new mongoose.Types.ObjectId(id);
+      return id;
+    };
+
+    const userIds = [toObjectIdIfValid(userId), String(userId)];
+
+    // Sum all points in LoyaltyTransaction ledger
+    const ledger = await LoyaltyTransaction.aggregate([
+      { $match: { user_id: { $in: userIds } } },
+      { $group: { _id: null, totalPoints: { $sum: '$points' } } }
+    ]);
+
+    const ledgerTotal = ledger.length > 0 ? Math.max(0, ledger[0].totalPoints) : 0;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const currentPoints = user.lotte_points || 0;
+    let corrected = false;
+
+    if (currentPoints !== ledgerTotal) {
+      user.lotte_points = ledgerTotal;
+      await user.save();
+      corrected = true;
+
+      // Log the discrepancy and the fix
+      try {
+        const { logActivity } = await import('../services/auditService.js');
+        await logActivity({
+          userId: user._id,
+          userName: 'SYSTEM_LEDGER_VALIDATION',
+          action: 'LOYALTY_BALANCE_CORRECTION',
+          entity: 'user',
+          entityId: user._id,
+          details: {
+            previousPoints: currentPoints,
+            newPoints: ledgerTotal,
+            reason: 'Auto-corrected from transaction ledger verification'
+          },
+          ip: req.ip || '127.0.0.1'
+        });
+      } catch (auditErr) {
+        console.error('[ValidateBalance] Failed to write audit log:', auditErr.message);
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        points: user.lotte_points,
+        corrected,
+        previousPoints: corrected ? currentPoints : undefined
+      },
+      message: corrected ? 'Đã đồng bộ điểm từ lịch sử giao dịch.' : 'Điểm số hoàn toàn khớp với lịch sử giao dịch.'
+    });
+  } catch (err) {
+    console.error('[ValidateBalance] Error:', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+

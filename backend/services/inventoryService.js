@@ -31,6 +31,15 @@ const InventoryBatch =
  * @param {object}          session         - Mongoose Transaction session (optional)
  * @returns {{ success: boolean, consumed: Array<{ batchId, used: number }>, remaining: number }}
  */
+/**
+ * Deduct stock using FIFO — batches with the nearest exp_date are consumed first.
+ * Only unexpired batches are eligible for deduction.
+ *
+ * @param {string|ObjectId} branchProductId - The branch product whose stock to reduce
+ * @param {number}          qty             - How many units to deduct
+ * @param {object}          session         - Mongoose Transaction session (optional)
+ * @returns {{ success: boolean, consumed: Array<{ batchId, used: number }>, remaining: number }}
+ */
 export async function deductStockFIFO(branchProductId, qty, session = null) {
   if (qty <= 0) return { success: true, consumed: [], remaining: 0 };
 
@@ -38,10 +47,16 @@ export async function deductStockFIFO(branchProductId, qty, session = null) {
     ? new mongoose.Types.ObjectId(branchProductId)
     : branchProductId;
 
-  // Get all batches ordered by exp_date ASC (soonest first), then by received_date ASC
+  const now = new Date();
+
+  // Get active, unexpired batches ordered by exp_date ASC (soonest first), then by received_date ASC
   const batches = await InventoryBatch.find({
     branch_product_id: normalizedId,
     quantity: { $gt: 0 },
+    $or: [
+      { exp_date: null },
+      { exp_date: { $gt: now } }
+    ]
   }).sort({ exp_date: 1, received_date: 1 }).session(session);
 
   let remaining = qty;
@@ -102,6 +117,60 @@ export async function deductInventoryForOrder(branch_id, items, session, orderId
       const p = await ProductModel.findById(bp.product_id).session(session);
       const productName = p ? (p.name || p.product_name) : (bp.name || 'Sản phẩm');
 
+      // ─── Detailed inventory validation ───
+      if (!bp.is_available) {
+        throw new Error(`Sản phẩm "${productName}" hiện không được bán tại chi nhánh này.`);
+      }
+
+      if (bp.stock <= 0) {
+        throw new Error(`Sản phẩm "${productName}" đã hết hàng tại chi nhánh đã chọn.`);
+      }
+
+      if (bp.stock < qty) {
+        throw new Error(`Sản phẩm "${productName}" không đủ số lượng tại chi nhánh đã chọn (yêu cầu: ${qty}, hiện có: ${bp.stock}).`);
+      }
+
+      const availableQty = Math.max(0, bp.stock - (bp.reserved_quantity || 0));
+      if (availableQty < qty) {
+        throw new Error(`Sản phẩm "${productName}" không đủ số lượng khả dụng do đã được giữ trước bởi các đơn hàng khác (yêu cầu: ${qty}, khả dụng: ${availableQty}).`);
+      }
+
+      const normalizedId = mongoose.Types.ObjectId.isValid(bpId)
+        ? new mongoose.Types.ObjectId(bpId)
+        : bpId;
+
+      // Check current batches
+      const batches = await InventoryBatch.find({
+        branch_product_id: normalizedId,
+        quantity: { $gt: 0 }
+      }).session(session);
+
+      const now = new Date();
+      const activeBatches = batches.filter(b => !b.exp_date || new Date(b.exp_date) > now);
+      const expiredBatches = batches.filter(b => b.exp_date && new Date(b.exp_date) <= now);
+
+      const totalActiveQty = activeBatches.reduce((sum, b) => sum + (b.quantity || 0), 0);
+      const totalExpiredQty = expiredBatches.reduce((sum, b) => sum + (b.quantity || 0), 0);
+
+      // Auto-heal if no batches exist but branch product has stock
+      if (batches.length === 0 && bp.stock >= qty) {
+        await InventoryBatch.create([{
+          branch_product_id: normalizedId,
+          batch_code: `BAT-HEAL-${Date.now().toString(36).toUpperCase()}`,
+          quantity: bp.stock,
+          exp_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)), // 1 year expiry
+          received_date: new Date(),
+          cost_price: bp.import_price || bp.price * 0.7 || 0,
+          note: 'Auto-created fallback batch to resolve FIFO discrepancy during checkout'
+        }], { session });
+      }
+      else if (batches.length > 0 && totalActiveQty === 0 && totalExpiredQty > 0) {
+        throw new Error(`Tất cả các lô hàng của sản phẩm "${productName}" tại chi nhánh này đã hết hạn sử dụng và không thể bán.`);
+      }
+      else if (batches.length > 0 && totalActiveQty < qty) {
+        throw new Error(`Số lượng sản phẩm "${productName}" trong các lô hàng còn hạn sử dụng không đủ bán (yêu cầu: ${qty}, còn hạn: ${totalActiveQty}).`);
+      }
+
       // 1. Áp dụng thuật toán FIFO trên các lô (Batches)
       const result = await deductStockFIFO(bpId, qty, session);
       if (!result || !result.success) {
@@ -117,8 +186,6 @@ export async function deductInventoryForOrder(branch_id, items, session, orderId
       const afterStock = currentStock - qty;
       bp.stock = afterStock;
       await bp.save({ session });
-
-      // Resolve product details (already resolved above)
 
       // Create Stock Movement Ledger entry
       const StockMovementModel = mongoose.model('StockMovement');
@@ -249,5 +316,51 @@ export async function addStockBatch({ branchProductId, qty, expDate, costPrice, 
   return batch;
 }
 
+export async function getSellableStockInfo(branchProductId) {
+  const normalizedId = mongoose.Types.ObjectId.isValid(branchProductId)
+    ? new mongoose.Types.ObjectId(branchProductId)
+    : branchProductId;
+
+  const BranchProductModel = mongoose.model('BranchProduct');
+  const bp = await BranchProductModel.findById(branchProductId);
+  if (!bp) {
+    return { stock: 0, reserved: 0, expired: 0, sellable: 0, status: 'not_found' };
+  }
+
+  // Get all batches
+  const batches = await InventoryBatch.find({
+    branch_product_id: normalizedId,
+    quantity: { $gt: 0 }
+  });
+
+  const now = new Date();
+  let totalActiveBatchQty = 0;
+  let totalExpiredBatchQty = 0;
+
+  for (const batch of batches) {
+    if (batch.exp_date && new Date(batch.exp_date) <= now) {
+      totalExpiredBatchQty += (batch.quantity || 0);
+    } else {
+      totalActiveBatchQty += (batch.quantity || 0);
+    }
+  }
+
+  // If no batches exist at all, we assume all bp.stock is active (since it is auto-healed at checkout)
+  let effectiveActiveQty = totalActiveBatchQty;
+  if (batches.length === 0 && bp.stock > 0) {
+    effectiveActiveQty = bp.stock;
+  }
+
+  const sellable = Math.max(0, Math.min(bp.stock, effectiveActiveQty) - (bp.reserved_quantity || 0));
+
+  return {
+    stock: bp.stock,
+    reserved: bp.reserved_quantity || 0,
+    expired: totalExpiredBatchQty,
+    sellable: sellable,
+    status: bp.is_available ? 'active' : 'inactive'
+  };
+}
+
 export { InventoryBatch };
-export default { deductStockFIFO, deductInventoryForOrder, restoreInventoryFromOrder, addStockBatch, InventoryBatch };
+export default { deductStockFIFO, deductInventoryForOrder, restoreInventoryFromOrder, addStockBatch, getSellableStockInfo, InventoryBatch };

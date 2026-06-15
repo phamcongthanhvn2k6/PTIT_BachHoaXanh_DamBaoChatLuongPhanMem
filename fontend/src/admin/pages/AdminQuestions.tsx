@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { questionService } from '../../services/questionService';
 import { toast } from '../../components/Toast/toastEvent';
+import UserAvatar from '../../components/UserAvatar/UserAvatar';
 import { 
   PageHeader, SearchBar, StatusBadge, EmptyState, 
   LoadingOverlay, PaginationControl, Modal, DetailDrawer, 
@@ -9,6 +11,7 @@ import {
 import { format } from 'date-fns';
 
 const AdminQuestions: React.FC = () => {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [questions, setQuestions] = useState<any[]>([]);
   const [page, setPage] = useState(1);
@@ -53,14 +56,14 @@ const AdminQuestions: React.FC = () => {
       };
       const res = await questionService.updateSettings(payload);
       if (res?.success) {
-        toast.success('Đã cập nhật cấu hình Q&A');
+        toast.success(t('adminQuestions.settingsUpdateSuccess', 'Đã cập nhật cấu hình Q&A'));
         if (newMode !== undefined) setQaMode(newMode);
         if (newFallback !== undefined) setQaFallback(newFallback);
         if (newModels !== undefined) setActiveModels(newModels);
         loadSettings();
       }
     } catch {
-      toast.error('Lỗi lưu cấu hình Q&A');
+      toast.error(t('adminQuestions.settingsUpdateError', 'Lỗi lưu cấu hình Q&A'));
     } finally {
       setSavingSettings(false);
     }
@@ -78,11 +81,11 @@ const AdminQuestions: React.FC = () => {
       setQuestions(res?.data || []);
       setTotal(res?.meta?.total || 0);
     } catch {
-      toast.error('Lỗi tải danh sách Hỏi/Đáp');
+      toast.error(t('adminQuestions.loadError'));
     } finally {
       setLoading(false);
     }
-  }, [page, search, statusFilter]);
+  }, [page, search, statusFilter, t]);
 
   useEffect(() => { 
     loadData(); 
@@ -94,34 +97,34 @@ const AdminQuestions: React.FC = () => {
     setPage(1);
   }, [statusFilter, search]);
 
-  const handleAction = async (e: React.FormEvent) => {
+  const handleAction = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!statusChangeModal) return;
     try {
       const { id, action } = statusChangeModal;
       if (action === 'delete') {
         await questionService.delete(id);
-        toast.success(`Đã xóa câu hỏi`);
+        toast.success(t('adminQuestions.deleteSuccess', 'Đã xóa câu hỏi'));
         setDetailItem(null);
       } else if (action === 'hide') {
         await questionService.update(id, { status: 'hidden' });
-        toast.success(`Đã ẩn câu hỏi`);
+        toast.success(t('adminQuestions.hideSuccess', 'Đã ẩn câu hỏi'));
         if (detailItem) setDetailItem((prev: any) => ({ ...prev, status: 'hidden' }));
       } else if (action === 'show') {
         await questionService.update(id, { status: 'pending' });
-        toast.success(`Đã hiển thị câu hỏi`);
+        toast.success(t('adminQuestions.showSuccess', 'Đã hiển thị câu hỏi'));
         if (detailItem) setDetailItem((prev: any) => ({ ...prev, status: 'pending' }));
       } else if (action === 'pin' || action === 'unpin') {
         await questionService.update(id, { is_pinned: action === 'pin' });
-        toast.success(`Đã cập nhật trạng thái ghim`);
+        toast.success(t('adminQuestions.pinSuccess', 'Đã cập nhật trạng thái ghim'));
         if (detailItem) setDetailItem((prev: any) => ({ ...prev, is_pinned: action === 'pin' }));
       } else if (action === 'official' || action === 'unofficial') {
         await questionService.update(id, { is_official_answer: action === 'official' });
-        toast.success(`Đã cập nhật huy hiệu Official`);
+        toast.success(t('adminQuestions.officialSuccess', 'Đã cập nhật huy hiệu Official'));
         if (detailItem) setDetailItem((prev: any) => ({ ...prev, is_official_answer: action === 'official' }));
       } else if (action === 'approve_ai') {
         await questionService.update(id, { ai_status: 'answered', status: 'answered' });
-        toast.success(`Đã phê duyệt câu trả lời của AI`);
+        toast.success(t('adminQuestions.approveSuccess', 'Đã phê duyệt câu trả lời của AI'));
         if (detailItem) {
           setDetailItem((prev: any) => ({ 
             ...prev, 
@@ -129,7 +132,7 @@ const AdminQuestions: React.FC = () => {
             ai_status: 'answered',
             answer: {
               ...prev.answer,
-              admin_name: 'Trợ lý AI Lotte Mart'
+              admin_name: t('qa.aiResponse', 'Trợ lý AI Lotte Mart')
             }
           }));
         }
@@ -137,7 +140,7 @@ const AdminQuestions: React.FC = () => {
       setStatusChangeModal(null);
       loadData();
     } catch {
-      toast.error('Lỗi thực hiện thao tác');
+      toast.error(t('adminQuestions.actionError', 'Lỗi thực hiện thao tác'));
     }
   };
 
@@ -145,12 +148,12 @@ const AdminQuestions: React.FC = () => {
     if (!detailItem || !replyText.trim()) return;
     try {
       const res = await questionService.reply(detailItem.product_id, detailItem._id || detailItem.id, replyText);
-      toast.success('Đã gửi phản hồi');
+      toast.success(t('adminQuestions.replySuccess', 'Đã gửi phản hồi'));
       setDetailItem(res.data);
       setReplyText('');
       loadData();
     } catch {
-      toast.error('Lỗi phản hồi');
+      toast.error(t('adminQuestions.replyError', 'Lỗi phản hồi'));
     }
   };
 
@@ -183,8 +186,8 @@ const AdminQuestions: React.FC = () => {
       <div className="p-8 bg-slate-50 min-h-screen">
         <div className="max-w-7xl mx-auto space-y-6">
           <PageHeader 
-            title="AI Moderation & Hỏi Đáp" 
-            subtitle="Kiểm duyệt câu trả lời tự động từ AI và giải đáp thắc mắc của khách hàng"
+            title={t('adminQuestions.title')} 
+            subtitle={t('adminQuestions.subtitle')}
             breadcrumbs={['Quản trị', 'CSKH', 'AI Moderation']}
           />
 
@@ -301,19 +304,19 @@ const AdminQuestions: React.FC = () => {
             {/* Quick stats grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100/80 text-center">
-                <div className="text-slate-400 text-[10px] font-black uppercase tracking-wider">Chờ duyệt</div>
+                <div className="text-slate-400 text-[10px] font-black uppercase tracking-wider">{t('adminQuestions.stats.pending')}</div>
                 <div className="text-xl font-black text-amber-600 mt-0.5">{stats.pending}</div>
               </div>
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100/80 text-center">
-                <div className="text-slate-400 text-[10px] font-black uppercase tracking-wider">Đã duyệt</div>
+                <div className="text-slate-400 text-[10px] font-black uppercase tracking-wider">{t('adminQuestions.stats.answered')}</div>
                 <div className="text-xl font-black text-emerald-600 mt-0.5">{stats.answered}</div>
               </div>
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100/80 text-center">
-                <div className="text-slate-400 text-[10px] font-black uppercase tracking-wider">Cần duyệt AI</div>
+                <div className="text-slate-400 text-[10px] font-black uppercase tracking-wider">{t('adminQuestions.stats.needs_review')}</div>
                 <div className="text-xl font-black text-purple-600 mt-0.5">{stats.needs_review}</div>
               </div>
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100/80 text-center">
-                <div className="text-slate-400 text-[10px] font-black uppercase tracking-wider">Từ chối</div>
+                <div className="text-slate-400 text-[10px] font-black uppercase tracking-wider">{t('adminQuestions.stats.rejected')}</div>
                 <div className="text-xl font-black text-red-600 mt-0.5">{stats.rejected}</div>
               </div>
             </div>
@@ -336,7 +339,7 @@ const AdminQuestions: React.FC = () => {
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Tất cả
+                {t('adminSupport.filterAll', 'Tất cả')}
               </button>
               <button
                 onClick={() => setStatusFilter('pending')}
@@ -346,7 +349,7 @@ const AdminQuestions: React.FC = () => {
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Chờ duyệt
+                {t('adminQuestions.status.pending')}
               </button>
               <button
                 onClick={() => setStatusFilter('answered')}
@@ -356,7 +359,7 @@ const AdminQuestions: React.FC = () => {
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Đã trả lời
+                {t('adminQuestions.stats.answered')}
               </button>
               <button
                 onClick={() => setStatusFilter('hidden')}
@@ -366,7 +369,7 @@ const AdminQuestions: React.FC = () => {
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Đã ẩn
+                {t('adminQuestions.status.hidden')}
               </button>
             </div>
           </div>
@@ -414,11 +417,11 @@ const AdminQuestions: React.FC = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex flex-col gap-1 items-start">
-                              <StatusBadge status={getStatusColor(q.status)} label={q.status === 'pending' ? 'Chờ duyệt' : q.status === 'answered' ? 'Đã duyệt' : 'Đã ẩn'} />
+                              <StatusBadge status={getStatusColor(q.status)} label={q.status === 'pending' ? t('adminQuestions.status.pending') : q.status === 'answered' ? t('adminQuestions.stats.answered') : t('adminQuestions.status.hidden')} />
                               {q.is_pinned && <span className="text-[10px] font-bold text-orange-600 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded">Ghim</span>}
                               {q.is_official_answer && <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">Official</span>}
                               {isPendingReview && (
-                                <span className="text-[9px] font-black text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 uppercase mt-1 animate-pulse">Cần duyệt AI</span>
+                                <span className="text-[9px] font-black text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 uppercase mt-1 animate-pulse">{t('adminQuestions.stats.needs_review')}</span>
                               )}
                             </div>
                           </td>
@@ -427,8 +430,11 @@ const AdminQuestions: React.FC = () => {
                           </td>
                           <td className="px-6 py-4 text-right">
                             <button 
-                              onClick={() => setDetailItem(q)} 
-                              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-primary font-bold rounded-lg transition text-xs"
+                              onClick={() => {
+                                setDetailItem(q);
+                                setReplyText(q.answer?.content || '');
+                              }} 
+                              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-primary font-bold rounded-lg transition text-xs"
                             >
                               Chi tiết
                             </button>
@@ -445,45 +451,143 @@ const AdminQuestions: React.FC = () => {
         </div>
 
         {detailItem && (
-          <DetailDrawer open={!!detailItem} onClose={() => setDetailItem(null)} title="AI Moderation Panel">
-            <div className="space-y-6 pb-12">
-              <div className="p-5 border border-slate-100 bg-white rounded-2xl shadow-sm">
-                <div className="flex flex-wrap items-center gap-2 mb-4">
-                  <StatusBadge status={getStatusColor(detailItem.status)} label={detailItem.status} />
-                  {getSourceBadge(detailItem.answer_source)}
+          <DetailDrawer 
+            open={!!detailItem} 
+            onClose={() => setDetailItem(null)} 
+            title={t('adminQuestions.detailTitle')}
+            subtitle={t('adminQuestions.productLabel') + `: ${detailItem.product_name}`}
+            width="max-w-2xl"
+            footer={
+              <div className="flex items-center justify-between w-full">
+                {/* Left Side: Delete */}
+                <button
+                  onClick={() => setStatusChangeModal({ id: detailItem._id || detailItem.id, action: 'delete', label: t('adminQuestions.deleteQuestion') })}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-xl transition text-xs border border-red-200"
+                >
+                  <span className="material-symbols-outlined text-base">delete</span>
+                  {t('adminQuestions.deleteQuestion')}
+                </button>
+
+                {/* Right Side: Primary Toggles & Actions */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setDetailItem(null)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl border border-slate-200 transition text-xs"
+                  >
+                    Đóng
+                  </button>
+
+                  {detailItem.status !== 'hidden' ? (
+                    <button
+                      onClick={() => setStatusChangeModal({ id: detailItem._id || detailItem.id, action: 'hide', label: t('adminQuestions.hideQuestion') })}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl border border-slate-200 transition text-xs"
+                    >
+                      {t('adminQuestions.hideQuestion')}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setStatusChangeModal({ id: detailItem._id || detailItem.id, action: 'show', label: t('adminQuestions.showQuestion') })}
+                      className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl border border-emerald-200 transition text-xs"
+                    >
+                      {t('adminQuestions.showQuestion')}
+                    </button>
+                  )}
+
+                  {detailItem.status === 'pending' && detailItem.answer?.content && detailItem.answer_source === 'ai' && (
+                    <button
+                      onClick={() => setStatusChangeModal({ id: detailItem._id || detailItem.id, action: 'approve_ai', label: t('adminQuestions.approveAiResponse') })}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl shadow-md shadow-purple-500/20 transition text-xs flex items-center gap-1"
+                    >
+                      <span className="material-symbols-outlined text-sm">check</span>
+                      {t('adminQuestions.approveAiResponse')}
+                    </button>
+                  )}
+
+                  {(!detailItem.answer?.content || replyText !== (detailItem.answer?.content || '') || (detailItem.status === 'pending' && detailItem.answer_source === 'ai')) && (
+                    <button
+                      onClick={submitReply}
+                      disabled={!replyText.trim()}
+                      className="px-4 py-2 bg-primary hover:bg-primary/95 text-white font-black rounded-xl shadow-md shadow-primary/10 transition text-xs flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span className="material-symbols-outlined text-sm">save</span>
+                      {t('adminQuestions.savePublish')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            }
+          >
+            <div className="space-y-6">
+              {/* User Profile & Context Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Left: User Card */}
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/60 flex gap-3 items-center">
+                  <UserAvatar 
+                    src={detailItem.user_avatar} 
+                    name={detailItem.user_name || t('adminQuestions.unknownUser')} 
+                    userId={detailItem.user_id} 
+                    size={48} 
+                    className="rounded-full border border-slate-200 shadow-xs" 
+                  />
+                  <div className="space-y-0.5 min-w-0">
+                    <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">{t('adminQuestions.customerInfo')}</div>
+                    <div className="text-sm font-extrabold text-slate-800 truncate">{detailItem.user_name || t('adminQuestions.unknownUser')}</div>
+                    <div className="text-xs text-slate-500 truncate">{detailItem.user_email || 'No email'}</div>
+                    <div className="text-[10px] text-slate-400 font-mono">ID: {String(detailItem.user_id).slice(-8)}</div>
+                  </div>
+                </div>
+
+                {/* Right: Meta Details */}
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/60 flex flex-col justify-center space-y-1.5">
+                  <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">{t('adminQuestions.referenceInfo')}</div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <StatusBadge status={getStatusColor(detailItem.status)} label={detailItem.status === 'pending' ? t('adminQuestions.status.pending') : detailItem.status === 'answered' ? t('adminQuestions.stats.answered') : t('adminQuestions.status.hidden')} />
+                    {getSourceBadge(detailItem.answer_source)}
+                  </div>
+                  {detailItem.created_at && (
+                    <div className="text-[11px] text-slate-500 font-medium">
+                      {t('adminQuestions.createdTime', 'Thời gian gửi')}: {format(new Date(detailItem.created_at), 'dd/MM/yyyy HH:mm')}
+                    </div>
+                  )}
                   {detailItem.answer_source === 'ai' && detailItem.confidence_score !== undefined && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-slate-500 font-bold">Độ tin cậy:</span>
+                    <div className="flex items-center gap-1 text-[11px] text-slate-500 font-medium">
+                      <span>{t('adminQuestions.confidenceScore')}:</span>
                       {getConfidenceBadge(detailItem.confidence_score)}
                     </div>
                   )}
                   {detailItem.ai_model_used && (
-                    <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
-                      {detailItem.ai_model_used}
-                    </span>
+                    <div className="text-[10px] text-slate-400 font-mono truncate">
+                      {t('adminQuestions.aiModel')}: {detailItem.ai_model_used}
+                    </div>
                   )}
                 </div>
-                <div className="text-xs text-slate-400 font-bold mb-2 uppercase tracking-wide">Câu hỏi từ khách hàng ({detailItem.user_name}):</div>
-                <div className="text-slate-800 font-bold whitespace-pre-wrap text-md bg-slate-50 p-4 rounded-xl border border-slate-100">{detailItem.question}</div>
               </div>
 
-              {/* Review Recommendation Banner for AI Pending */}
+              {/* Question Text Box */}
+              <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-xs">
+                <div className="text-xs text-slate-400 font-black uppercase tracking-wider mb-2">Nội dung câu hỏi từ khách:</div>
+                <div className="text-slate-800 font-bold whitespace-pre-wrap text-md bg-slate-50 p-4 rounded-xl border border-slate-100 leading-relaxed">
+                  "{detailItem.question}"
+                </div>
+              </div>
+
+              {/* Display AI Suggested Response block if pending */}
               {detailItem.status === 'pending' && detailItem.answer?.content && detailItem.answer_source === 'ai' && (
-                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl p-5 shadow-sm">
+                <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl p-5 shadow-xs">
                   <div className="flex items-center gap-2 mb-3">
                     <span className="material-symbols-outlined text-purple-600 animate-bounce">smart_toy</span>
-                    <h4 className="text-sm font-black text-purple-900">Câu trả lời do AI đề xuất</h4>
+                    <h4 className="text-sm font-black text-purple-900">{t('adminQuestions.aiSuggestedAnswer')}</h4>
                   </div>
                   <p className="text-sm text-slate-700 font-medium mb-4 whitespace-pre-wrap italic bg-white/70 p-3.5 rounded-xl border border-purple-100/50">
                     "{detailItem.answer.content}"
                   </p>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setStatusChangeModal({ id: detailItem._id || detailItem.id, action: 'approve_ai', label: 'Phê duyệt câu trả lời của AI' })}
+                      onClick={() => setStatusChangeModal({ id: detailItem._id || detailItem.id, action: 'approve_ai', label: t('adminQuestions.approveAiResponse') })}
                       className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-xl shadow-md shadow-purple-500/20 active:scale-[0.98] transition text-xs flex items-center justify-center gap-1.5"
                     >
                       <span className="material-symbols-outlined text-base">check</span>
-                      Phê duyệt câu trả lời AI
+                      {t('adminQuestions.approveAiResponse')}
                     </button>
                     <button
                       onClick={() => setReplyText(detailItem.answer.content)}
@@ -496,9 +600,10 @@ const AdminQuestions: React.FC = () => {
                 </div>
               )}
 
-              <FormSection title="Phản hồi chính thức (Đã xuất bản)">
+              {/* Official response section */}
+              <FormSection title={t('adminQuestions.answerTitle')}>
                 {detailItem.answer?.content && !(detailItem.status === 'pending' && detailItem.answer_source === 'ai') ? (
-                  <div className="bg-blue-50/50 p-5 rounded-2xl border border-blue-100 shadow-sm">
+                  <div className="bg-blue-50/50 p-5 rounded-2xl border border-blue-100 shadow-xs">
                     <div className="text-xs text-blue-600 font-bold mb-3 uppercase tracking-wider flex items-center gap-1">
                       <span className="material-symbols-outlined text-[16px]">account_circle</span>
                       {detailItem.answer.admin_name || 'Admin'} • {detailItem.answer.answered_at ? format(new Date(detailItem.answer.answered_at), 'dd/MM/yyyy HH:mm') : ''}
@@ -507,56 +612,67 @@ const AdminQuestions: React.FC = () => {
                     <div className="mt-4 pt-3 border-t border-blue-100 flex justify-end">
                       <button 
                         onClick={() => setReplyText(detailItem.answer.content)} 
-                        className="text-xs font-extrabold text-blue-600 hover:text-blue-800 flex items-center gap-1 bg-white px-3 py-1.5 rounded-lg border border-blue-200 shadow-sm"
+                        className="text-xs font-extrabold text-blue-600 hover:text-blue-800 flex items-center gap-1 bg-white px-3 py-1.5 rounded-lg border border-blue-200 shadow-xs"
                       >
-                        <span className="material-symbols-outlined text-[14px]">edit</span> Chỉnh sửa phản hồi
+                        <span className="material-symbols-outlined text-[14px]">edit</span> {t('adminQuestions.editAnswer')}
                       </button>
                     </div>
                   </div>
                 ) : null}
                 
-                {(!detailItem.answer?.content || replyText || (detailItem.status === 'pending' && detailItem.answer_source === 'ai')) && (
+                {(!detailItem.answer?.content || replyText !== (detailItem.answer?.content || '') || (detailItem.status === 'pending' && detailItem.answer_source === 'ai')) && (
                   <div className="space-y-3 mt-4">
                     <textarea 
                       className={cls.input + ' min-h-[120px] rounded-2xl text-sm p-4 focus:ring-2 focus:ring-primary/20'} 
                       value={replyText} 
                       onChange={e => setReplyText(e.target.value)} 
-                      placeholder="Nhập nội dung trả lời thủ công hoặc ghi đè phản hồi của AI..."
+                      placeholder={t('adminQuestions.manualReply')}
                     />
-                    <button 
-                      onClick={submitReply} 
-                      className={cls.btnPrimary + ' w-full py-3 rounded-2xl font-black text-sm shadow-md shadow-primary/10 active:scale-[0.99] flex items-center justify-center gap-1.5'}
-                    >
-                      <span className="material-symbols-outlined text-lg">save</span>
-                      Lưu & xuất bản phản hồi
-                    </button>
                   </div>
                 )}
               </FormSection>
 
-              <FormSection title="Hành động kiểm duyệt">
-                <div className="grid grid-cols-2 gap-2">
-                  {detailItem.status !== 'hidden' ? (
-                    <button onClick={() => setStatusChangeModal({ id: detailItem._id || detailItem.id, action: 'hide', label: 'Ẩn câu hỏi' })} className="py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl border border-slate-200 transition text-xs">Ẩn câu hỏi</button>
-                  ) : (
-                    <button onClick={() => setStatusChangeModal({ id: detailItem._id || detailItem.id, action: 'show', label: 'Hiện câu hỏi' })} className="py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-xl border border-emerald-200 transition text-xs">Hiển thị lại</button>
-                  )}
-                  
+              {/* Pinning & Official Badging Controls */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 space-y-3">
+                <div className="text-xs text-slate-400 font-black uppercase tracking-wider">{t('adminQuestions.moderationActions')}</div>
+                <div className="flex flex-wrap gap-2">
                   {detailItem.is_pinned ? (
-                    <button onClick={() => setStatusChangeModal({ id: detailItem._id || detailItem.id, action: 'unpin', label: 'Bỏ ghim' })} className="py-2.5 bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold rounded-xl border border-orange-200 transition text-xs">Bỏ ghim tiêu điểm</button>
+                    <button 
+                      onClick={() => setStatusChangeModal({ id: detailItem._id || detailItem.id, action: 'unpin', label: t('adminQuestions.unpinQuestion') })} 
+                      className="flex-1 py-2 bg-white hover:bg-orange-50 text-orange-700 font-bold rounded-xl border border-orange-200 transition text-xs flex items-center justify-center gap-1 shadow-2xs"
+                    >
+                      <span className="material-symbols-outlined text-sm">keep_off</span>
+                      {t('adminQuestions.unpinQuestion')}
+                    </button>
                   ) : (
-                    <button onClick={() => setStatusChangeModal({ id: detailItem._id || detailItem.id, action: 'pin', label: 'Ghim top' })} className="py-2.5 bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold rounded-xl border border-orange-200 transition text-xs">Ghim làm tiêu điểm</button>
+                    <button 
+                      onClick={() => setStatusChangeModal({ id: detailItem._id || detailItem.id, action: 'pin', label: t('adminQuestions.pinQuestion') })} 
+                      className="flex-1 py-2 bg-white hover:bg-orange-50 text-orange-700 font-bold rounded-xl border border-slate-200 transition text-xs flex items-center justify-center gap-1 shadow-2xs"
+                    >
+                      <span className="material-symbols-outlined text-sm">keep</span>
+                      {t('adminQuestions.pinQuestion')}
+                    </button>
                   )}
                   
                   {detailItem.is_official_answer ? (
-                    <button onClick={() => setStatusChangeModal({ id: detailItem._id || detailItem.id, action: 'unofficial', label: 'Gỡ Official' })} className="py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-xl border border-blue-200 transition text-xs">Gỡ Official</button>
+                    <button 
+                      onClick={() => setStatusChangeModal({ id: detailItem._id || detailItem.id, action: 'unofficial', label: t('adminQuestions.removeOfficial') })} 
+                      className="flex-1 py-2 bg-white hover:bg-blue-50 text-blue-700 font-bold rounded-xl border border-blue-200 transition text-xs flex items-center justify-center gap-1 shadow-2xs"
+                    >
+                      <span className="material-symbols-outlined text-sm">verified_user</span>
+                      {t('adminQuestions.removeOfficial')}
+                    </button>
                   ) : (
-                    <button onClick={() => setStatusChangeModal({ id: detailItem._id || detailItem.id, action: 'official', label: 'Đánh dấu Official' })} className="py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-xl border border-blue-200 transition text-xs">Đánh dấu Official</button>
+                    <button 
+                      onClick={() => setStatusChangeModal({ id: detailItem._id || detailItem.id, action: 'official', label: t('adminQuestions.markOfficial') })} 
+                      className="flex-1 py-2 bg-white hover:bg-blue-50 text-blue-700 font-bold rounded-xl border border-slate-200 transition text-xs flex items-center justify-center gap-1 shadow-2xs"
+                    >
+                      <span className="material-symbols-outlined text-sm">verified</span>
+                      {t('adminQuestions.markOfficial')}
+                    </button>
                   )}
-
-                  <button onClick={() => setStatusChangeModal({ id: detailItem._id || detailItem.id, action: 'delete', label: 'Xóa vĩnh viễn' })} className="py-2.5 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-xl border border-red-200 transition text-xs col-span-2">Xóa Vĩnh Viễn</button>
                 </div>
-              </FormSection>
+              </div>
             </div>
           </DetailDrawer>
         )}
@@ -565,15 +681,27 @@ const AdminQuestions: React.FC = () => {
           <Modal
             open={!!statusChangeModal}
             onClose={() => setStatusChangeModal(null)}
-            title={`Xác nhận: ${statusChangeModal.label}`}
+            title={t('adminQuestions.confirmTitle')}
+            size="sm"
             footer={
               <div className="flex gap-2 justify-end w-full">
-                <button onClick={() => setStatusChangeModal(null)} className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl border border-slate-200 transition text-xs">Hủy</button>
-                <button onClick={handleAction} className="py-2.5 px-4 bg-primary hover:bg-primary/95 text-white font-bold rounded-xl transition text-xs shadow-md shadow-primary/10">Xác nhận</button>
+                <button onClick={() => setStatusChangeModal(null)} className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl border border-slate-200 transition text-xs">
+                  {t('adminProducts.modalDeleteCancel', 'Hủy')}
+                </button>
+                <button 
+                  onClick={() => handleAction()} 
+                  className={`py-2.5 px-4 font-bold rounded-xl transition text-xs shadow-md ${
+                    statusChangeModal.action === 'delete' 
+                      ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-500/10' 
+                      : 'bg-primary hover:bg-primary/95 text-white shadow-primary/10'
+                  }`}
+                >
+                  {t('adminProducts.confirmBtn', 'Xác nhận')}
+                </button>
               </div>
             }
           >
-            <p className="text-slate-600 text-sm font-medium">Bạn có chắc chắn muốn thực hiện hành động này không?</p>
+            <p className="text-slate-600 text-sm font-medium">{t('adminQuestions.confirmMsg')}</p>
           </Modal>
         )}
       </div>

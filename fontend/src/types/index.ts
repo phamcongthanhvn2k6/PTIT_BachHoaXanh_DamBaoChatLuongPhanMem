@@ -74,6 +74,12 @@ export interface User {
     marketing_opt_in?: boolean;
     sms_opt_in?: boolean;
   };
+  gamification_lock?: {
+    is_locked?: boolean;
+    scope?: 'spin' | 'checkin' | 'all' | string;
+    reason?: string;
+    expires_at?: string | null;
+  };
 }
 
 export interface AuthToken {
@@ -522,6 +528,7 @@ export interface OrderItem {
 export interface Order {
   id: string;
   user_id: number | string;
+  user?: any;
   branch_id: string;
   branch_name?: string;
   subtotal: number;
@@ -657,6 +664,7 @@ export interface Review {
   comment?: string;
   user_name?: string;
   avatar?: string;
+  user_avatar?: string;
   images?: string[];
   likes?: number;
   status?: string;

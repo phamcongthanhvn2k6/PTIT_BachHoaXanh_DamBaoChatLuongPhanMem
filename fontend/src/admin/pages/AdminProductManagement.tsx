@@ -6,8 +6,24 @@ import { toast } from '../../components/Toast/toastEvent';
 import { useAppSelector } from '../../store';
 import { productService } from '../../services/productService';
 import { getBackendHost } from '../../utils/imageUrl';
+import { CategoryIcon } from '../../components/CategoryIcon';
 
 type SortOption = 'newest' | 'stock-low' | 'best-seller' | 'price-high' | 'price-low';
+
+const POPULAR_ICONS = [
+  { value: 'restaurant', label: 'Thực phẩm' },
+  { value: 'local_drink', label: 'Đồ uống' },
+  { value: 'eco', label: 'Rau quả' },
+  { value: 'bakery_dining', label: 'Bánh ngọt' },
+  { value: 'cookie', label: 'Ăn vặt' },
+  { value: 'shopping_cart', label: 'Giỏ hàng' },
+  { value: 'local_offer', label: 'Ưu đãi' },
+  { value: 'pets', label: 'Thú cưng' },
+  { value: 'child_care', label: 'Mẹ & Bé' },
+  { value: 'kitchen', label: 'Điện máy' },
+  { value: 'smartphone', label: 'Công nghệ' },
+  { value: 'category', label: 'Mặc định' }
+];
 
 const AdminProductManagement: React.FC = () => {
   const navigate = useNavigate();
@@ -27,6 +43,8 @@ const AdminProductManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [showIconPicker, setShowIconPicker] = useState(false);
+  const [showCategoriesSection, setShowCategoriesSection] = useState(false);
   const [categoryBusy, setCategoryBusy] = useState(false);
   const [categoryForm, setCategoryForm] = useState({
     name: '',
@@ -268,6 +286,7 @@ const AdminProductManagement: React.FC = () => {
 
   const startEditCategory = (category: any) => {
     setEditingCategoryId(String(category.id || category._id));
+    setShowCategoriesSection(true);
     setCategoryForm({
       name: category.name || '',
       icon: category.icon || 'category',
@@ -663,133 +682,297 @@ const AdminProductManagement: React.FC = () => {
         </div>
 
         <div className="bg-surface-container-lowest rounded-2xl p-6 shadow-sm border border-slate-100 space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-black text-slate-800">{t('adminProducts.manageCategories')}</h2>
-              <p className="text-xs text-slate-500 mt-1">{t('adminProducts.manageCategoriesDesc')}</p>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 cursor-pointer select-none" onClick={() => setShowCategoriesSection(!showCategoriesSection)}>
+              <div className="w-10 h-10 rounded-xl bg-primary/5 text-primary flex items-center justify-center border border-primary/10">
+                <span className="material-symbols-outlined text-[20px]">category</span>
+              </div>
+              <div>
+                <h2 className="text-base font-black text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  {t('adminProducts.manageCategories')}
+                  <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-650 dark:text-slate-300 rounded-full">
+                    {categories.length}
+                  </span>
+                </h2>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {showCategoriesSection 
+                    ? t('adminProducts.manageCategoriesDesc') 
+                    : 'Nhấp để mở rộng bảng cấu hình và danh sách danh mục.'
+                  }
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={handleCreateSKU} disabled={isProcessing} className="inline-flex items-center justify-center gap-1 px-3 py-2 bg-primary text-white font-bold rounded-lg hover:bg-primary/90 transition-all cursor-pointer text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => navigate('/admin/categories')}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-705 dark:text-slate-300 font-bold rounded-lg transition-all cursor-pointer text-xs h-9"
+              >
+                <span className="material-symbols-outlined text-[16px]">settings</span>
+                Cấu hình nâng cao
+              </button>
+              <button onClick={handleCreateSKU} disabled={isProcessing} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-primary text-white font-bold rounded-lg hover:bg-primary/90 transition-all cursor-pointer text-xs h-9">
                 <span className="material-symbols-outlined text-[16px]">add</span>
                 {t('adminProducts.newSku')}
               </button>
               <button
                 type="button"
-                onClick={resetCategoryForm}
-                className="px-3 py-2 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                onClick={() => {
+                  setShowCategoriesSection(true);
+                  resetCategoryForm();
+                }}
+                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-100 dark:bg-slate-700 text-slate-605 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 font-bold rounded-lg transition-colors cursor-pointer text-xs h-9"
               >
-                {t('adminProducts.newCategory')}
+                <span className="material-symbols-outlined text-[16px]">add_circle</span>
+                Tạo nhanh danh mục
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCategoriesSection(!showCategoriesSection)}
+                className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+                title={showCategoriesSection ? 'Thu gọn' : 'Mở rộng'}
+              >
+                <span className="material-symbols-outlined text-[24px] transition-transform duration-200" style={{ transform: showCategoriesSection ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                  expand_more
+                </span>
               </button>
             </div>
           </div>
 
-          <form onSubmit={saveCategory} className="grid grid-cols-1 md:grid-cols-12 gap-3">
-            <div className="md:col-span-4">
-              <input
-                type="text"
-                value={categoryForm.name}
-                onChange={(e) => setCategoryForm((prev) => ({ ...prev, name: e.target.value }))}
-                placeholder={t('adminProducts.categoryName')}
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-primary"
-                required
-              />
-            </div>
-            <div className="md:col-span-2">
-              <input
-                type="text"
-                value={categoryForm.icon}
-                onChange={(e) => setCategoryForm((prev) => ({ ...prev, icon: e.target.value }))}
-                placeholder={t('adminProducts.categoryIcon')}
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-primary"
-              />
-            </div>
-            <div className="md:col-span-3">
-              <select
-                value={categoryForm.parent_id}
-                onChange={(e) => setCategoryForm((prev) => ({ ...prev, parent_id: e.target.value }))}
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-primary"
-              >
-                <option value="">{t('adminProducts.parentCategory')}</option>
-                {categories
-                  .filter((c: any) => String(c.id || c._id) !== String(editingCategoryId || ''))
-                  .map((c: any) => (
-                    <option key={String(c.id || c._id)} value={String(c.id || c._id)}>
-                      {c.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-            <div className="md:col-span-1">
-              <input
-                type="number"
-                min={0}
-                value={categoryForm.sort_order}
-                onChange={(e) => setCategoryForm((prev) => ({ ...prev, sort_order: Number(e.target.value || 0) }))}
-                placeholder={t('adminProducts.sortOrder')}
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-primary"
-              />
-            </div>
-            <div className="md:col-span-2 flex items-center justify-end gap-2">
-              <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={categoryForm.is_active}
-                  onChange={(e) => setCategoryForm((prev) => ({ ...prev, is_active: e.target.checked }))}
-                  className="rounded border-slate-300 text-primary"
-                />
-                {t('adminProducts.active')}
-              </label>
-              <button
-                type="submit"
-                disabled={categoryBusy}
-                className="px-3 py-2 rounded-lg text-xs font-bold bg-primary text-white hover:bg-primary/90 disabled:opacity-60"
-              >
-                {editingCategoryId ? t('adminProducts.saveCategory') : t('adminProducts.addCategory')}
-              </button>
-            </div>
-          </form>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
-            {categories.map((cat: any) => {
-              const catId = String(cat.id || cat._id);
-              const parent = categories.find((c: any) => String(c.id || c._id) === String(cat.parent_id));
-              return (
-                <div key={catId} className="border border-slate-200 rounded-xl px-3 py-2.5 bg-white flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-bold text-sm text-slate-800 truncate">{cat.name}</p>
-                    <p className="text-[11px] text-slate-500">{parent ? t('adminProducts.categoryParent', { name: parent.name }) : t('adminProducts.categoryRoot')}</p>
-                    <p className="text-[11px] text-slate-500">{t('adminProducts.categoryOrder', { order: Number(cat.sort_order || 0) })}</p>
+          {showCategoriesSection && (
+            <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800 mt-2 animate-in fade-in duration-200">
+              <form onSubmit={saveCategory} className="bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                  <div className="md:col-span-3">
+                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">
+                      {t('adminProducts.categoryName')}
+                    </label>
+                    <input
+                      type="text"
+                      value={categoryForm.name}
+                      onChange={(e) => setCategoryForm((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder={t('adminProducts.categoryName')}
+                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all text-slate-800 dark:text-slate-100"
+                      required
+                    />
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => startEditCategory(cat)}
-                      className="p-1.5 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      title={t('adminProducts.edit')}
+
+                  <div className="md:col-span-3 relative">
+                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">
+                      {t('adminProducts.categoryIcon')}
+                    </label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type="text"
+                          value={categoryForm.icon}
+                          onFocus={() => setShowIconPicker(true)}
+                          onChange={(e) => setCategoryForm((prev) => ({ ...prev, icon: e.target.value, icon_name: e.target.value }))}
+                          placeholder={t('adminProducts.categoryIcon')}
+                          className="w-full pl-3.5 pr-10 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all font-mono text-slate-800 dark:text-slate-100"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowIconPicker(!showIconPicker)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-650 focus:outline-none"
+                        >
+                          <span className="material-symbols-outlined text-lg leading-none block">pageview</span>
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-1 bg-white dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 shrink-0">
+                        <CategoryIcon category={categoryForm} className="w-5 h-5 text-primary" iconClass="material-symbols-outlined text-sm text-primary" size={20} />
+                      </div>
+                    </div>
+
+                    {showIconPicker && (
+                      <div className="absolute left-0 right-0 top-full mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl p-3 z-30 max-h-56 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-150">
+                        <div className="flex items-center justify-between mb-2 pb-1 border-b border-slate-100 dark:border-slate-700">
+                          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Chọn nhanh biểu tượng</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowIconPicker(false)}
+                            className="text-[11px] font-bold text-primary hover:underline"
+                          >
+                            Đóng
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-6 gap-2">
+                          {POPULAR_ICONS.map((ico) => {
+                            const isSelected = categoryForm.icon === ico.value;
+                            return (
+                              <button
+                                key={ico.value}
+                                type="button"
+                                onClick={() => {
+                                  setCategoryForm((prev) => ({ ...prev, icon: ico.value, icon_name: ico.value }));
+                                  setShowIconPicker(false);
+                                }}
+                                className={`p-2 rounded-lg border flex flex-col items-center justify-center gap-0.5 transition-all ${
+                                  isSelected
+                                    ? 'border-primary bg-primary/5 text-primary'
+                                    : 'border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-500'
+                                }`}
+                                title={ico.label}
+                              >
+                                <span className="material-symbols-outlined text-xl">{ico.value}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="md:col-span-3">
+                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">
+                      {t('adminProducts.parentCategory')}
+                    </label>
+                    <select
+                      value={categoryForm.parent_id}
+                      onChange={(e) => setCategoryForm((prev) => ({ ...prev, parent_id: e.target.value }))}
+                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all text-slate-800 dark:text-slate-100"
                     >
-                      <span className="material-symbols-outlined text-[16px]">edit</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => toggleCategoryStatus(cat)}
-                      className={`p-1.5 rounded-md ${cat.is_active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}
-                      title={cat.is_active ? t('adminProducts.statusInactive') : t('adminProducts.statusActive')}
-                    >
-                      <span className="material-symbols-outlined text-[16px]">{cat.is_active ? 'visibility' : 'visibility_off'}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => deleteCategory(cat)}
-                      className="p-1.5 rounded-md bg-red-100 text-red-700 hover:bg-red-200"
-                      title={t('adminProducts.delete')}
-                    >
-                      <span className="material-symbols-outlined text-[16px]">delete</span>
-                    </button>
+                      <option value="">{t('adminProducts.parentCategory')}</option>
+                      {categories
+                        .filter((c: any) => String(c.id || c._id) !== String(editingCategoryId || ''))
+                        .map((c: any) => (
+                          <option key={String(c.id || c._id)} value={String(c.id || c._id)}>
+                            {c.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-1">
+                    <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wider">
+                      {t('adminProducts.sortOrder')}
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={categoryForm.sort_order}
+                      onChange={(e) => setCategoryForm((prev) => ({ ...prev, sort_order: Number(e.target.value || 0) }))}
+                      placeholder="0"
+                      className="w-full px-3.5 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all text-slate-800 dark:text-slate-100"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2 flex items-center justify-start md:justify-center">
+                    <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-650 dark:text-slate-450 cursor-pointer select-none mt-6">
+                      <input
+                        type="checkbox"
+                        checked={categoryForm.is_active}
+                        onChange={(e) => setCategoryForm((prev) => ({ ...prev, is_active: e.target.checked }))}
+                        className="rounded border-slate-300 text-primary w-4.5 h-4.5 focus:ring-primary/20 transition-all cursor-pointer"
+                      />
+                      {t('adminProducts.active')}
+                    </label>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200/40">
+                  {editingCategoryId && (
+                    <button
+                      type="button"
+                      onClick={resetCategoryForm}
+                      className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-655 dark:text-slate-350 transition-colors"
+                    >
+                      Hủy chỉnh sửa
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={categoryBusy}
+                    className="px-6 py-2.5 rounded-xl text-xs font-bold bg-primary text-white hover:bg-primary/95 disabled:opacity-60 transition-all shadow-md shadow-primary/15"
+                  >
+                    {editingCategoryId ? 'Lưu thay đổi' : 'Thêm danh mục mới'}
+                  </button>
+                </div>
+              </form>
+
+              <div className="max-h-[300px] overflow-y-auto pr-1.5 border border-slate-100 dark:border-slate-800 rounded-2xl p-3 bg-slate-50/20 dark:bg-slate-900/10">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {categories.map((cat: any) => {
+                    const catId = String(cat.id || cat._id);
+                    const parent = categories.find((c: any) => String(c.id || c._id) === String(cat.parent_id));
+                    const isActive = cat.is_active !== false;
+                    const isEditing = editingCategoryId === catId;
+                    return (
+                      <div
+                        key={catId}
+                        className={`border rounded-2xl px-4 py-3.5 bg-white dark:bg-slate-800 transition-all duration-200 flex items-start justify-between gap-3 relative overflow-hidden group/card ${
+                          isEditing 
+                            ? 'border-primary shadow-md ring-2 ring-primary/10' 
+                            : isActive 
+                              ? 'border-slate-200 dark:border-slate-700 hover:border-slate-300 hover:shadow-md' 
+                              : 'border-slate-200 dark:border-slate-700 opacity-65 bg-slate-50/50 dark:bg-slate-800/40'
+                        }`}
+                      >
+                        <div className={`absolute top-0 left-0 w-1 h-full ${isActive ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-650'}`}></div>
+                        
+                        <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-700/50 flex items-center justify-center border border-slate-100 dark:border-slate-700 shrink-0 mt-0.5 shadow-sm">
+                          <CategoryIcon category={cat} className={`w-5 h-5 ${isActive ? 'text-primary' : 'text-slate-400'}`} iconClass={`material-symbols-outlined text-[20px] ${isActive ? 'text-primary' : 'text-slate-400'}`} size={20} />
+                        </div>
+                        
+                        <div className="min-w-0 flex-1 pl-1">
+                          <p className="font-extrabold text-sm text-slate-800 dark:text-slate-100 truncate flex items-center gap-1.5" title={cat.name}>
+                            {cat.name}
+                            {isEditing && (
+                              <span className="inline-block px-1.5 py-0.5 text-[9px] font-bold bg-primary text-white rounded uppercase tracking-wider scale-90">Sửa</span>
+                            )}
+                          </p>
+                          <p className="text-[11px] text-slate-450 dark:text-slate-500 font-medium truncate mt-0.5">
+                            {parent ? `Mẹ: ${parent.name}` : 'Danh mục gốc'}
+                          </p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/60 px-1.5 py-0.5 rounded">
+                              Thứ tự: {Number(cat.sort_order || 0)}
+                            </span>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isActive ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-450' : 'bg-amber-55 bg-opacity-10 text-amber-600 dark:text-amber-450'}`}>
+                              {isActive ? 'Hoạt động' : 'Tạm ẩn'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-center gap-1.5 shrink-0 opacity-80 group-hover/card:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={() => startEditCategory(cat)}
+                            className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-350 transition-colors shadow-sm"
+                            title={t('adminProducts.edit')}
+                          >
+                            <span className="material-symbols-outlined text-[16px] block">edit</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleCategoryStatus(cat)}
+                            className={`p-1.5 rounded-lg transition-colors shadow-sm ${
+                              isActive 
+                                ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 hover:bg-emerald-100' 
+                                : 'bg-amber-50 dark:bg-amber-950/20 text-amber-600 hover:bg-amber-100'
+                            }`}
+                            title={isActive ? t('adminProducts.statusInactive') : t('adminProducts.statusActive')}
+                          >
+                            <span className="material-symbols-outlined text-[16px] block">
+                              {isActive ? 'visibility' : 'visibility_off'}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteCategory(cat)}
+                            className="p-1.5 rounded-lg bg-red-50 dark:bg-red-955/20 text-red-650 hover:bg-red-100 dark:hover:bg-red-900/35 transition-colors shadow-sm"
+                            title={t('adminProducts.delete')}
+                          >
+                            <span className="material-symbols-outlined text-[16px] block">delete</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Moved Action Buttons */}
           <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center gap-3">

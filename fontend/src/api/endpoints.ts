@@ -23,6 +23,7 @@ export const endpoints = {
     verify: '/auth/verify',
     logoutAll: '/auth/logout-all',
     profileSummary: '/auth/profile/summary',
+    validateBalance: '/auth/validate-balance',
   },
   adminAuth: {
     login: '/admin/auth/login',
@@ -101,6 +102,9 @@ export const endpoints = {
     alertsLowStock: '/inventory-batches/alerts/low-stock',
     alertsExpiring: '/inventory-batches/alerts/expiring',
     draftPromotion: '/inventory-batches/draft-promotion',
+    driftReport: '/inventory-batches/reconciliation/drift-report',
+    autoHeal: '/inventory-batches/reconciliation/auto-heal',
+    autoHealAll: '/inventory-batches/reconciliation/auto-heal-all',
   },
 
   suppliers: {

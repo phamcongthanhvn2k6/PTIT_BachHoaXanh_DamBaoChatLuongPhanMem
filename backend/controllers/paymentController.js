@@ -513,6 +513,27 @@ export const confirm = async (req, res) => {
           }], { session });
 
           try {
+            const { logSecurityEvent } = await import('../utils/auditLogger.js');
+            await logSecurityEvent({
+              userId: user._id,
+              action: 'LOYALTY_POINT_AWARD',
+              resource: 'User',
+              details: {
+                order_id: tx.order_id || null,
+                transaction_id: tx.transaction_id || null,
+                points_earned: pointsEarned,
+                balance_before: previousBalance,
+                balance_after: user.lotte_points,
+                trigger: 'purchase_success'
+              },
+              ip: req.ip,
+              status: 'SUCCESS'
+            });
+          } catch (logErr) {
+            console.error('[Audit] Failed to log loyalty award on purchase:', logErr.message);
+          }
+
+          try {
             await notifyPointsEarned({
               userId: user._id,
               points: pointsEarned,

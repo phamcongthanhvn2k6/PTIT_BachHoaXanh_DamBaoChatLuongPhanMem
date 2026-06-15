@@ -19,6 +19,7 @@ import { resolveEffectivePrice, resolveProductPricing } from '../services/pricin
 import { HotDeal } from '../models/Misc.js';
 import { acquireLock, releaseLock } from '../services/redisService.js';
 import { LoyaltyTransaction } from '../models/Loyalty.js';
+import { PaymentMethod } from '../models/Payment.js';
 
 // ─── Normalize helper: MongoDB _id → id ───
 const normalizeOrder = (order) => {
@@ -26,6 +27,60 @@ const normalizeOrder = (order) => {
   const o = order.toObject ? order.toObject() : { ...order };
   o.id = o._id ? String(o._id) : o.id;
   return o;
+};
+
+const populateOrderWithUser = async (order) => {
+  const o = normalizeOrder(order);
+  if (o && o.user_id) {
+    try {
+      const user = await User.findById(o.user_id).lean();
+      if (user) {
+        o.user = {
+          _id: user._id,
+          id: String(user._id),
+          username: user.username,
+          full_name: user.full_name,
+          email: user.email,
+          phone: user.phone,
+          avatar: user.avatar || null,
+          avatarUrl: user.avatar || null,
+          profileImage: user.avatar || null,
+          image: user.avatar || null
+        };
+      }
+    } catch (e) {
+      console.error('[populateOrderWithUser] Error:', e.message);
+    }
+  }
+  return o;
+};
+
+const populateOrdersWithUsers = async (orders) => {
+  const normalized = orders.map(normalizeOrder).filter(Boolean);
+  const userIds = [...new Set(normalized.map(o => o.user_id).filter(Boolean))];
+  try {
+    const users = await User.find({ _id: { $in: userIds } }).lean();
+    const userMap = new Map(users.map(u => [String(u._id), {
+      _id: u._id,
+      id: String(u._id),
+      username: u.username,
+      full_name: u.full_name,
+      email: u.email,
+      phone: u.phone,
+      avatar: u.avatar || null,
+      avatarUrl: u.avatar || null,
+      profileImage: u.avatar || null,
+      image: u.avatar || null
+    }]));
+    for (const o of normalized) {
+      if (o.user_id) {
+        o.user = userMap.get(String(o.user_id)) || null;
+      }
+    }
+  } catch (e) {
+    console.error('[populateOrdersWithUsers] Error:', e.message);
+  }
+  return normalized;
 };
 
 const toObjectIdIfValid = (id) => {
@@ -178,7 +233,7 @@ const recordPromotionAndCouponUsage = async ({
     if (!cInfo) continue;
     if (cInfo.code || cInfo.id) {
       const query = cInfo.code ? { code: String(cInfo.code).toUpperCase() } : { _id: toObjectIdIfValid(cInfo.id) };
-      
+
       // Acquire exclusive write lock on Coupon
       const coupon = await Coupon.findOneAndUpdate(
         query,
@@ -466,9 +521,29 @@ export const create = async (req, res) => {
     }
 
     // ── 4. Build the payload ensuring payment is a proper sub-document ──
-    const safeMethod = ['COD', 'QR_TRANSFER'].includes(payment_method) ? payment_method : 'COD';
+    let resolvedMethod = 'COD';
+    if (payment_method === 'COD') {
+      resolvedMethod = 'COD';
+    } else if (payment_method === 'QR_TRANSFER') {
+      resolvedMethod = 'QR_TRANSFER';
+    } else if (payment_method && mongoose.Types.ObjectId.isValid(String(payment_method))) {
+      try {
+        const pm = await PaymentMethod.findById(payment_method).session(session);
+        if (pm) {
+          resolvedMethod = pm.type === 'wallet' ? 'WALLET' : 'CARD';
+        } else {
+          resolvedMethod = 'PREPAID';
+        }
+      } catch (err) {
+        console.warn('[OrderCreate] Failed to resolve payment method:', err.message);
+        resolvedMethod = 'PREPAID';
+      }
+    } else if (payment_method) {
+      resolvedMethod = String(payment_method).toUpperCase();
+    }
+
     const payment = {
-      method: req.body.payment?.method || safeMethod,
+      method: req.body.payment?.method || resolvedMethod,
       status: req.body.payment?.status || payment_status || 'PENDING',
       transaction_id: req.body.payment?.transaction_id || null,
     };
@@ -584,7 +659,8 @@ export const create = async (req, res) => {
       );
     }
 
-    const responsePayload = { success: true, data: normalizeOrder(order), message: 'Đặt hàng thành công' };
+    const populated = await populateOrderWithUser(order);
+    const responsePayload = { success: true, data: populated, message: 'Đặt hàng thành công' };
 
     // Log order creation to AuditLog
     try {
@@ -777,7 +853,7 @@ export const list = async (req, res) => {
     const l = Math.min(100, Math.max(1, parseInt(limit)));
     const total = await Order.countDocuments(filter);
     const rawData = await Order.find(filter).sort('-created_at').skip((p - 1) * l).limit(l);
-    const data = rawData.map(normalizeOrder);
+    const data = await populateOrdersWithUsers(rawData);
 
     console.log('[OrderList] filter:', JSON.stringify(filter), 'total:', total, 'returned:', data.length);
 
@@ -798,7 +874,9 @@ export const detail = async (req, res) => {
     if (req.user?.role_id === 3 && String(order.user_id) !== String(req.userId)) {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
-    return res.json({ success: true, data: normalizeOrder(order) });
+    const populated = await populateOrderWithUser(order);
+    return res.json({ success: true, data: populated });
+
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -881,9 +959,29 @@ export const cancel = async (req, res) => {
     if (!order.is_points_reversed && order.payment && order.payment.status === 'PAID') {
       const user = await User.findById(order.user_id).session(session);
       if (user && order.points_earned > 0) {
-        user.lotte_points = Math.max(0, (user.lotte_points || 0) - order.points_earned);
+        const balanceBefore = user.lotte_points || 0;
+        user.lotte_points = Math.max(0, balanceBefore - order.points_earned);
         await user.save({ session });
         await LoyaltyTransaction.create([{ user_id: order.user_id, type: 'adjust', points: -order.points_earned, source: 'order_cancel', description: `Thu hồi điểm do hủy đơn #${order._id}`, order_id: order._id, balance_after: user.lotte_points }], { session });
+        try {
+          const { logSecurityEvent } = await import('../utils/auditLogger.js');
+          await logSecurityEvent({
+            userId: order.user_id,
+            action: 'LOYALTY_POINT_REVERSAL',
+            resource: 'User',
+            details: {
+              order_id: order._id,
+              points_reversed: -order.points_earned,
+              balance_before: balanceBefore,
+              balance_after: user.lotte_points,
+              trigger: 'order_cancel'
+            },
+            ip: req.ip,
+            status: 'SUCCESS'
+          });
+        } catch (logErr) {
+          console.error('[Audit] Failed to log loyalty reversal on cancel:', logErr.message);
+        }
       }
       order.is_points_reversed = true;
     }
@@ -902,7 +1000,8 @@ export const cancel = async (req, res) => {
     session.endSession();
 
     await notifyOrderStatusSafely({ userId: order.user_id, orderId: String(order._id), status: 'CANCELLED', note: req.body.reason || 'Hủy bởi khách hàng' });
-    return res.json({ success: true, data: normalizeOrder(order), message: 'Đã hủy đơn hàng' });
+    const populated = await populateOrderWithUser(order);
+    return res.json({ success: true, data: populated, message: 'Đã hủy đơn hàng' });
   } catch (err) {
     if (session) { await session.abortTransaction(); session.endSession(); }
     return res.status(500).json({ success: false, message: err.message });
@@ -1034,7 +1133,8 @@ export const updateStatus = async (req, res) => {
       note: historyEntry.note || '',
     });
 
-    return res.json({ success: true, data: normalizeOrder(order), message: 'Cập nhật trạng thái thành công' });
+    const populated = await populateOrderWithUser(order);
+    return res.json({ success: true, data: populated, message: 'Cập nhật trạng thái thành công' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -1050,7 +1150,8 @@ export const assignTracking = async (req, res) => {
     order.tracking.carrier = carrier || order.tracking.carrier;
     if (estimated_delivery) order.tracking.estimated_delivery = estimated_delivery;
     await order.save();
-    return res.json({ success: true, data: normalizeOrder(order), message: 'Đã gán mã vận đơn' });
+    const populated = await populateOrderWithUser(order);
+    return res.json({ success: true, data: populated, message: 'Đã gán mã vận đơn' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -1125,9 +1226,29 @@ export const refund = async (req, res) => {
       if (pointsToDeduct > 0) {
         const user = await User.findById(order.user_id).session(session);
         if (user) {
-          user.lotte_points = Math.max(0, (user.lotte_points || 0) - pointsToDeduct);
+          const balanceBefore = user.lotte_points || 0;
+          user.lotte_points = Math.max(0, balanceBefore - pointsToDeduct);
           await user.save({ session });
           await LoyaltyTransaction.create([{ user_id: order.user_id, type: 'adjust', points: -pointsToDeduct, source: 'order_refund', description: `Thu hồi điểm do hoàn tiền đơn #${order._id}`, order_id: order._id, balance_after: user.lotte_points }], { session });
+          try {
+            const { logSecurityEvent } = await import('../utils/auditLogger.js');
+            await logSecurityEvent({
+              userId: order.user_id,
+              action: 'LOYALTY_POINT_REVERSAL',
+              resource: 'User',
+              details: {
+                order_id: order._id,
+                points_reversed: -pointsToDeduct,
+                balance_before: balanceBefore,
+                balance_after: user.lotte_points,
+                trigger: 'order_refund'
+              },
+              ip: req.ip,
+              status: 'SUCCESS'
+            });
+          } catch (logErr) {
+            console.error('[Audit] Failed to log loyalty reversal on refund:', logErr.message);
+          }
         }
       }
       order.is_points_reversed = true;
@@ -1162,7 +1283,8 @@ export const refund = async (req, res) => {
     session.endSession();
 
     await notifyOrderStatusSafely({ userId: order.user_id, orderId: String(order._id), status: 'REFUNDED', note: req.body.reason || 'Đã hoàn tiền đơn hàng' });
-    return res.json({ success: true, data: normalizeOrder(order), message: 'Đã hoàn tiền và nhập lại kho' });
+    const populated = await populateOrderWithUser(order);
+    return res.json({ success: true, data: populated, message: 'Đã hoàn tiền và nhập lại kho' });
   } catch (err) {
     if (session) { await session.abortTransaction(); session.endSession(); }
     return res.status(500).json({ success: false, message: err.message });
@@ -1381,7 +1503,8 @@ export const getInvoice = async (req, res) => {
     if (req.user?.role_id === 3 && String(order.user_id) !== String(req.userId)) {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
-    return res.json({ success: true, data: { order: normalizeOrder(order), invoice_number: `INV-${order._id}`, issued_at: new Date().toISOString() } });
+    const populated = await populateOrderWithUser(order);
+    return res.json({ success: true, data: { order: populated, invoice_number: `INV-${order._id}`, issued_at: new Date().toISOString() } });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

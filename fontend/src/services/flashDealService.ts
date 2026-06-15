@@ -66,7 +66,7 @@ export const flashDealService = {
       });
     }
 
-    return { success: true, data: deals };
+    return { success: true, data: deals, pagination: res.data?.pagination };
   },
 
   getFlashDealById: async (id: string | number) => {

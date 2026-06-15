@@ -37,7 +37,6 @@ const persistAuthState = (state: AuthState) => {
   localStorage.setItem(
     'authState',
     JSON.stringify({
-      user: state.user,
       isAuthenticated: state.isAuthenticated,
       otpSent: state.otpSent,
       otpPhone: state.otpPhone,
@@ -66,7 +65,7 @@ const loadState = (): AuthState => {
 
     const parsedState = JSON.parse(serializedState);
     return {
-      user: parsedState.user || null,
+      user: null, // do not load user details from localStorage to guarantee fresh re-hydration
       token: token || null,
       isAuthenticated: Boolean(parsedState.isAuthenticated),
       loading: false,
@@ -236,6 +235,18 @@ export const updateUserSettingsThunk = createAsyncThunk(
   }
 );
 
+export const validateLoyaltyBalance = createAsyncThunk(
+  'auth/validateLoyaltyBalance',
+  async (_, { rejectWithValue }) => {
+    try {
+      return await authService.validateBalance();
+    } catch (error: any) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+
 const initialState: AuthState = loadState();
 
 export const authSlice = createSlice({
@@ -283,6 +294,11 @@ export const authSlice = createSlice({
       }
 
       persistAuthState(state);
+    },
+    invalidateCache: (state) => {
+      localStorage.removeItem('authState');
+      state.user = null;
+      state.status = 'idle';
     },
   },
   extraReducers: (builder) => {
@@ -396,6 +412,12 @@ export const authSlice = createSlice({
       .addCase(updateUserSettingsThunk.fulfilled, (state, action) => {
         state.user = action.payload;
         persistAuthState(state);
+      })
+      .addCase(validateLoyaltyBalance.fulfilled, (state, action) => {
+        if (state.user) {
+          state.user.lotte_points = action.payload.points;
+          persistAuthState(state);
+        }
       });
   },
 });
@@ -404,5 +426,5 @@ export const authLogin = login;
 export const authRegister = register;
 export const authVerify = verifySession;
 
-export const { logout, clearAuthMessages, hydrateOAuthSession } = authSlice.actions;
+export const { logout, clearAuthMessages, hydrateOAuthSession, invalidateCache } = authSlice.actions;
 export default authSlice.reducer;

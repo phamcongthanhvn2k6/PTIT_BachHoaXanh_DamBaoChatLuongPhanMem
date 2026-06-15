@@ -93,7 +93,7 @@ describe('Event Management System Hardening & Validation Audit', () => {
         thumbnail: 'https://lottemart.com/images/sua-hat.jpg',
         banner: 'https://lottemart.com/images/sua-hat-banner.jpg',
         start_date: new Date('2026-05-15T00:00:00.000Z'),
-        end_date: new Date('2026-06-15T00:00:00.000Z'),
+        end_date: new Date('2030-06-15T00:00:00.000Z'),
         status: 'published',
         is_published: true,
         branch: 'Lotte Mart Quận 7',

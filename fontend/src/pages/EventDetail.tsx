@@ -5,6 +5,7 @@ import { dataService } from '../services/dataService';
 import { eventService } from '../services/eventService';
 import { toast } from '../components/Toast/toastEvent';
 import { useAppSelector } from '../store';
+import UserAvatar from '../components/UserAvatar/UserAvatar';
 
 /* ─── Lightbox ───────────────────────────────────────────────── */
 const Lightbox: React.FC<{ images: string[]; index: number; onClose: () => void }> = ({ images, index, onClose }) => {
@@ -576,10 +577,12 @@ const EventDetail: React.FC = () => {
         {/* Comment input */}
         <div className="flex gap-4 mb-8 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
           {user ? (
-            <img
-              src={user.avatar || `https://ui-avatars.com/api/?name=${user.full_name || user.username || 'U'}&background=e2e8f0&color=475569`}
-              alt={user.full_name || user.username || 'User'}
-              className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+            <UserAvatar
+              src={user.avatar}
+              name={user.full_name || user.username || 'User'}
+              size={40}
+              userId={user.id || user._id}
+              className="flex-shrink-0"
             />
           ) : (
             <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center flex-shrink-0 text-slate-400">
@@ -630,10 +633,12 @@ const EventDetail: React.FC = () => {
           <div className="space-y-6">
             {comments.filter(c => !c.parent_id).map((c: any) => (
               <div key={c.id || c._id} className="flex gap-4">
-                <img
-                  src={c.user_avatar || c.avatar || `https://ui-avatars.com/api/?name=${c.user_name || 'U'}&background=e2e8f0&color=475569`}
-                  alt={c.user_name}
-                  className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                <UserAvatar
+                  src={c.user_avatar || c.avatar}
+                  name={c.user_name || 'U'}
+                  size={40}
+                  userId={c.user_id}
+                  className="flex-shrink-0"
                 />
                 <div className="flex-1">
                   <div className="bg-slate-50 dark:bg-slate-800/80 rounded-2xl p-4 border border-slate-100 dark:border-slate-800">
@@ -664,10 +669,12 @@ const EventDetail: React.FC = () => {
                     <div className="mt-4 space-y-4 pl-4 border-l-2 border-slate-100 dark:border-slate-800">
                       {comments.filter(reply => reply.parent_id === (c.id || c._id)).map((reply: any) => (
                         <div key={reply.id || reply._id} className="flex gap-3">
-                          <img
-                            src={reply.user_avatar || reply.avatar || `https://ui-avatars.com/api/?name=${reply.user_name || 'U'}&background=e2e8f0&color=475569`}
-                            alt={reply.user_name}
-                            className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                          <UserAvatar
+                            src={reply.user_avatar || reply.avatar}
+                            name={reply.user_name || 'U'}
+                            size={32}
+                            userId={reply.user_id}
+                            className="flex-shrink-0"
                           />
                           <div className="flex-1">
                             <div className="bg-slate-50 dark:bg-slate-800/80 rounded-2xl p-3 border border-slate-100 dark:border-slate-800">

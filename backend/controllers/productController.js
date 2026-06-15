@@ -90,16 +90,19 @@ const findProductByRouteParam = async (idParam) => {
   return product;
 };
 
-const normalizeQuestion = (questionDoc) => {
+const normalizeQuestion = (questionDoc, userAvatar = null) => {
   const q = questionDoc.toObject ? questionDoc.toObject() : { ...questionDoc };
   return {
     id: String(q._id),
     product_id: q.product_id,
     user_id: q.user_id,
     user_name: q.user_name || 'Khach hang',
+    user_avatar: userAvatar || q.user_avatar || null,
     question: q.question || '',
     content: q.question || '',
     status: q.status || 'pending',
+    is_pinned: q.is_pinned || false,
+    is_official_answer: q.is_official_answer || false,
     created_at: q.created_at,
     answer: q.answer || null,
     answers: q.answer?.content
@@ -181,6 +184,7 @@ export const list = async (req, res) => {
           original_price: "$branch_info.original_price",
           discount_percent: "$branch_info.discount_percent",
           stock: "$branch_info.stock",
+          available_quantity: { $max: [0, { $subtract: ["$branch_info.stock", { $ifNull: ["$branch_info.reserved_quantity", 0] }] }] },
           branch_active: "$branch_info.is_available"
         }
       });
@@ -271,6 +275,15 @@ export const list = async (req, res) => {
       item.active_hot_deal = resolvedPricing.active_hot_deal;
       item.active_promotion = resolvedPricing.active_promotion;
       item.pricing = resolvedPricing;
+
+      // Resolve dynamic sellable stock info
+      if (item.branch_product_id) {
+        const { getSellableStockInfo } = await import('../services/inventoryService.js');
+        const stockInfo = await getSellableStockInfo(item.branch_product_id);
+        item.available_quantity = stockInfo.sellable;
+      } else {
+        item.available_quantity = item.stock || 0;
+      }
 
       const applicablePromotions = activePromotions.filter(promo => {
         if (isTargetMatched(promo.excluded_product_ids, item._id)) return false;
@@ -375,7 +388,27 @@ export const search = async (req, res) => {
             const now = new Date();
             const mapped = await Promise.all(data.map(async (item) => {
               const obj = { ...item, id: item._id };
-              const pricing = await resolveProductPricing(obj, null, branchId, { now });
+              let bp = null;
+              if (branchId) {
+                bp = await BranchProduct.findOne({ product_id: item._id, branch_id: parseBranchId(branchId) }).lean();
+                if (bp) {
+                  obj.branch_product_id = bp._id;
+                  obj.price = bp.price;
+                  obj.original_price = bp.original_price;
+                  obj.discount_percent = bp.discount_percent;
+                  obj.stock = bp.stock;
+                  obj.branch_active = bp.is_available;
+                  
+                  const { getSellableStockInfo } = await import('../services/inventoryService.js');
+                  const stockInfo = await getSellableStockInfo(bp._id);
+                  obj.available_quantity = stockInfo.sellable;
+                }
+              }
+              if (obj.available_quantity === undefined) {
+                obj.available_quantity = obj.stock || 0;
+              }
+
+              const pricing = await resolveProductPricing(obj, bp, branchId, { now });
               obj.price = pricing.effective_price;
               obj.original_price = pricing.original_price;
               obj.discount_percent = pricing.discount_percent;
@@ -519,6 +552,13 @@ export const compare = async (req, res) => {
           badges.push({ type: 'promo', text: promo.badge_text || 'Khuyến mãi' });
         });
 
+        let availableQty = product.stock || 0;
+        if (branchProduct) {
+          const { getSellableStockInfo } = await import('../services/inventoryService.js');
+          const stockInfo = await getSellableStockInfo(branchProduct._id);
+          availableQty = stockInfo.sellable;
+        }
+
         return {
           id: String(product._id),
           product_id: String(product._id),
@@ -546,8 +586,9 @@ export const compare = async (req, res) => {
           sold_count: branchProduct?.sold_count ?? product.sold_count ?? 0,
           badges,
           stock: branchProduct?.stock ?? product.stock ?? 0,
+          available_quantity: availableQty,
           in_stock: branchProduct
-            ? branchProduct.is_available !== false && Number(branchProduct.stock || 0) > 0
+            ? branchProduct.is_available !== false && availableQty > 0
             : Number(product.stock || 0) > 0,
           short_description: product.short_description || product.description || '',
           description: product.description || '',
@@ -616,7 +657,15 @@ export const detail = async (req, res) => {
         obj.discount_percent = bp.discount_percent;
         obj.stock = bp.stock;
         obj.branch_active = bp.is_available;
+
+        // Retrieve dynamic sellable stock info
+        const { getSellableStockInfo } = await import('../services/inventoryService.js');
+        const stockInfo = await getSellableStockInfo(bp._id);
+        obj.available_quantity = stockInfo.sellable;
       }
+    }
+    if (obj.available_quantity === undefined) {
+      obj.available_quantity = obj.stock || 0;
     }
 
     const resolvedPricing = await resolveProductPricing(product, bp, branchId, { now: new Date() });
@@ -658,7 +707,26 @@ export const related = async (req, res) => {
     const now = new Date();
     const mapped = await Promise.all(data.map(async (p) => {
       const obj = { ...p, id: p._id };
-      const pricing = await resolveProductPricing(p, null, branchId, { now });
+      let bp = null;
+      if (branchId) {
+        bp = await BranchProduct.findOne({ product_id: p._id, branch_id: parseBranchId(branchId) }).lean();
+        if (bp) {
+          obj.branch_product_id = bp._id;
+          obj.price = bp.price;
+          obj.original_price = bp.original_price;
+          obj.discount_percent = bp.discount_percent;
+          obj.stock = bp.stock;
+          obj.branch_active = bp.is_available;
+
+          const { getSellableStockInfo } = await import('../services/inventoryService.js');
+          const stockInfo = await getSellableStockInfo(bp._id);
+          obj.available_quantity = stockInfo.sellable;
+        }
+      }
+      if (obj.available_quantity === undefined) {
+        obj.available_quantity = obj.stock || 0;
+      }
+      const pricing = await resolveProductPricing(p, bp, branchId, { now });
       obj.price = pricing.effective_price;
       obj.original_price = pricing.original_price;
       obj.discount_percent = pricing.discount_percent;
@@ -688,8 +756,25 @@ export const questions = async (req, res) => {
       filter.status = { $ne: 'hidden' };
     }
 
-    const data = await ProductQuestion.find(filter).sort('-created_at').limit(100);
-    return res.json({ success: true, data: data.map(normalizeQuestion) });
+    const data = await ProductQuestion.find(filter).sort({ is_pinned: -1, created_at: -1 }).limit(100);
+
+    // Fetch user avatars for all questions
+    const uniqueUserIds = [...new Set(data.map(q => String(q.user_id || '')).filter(Boolean))];
+    const validObjectIds = uniqueUserIds.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new mongoose.Types.ObjectId(id));
+    
+    const UserModel = mongoose.models.User || mongoose.model('User');
+    const users = await UserModel.find({ _id: { $in: validObjectIds } }).select('avatar').lean();
+    const avatarMap = {};
+    users.forEach(u => {
+      avatarMap[String(u._id)] = u.avatar;
+    });
+
+    const mapped = data.map(q => {
+      const uId = String(q.user_id || '');
+      return normalizeQuestion(q, avatarMap[uId]);
+    });
+
+    return res.json({ success: true, data: mapped });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -748,8 +833,30 @@ export const askQuestion = async (req, res) => {
 
     if (resolvedQaMode === 'ai') {
       // Auto-generate AI response in real-time
+      // Enrich product context for better AI grounding
       try {
-        const aiResult = await generateAiAnswer(product, content);
+        const enrichedProduct = product.toObject ? product.toObject() : { ...product };
+
+        // Populate category_name if missing
+        if (!enrichedProduct.category_name && enrichedProduct.category_id) {
+          try {
+            const CategoryModel = mongoose.models.Category || mongoose.model('Category');
+            const cat = await CategoryModel.findById(enrichedProduct.category_id).select('name').lean();
+            if (cat?.name) enrichedProduct.category_name = cat.name;
+          } catch (catErr) {
+            console.warn('[AI-QA] Could not populate category_name:', catErr.message);
+          }
+        }
+
+        // Merge highlights and product_details into a readable string for the AI
+        if (Array.isArray(enrichedProduct.highlights) && enrichedProduct.highlights.length > 0) {
+          enrichedProduct._highlights_text = enrichedProduct.highlights.join('; ');
+        }
+        if (Array.isArray(enrichedProduct.product_details) && enrichedProduct.product_details.length > 0) {
+          enrichedProduct._product_details_text = enrichedProduct.product_details.join('; ');
+        }
+
+        const aiResult = await generateAiAnswer(enrichedProduct, content);
         
         questionDoc.answer_source = 'ai';
         questionDoc.ai_model_used = aiResult.model;
@@ -800,7 +907,7 @@ export const askQuestion = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      data: normalizeQuestion(questionDoc),
+      data: normalizeQuestion(questionDoc, req.user?.avatar),
       message: questionDoc.status === 'answered'
         ? 'Đã trả lời tự động bằng AI'
         : 'Câu hỏi đã được gửi và đang chờ kiểm duyệt phản hồi',
@@ -847,9 +954,12 @@ export const replyQuestion = async (req, res) => {
 
     await question.save();
 
+    const UserModel = mongoose.models.User || mongoose.model('User');
+    const questionAuthor = await UserModel.findById(question.user_id).select('avatar').lean();
+
     return res.json({
       success: true,
-      data: normalizeQuestion(question),
+      data: normalizeQuestion(question, questionAuthor?.avatar),
       message: 'Đã phản hồi câu hỏi sản phẩm',
     });
   } catch (err) {
@@ -882,7 +992,26 @@ export const smartRecommendations = async (req, res) => {
     const now = new Date();
     const mapped = await Promise.all(data.map(async (p) => {
       const obj = { ...p, id: p._id };
-      const pricing = await resolveProductPricing(p, null, branchId, { now });
+      let bp = null;
+      if (branchId) {
+        bp = await BranchProduct.findOne({ product_id: p._id, branch_id: parseBranchId(branchId) }).lean();
+        if (bp) {
+          obj.branch_product_id = bp._id;
+          obj.price = bp.price;
+          obj.original_price = bp.original_price;
+          obj.discount_percent = bp.discount_percent;
+          obj.stock = bp.stock;
+          obj.branch_active = bp.is_available;
+
+          const { getSellableStockInfo } = await import('../services/inventoryService.js');
+          const stockInfo = await getSellableStockInfo(bp._id);
+          obj.available_quantity = stockInfo.sellable;
+        }
+      }
+      if (obj.available_quantity === undefined) {
+        obj.available_quantity = obj.stock || 0;
+      }
+      const pricing = await resolveProductPricing(p, bp, branchId, { now });
       obj.price = pricing.effective_price;
       obj.original_price = pricing.original_price;
       obj.discount_percent = pricing.discount_percent;
@@ -921,7 +1050,26 @@ export const recommendations = async (req, res) => {
 
     const related = await Promise.all(relatedRaw.map(async (p) => {
       const obj = { ...p, id: String(p._id) };
-      const pricing = await resolveProductPricing(p, null, branchId, { now });
+      let bp = null;
+      if (branchId) {
+        bp = await BranchProduct.findOne({ product_id: p._id, branch_id: parseBranchId(branchId) }).lean();
+        if (bp) {
+          obj.branch_product_id = bp._id;
+          obj.price = bp.price;
+          obj.original_price = bp.original_price;
+          obj.discount_percent = bp.discount_percent;
+          obj.stock = bp.stock;
+          obj.branch_active = bp.is_available;
+
+          const { getSellableStockInfo } = await import('../services/inventoryService.js');
+          const stockInfo = await getSellableStockInfo(bp._id);
+          obj.available_quantity = stockInfo.sellable;
+        }
+      }
+      if (obj.available_quantity === undefined) {
+        obj.available_quantity = obj.stock || 0;
+      }
+      const pricing = await resolveProductPricing(p, bp, branchId, { now });
       obj.price = pricing.effective_price;
       obj.original_price = pricing.original_price;
       obj.discount_percent = pricing.discount_percent;
@@ -970,20 +1118,39 @@ export const recommendations = async (req, res) => {
         const productDoc = coBuyMap.get(pid);
         if (!productDoc) return null;
         const score = scoreMap.get(pid);
-        const pricing = await resolveProductPricing(productDoc, null, branchId, { now });
+        const obj = { ...productDoc, id: String(productDoc._id) };
+        let bp = null;
+        if (branchId) {
+          bp = await BranchProduct.findOne({ product_id: productDoc._id, branch_id: parseBranchId(branchId) }).lean();
+          if (bp) {
+            obj.branch_product_id = bp._id;
+            obj.price = bp.price;
+            obj.original_price = bp.original_price;
+            obj.discount_percent = bp.discount_percent;
+            obj.stock = bp.stock;
+            obj.branch_active = bp.is_available;
+
+            const { getSellableStockInfo } = await import('../services/inventoryService.js');
+            const stockInfo = await getSellableStockInfo(bp._id);
+            obj.available_quantity = stockInfo.sellable;
+          }
+        }
+        if (obj.available_quantity === undefined) {
+          obj.available_quantity = obj.stock || 0;
+        }
+        const pricing = await resolveProductPricing(productDoc, bp, branchId, { now });
+        obj.price = pricing.effective_price;
+        obj.original_price = pricing.original_price;
+        obj.discount_percent = pricing.discount_percent;
+        obj.effective_price = pricing.effective_price;
+        obj.pricing_source = pricing.pricing_source;
+        obj.active_hot_deal = pricing.active_hot_deal;
+        obj.active_promotion = pricing.active_promotion;
+        obj.pricing = pricing;
         return {
-          ...productDoc,
-          id: String(productDoc._id),
+          ...obj,
           score: score?.score || 0,
           quantity: score?.quantity || 0,
-          price: pricing.effective_price,
-          original_price: pricing.original_price,
-          discount_percent: pricing.discount_percent,
-          effective_price: pricing.effective_price,
-          pricing_source: pricing.pricing_source,
-          active_hot_deal: pricing.active_hot_deal,
-          active_promotion: pricing.active_promotion,
-          pricing,
         };
       }));
 
@@ -1102,6 +1269,10 @@ export const couponsDetail = async (req, res) => {
 };
 
 const processProductData = (data) => {
+  // ERP stock control: prevent direct inventory stock overwriting via standard update/create APIs
+  delete data.stock;
+  delete data.sold_count;
+
   // ── Normalize image fields ──────────────────────────────────────────
   const parseImageArray = (val) => {
     if (!val) return [];

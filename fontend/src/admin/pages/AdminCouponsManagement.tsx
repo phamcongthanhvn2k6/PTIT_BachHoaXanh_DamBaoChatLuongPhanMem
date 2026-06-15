@@ -556,24 +556,27 @@ const CampaignPreview: React.FC<{
 
 const AdminCouponsManagement: React.FC = () => {
   const { t } = useTranslation();
-  const createLabel = (tab: 'promotions' | 'banners' | 'hot_deals' | 'popup_ads') => {
+  const createLabel = (tab: 'promotions' | 'coupons' | 'banners' | 'hot_deals' | 'popup_ads') => {
     if (tab === 'banners') return t('admin.promotions.banner', 'Banner');
     if (tab === 'hot_deals') return t('admin.promotions.hotDeal', 'Hot Deal');
     if (tab === 'popup_ads') return t('admin.promotions.popupAd', 'Popup Ad');
-    return t('admin.promotions.promoCoupon', 'Khuyến mãi/Coupon');
+    if (tab === 'coupons') return t('admin.promotions.coupon', 'Coupon');
+    return t('admin.promotions.promo', 'Khuyến mãi');
   };
   const getActiveLabel = (isActive: boolean) => (
     isActive
       ? t('admin.promotions.statusActiveLabel', 'Hoạt động / Active')
       : t('admin.promotions.statusInactiveLabel', 'Không hoạt động / Inactive')
   );
-  const [activeTab, setActiveTab] = useState<'promotions' | 'banners' | 'hot_deals' | 'popup_ads'>('promotions');
+  const [activeTab, setActiveTab] = useState<'promotions' | 'coupons' | 'banners' | 'hot_deals' | 'popup_ads'>('promotions');
 
-  const [promotions, setPromotions] = useState<any[]>([]);
-  const [coupons, setCoupons] = useState<any[]>([]);
-  const [banners, setBanners] = useState<any[]>([]);
-  const [hotDeals, setHotDeals] = useState<any[]>([]);
-  const [popupAds, setPopupAds] = useState<any[]>([]);
+  const [items, setItems] = useState<GenericItem[]>([]);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const [allPromotions, setAllPromotions] = useState<any[]>([]);
+  const [allCoupons, setAllCoupons] = useState<any[]>([]);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -586,7 +589,6 @@ const AdminCouponsManagement: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [sortOrder, setSortOrder] = useState('newest');
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
 
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingItem, setEditingItem] = useState<GenericItem | null>(null);
@@ -638,26 +640,104 @@ const AdminCouponsManagement: React.FC = () => {
   const [searchCategory, setSearchCategory] = useState('');
   const [searchBranch, setSearchBranch] = useState('');
 
-  const loadData = async () => {
+  const loadDropdownReferences = async () => {
+    try {
+      const [pRes, cRes] = await Promise.all([
+        promotionService.getPromotions({ limit: 1000 }),
+        couponService.getCoupons({ limit: 1000 }),
+      ]);
+      setAllPromotions((pRes as any)?.data || []);
+      setAllCoupons((cRes as any)?.data || []);
+    } catch (err) {
+      console.error('Error loading campaign references:', err);
+    }
+  };
+
+  const loadTabPagedData = async () => {
     try {
       setLoading(true);
-      const [pRes, cRes, bRes, hRes, paRes] = await Promise.all([
-        promotionService.getPromotions(),
-        couponService.getCoupons(),
-        bannerService.getBanners({ includeInactive: true }),
-        hotDealService.getHotDeals({ includeInactive: true }),
-        popupAdService.getPopupAds({ includeInactive: true }),
-      ]);
-      setPromotions((pRes as any)?.data || (pRes as any) || []);
-      setCoupons((cRes as any)?.data || (cRes as any) || []);
-      setBanners((bRes as any)?.data || (bRes as any) || []);
-      setHotDeals((hRes as any)?.data || (hRes as any) || []);
-      setPopupAds((paRes as any)?.data || (paRes as any) || []);
+      const params: Record<string, any> = {
+        page: currentPage,
+        limit: pageSize,
+        search: searchTerm,
+        status: filterStatus,
+        sort: sortOrder,
+      };
+
+      let fetchedData: any[] = [];
+      let paginationInfo: any = null;
+
+      if (activeTab === 'promotions') {
+        const res = await promotionService.getPromotions(params);
+        fetchedData = ((res as any)?.data || []).map((p: any) => ({
+          ...p,
+          id: toItemId(p),
+          item_type: 'promotion' as const,
+        }));
+        paginationInfo = (res as any)?.pagination;
+      } else if (activeTab === 'coupons') {
+        const res = await couponService.getCoupons(params);
+        fetchedData = ((res as any)?.data || []).map((c: any) => ({
+          ...c,
+          id: toItemId(c),
+          item_type: 'coupon' as const,
+          title: c.title || c.code,
+        }));
+        paginationInfo = (res as any)?.pagination;
+      } else if (activeTab === 'banners') {
+        const res = await bannerService.getBanners({ ...params, include_inactive: true });
+        fetchedData = ((res as any)?.data || []).map((b: any) => ({
+          ...b,
+          id: toItemId(b),
+          item_type: 'banner' as const,
+        }));
+        paginationInfo = (res as any)?.pagination;
+      } else if (activeTab === 'hot_deals') {
+        const res = await hotDealService.getHotDeals({ ...params, include_inactive: true });
+        fetchedData = ((res as any)?.data || []).map((h: any) => ({
+          ...h,
+          id: toItemId(h),
+          item_type: 'hot_deal' as const,
+          title: h.title || h.product_name || `Hot Deal #${String(toItemId(h)).slice(-6)}`,
+          start_date: h.start_date || h.created_at,
+          end_date: h.end_date || h.valid_until,
+        }));
+        paginationInfo = (res as any)?.pagination;
+      } else if (activeTab === 'popup_ads') {
+        const res = await popupAdService.getPopupAds({ ...params, include_inactive: true });
+        fetchedData = ((res as any)?.data || []).map((pa: any) => ({
+          ...pa,
+          id: toItemId(pa),
+          item_type: 'popup_ad' as const,
+          title: pa.title || `Popup Ad #${String(toItemId(pa)).slice(-6)}`,
+          is_active: pa.status === 'active',
+        }));
+        paginationInfo = (res as any)?.pagination;
+      }
+
+      setItems(fetchedData);
+      if (paginationInfo) {
+        setTotalRecords(paginationInfo.total || fetchedData.length);
+        setTotalPages(paginationInfo.totalPages || 1);
+      } else {
+        setTotalRecords(fetchedData.length);
+        setTotalPages(1);
+      }
     } catch (err: any) {
       toast.error(err?.message || 'Lỗi tải dữ liệu');
+      setItems([]);
+      setTotalRecords(0);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadData = async () => {
+    await Promise.all([
+      loadTabPagedData(),
+      loadDropdownReferences(),
+    ]);
   };
 
   const loadScopeOptions = async () => {
@@ -717,8 +797,12 @@ const AdminCouponsManagement: React.FC = () => {
   };
 
   useEffect(() => {
-    loadData();
+    loadDropdownReferences();
   }, []);
+
+  useEffect(() => {
+    loadTabPagedData();
+  }, [activeTab, currentPage, pageSize, searchTerm, filterStatus, sortOrder]);
 
   useEffect(() => {
     if (showFormModal) {
@@ -849,80 +933,7 @@ const AdminCouponsManagement: React.FC = () => {
     }
   }, [location.state, navigate]);
 
-  const activeList = useMemo(() => {
-    let list: GenericItem[] = [];
-
-    if (activeTab === 'promotions') {
-      const promotionRows = (promotions || []).map((p: any) => ({ ...p, id: toItemId(p), item_type: 'promotion' as const }));
-      const couponRows = (coupons || []).map((c: any) => ({ ...c, id: toItemId(c), item_type: 'coupon' as const, title: c.title || c.code }));
-      list = [...promotionRows, ...couponRows];
-    }
-
-    if (activeTab === 'banners') {
-      list = (banners || []).map((b: any) => ({ ...b, id: toItemId(b), item_type: 'banner' as const }));
-    }
-
-    if (activeTab === 'hot_deals') {
-      list = (hotDeals || []).map((h: any) => ({
-        ...h,
-        id: toItemId(h),
-        item_type: 'hot_deal' as const,
-        title: h.title || h.product_name || `Hot Deal #${String(toItemId(h)).slice(-6)}`,
-        start_date: h.start_date || h.created_at,
-        end_date: h.end_date || h.valid_until,
-      }));
-    }
-
-    if (activeTab === 'popup_ads') {
-      list = (popupAds || []).map((pa: any) => ({
-        ...pa,
-        id: toItemId(pa),
-        item_type: 'popup_ad' as const,
-        title: pa.title || `Popup Ad #${String(toItemId(pa)).slice(-6)}`,
-        is_active: pa.status === 'active',
-      }));
-    }
-
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
-      list = list.filter((item) => `${item.title || ''} ${item.code || ''}`.toLowerCase().includes(q));
-    }
-
-    if (filterStatus !== 'all') {
-      const now = new Date();
-      list = list.filter((item) => {
-        if (filterStatus === 'active') return item.is_active === true;
-        if (filterStatus === 'inactive') return item.is_active === false;
-        if (filterStatus === 'expired') return !!item.end_date && new Date(item.end_date) < now;
-        return true;
-      });
-    }
-
-    list.sort((a, b) => {
-      const endA = a.end_date ? new Date(a.end_date).getTime() : 0;
-      const endB = b.end_date ? new Date(b.end_date).getTime() : 0;
-
-      if (sortOrder === 'expiring') {
-        if (!endA && !endB) return 0;
-        if (!endA) return 1;
-        if (!endB) return -1;
-        return endA - endB;
-      }
-
-      const startA = a.start_date ? new Date(a.start_date).getTime() : 0;
-      const startB = b.start_date ? new Date(b.start_date).getTime() : 0;
-      return startB - startA;
-    });
-
-    return list;
-  }, [activeTab, promotions, coupons, banners, hotDeals, popupAds, searchTerm, filterStatus, sortOrder]);
-
-  const paginatedList = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return activeList.slice(start, start + itemsPerPage);
-  }, [activeList, currentPage]);
-
-  const totalPages = Math.ceil(activeList.length / itemsPerPage);
+  const paginatedList = items;
 
   const openCreateModal = () => {
     setEditingItem(null);
@@ -932,8 +943,11 @@ const AdminCouponsManagement: React.FC = () => {
     setSearchCategory('');
     setSearchBranch('');
 
-    if (activeTab === 'promotions') {
-      setPromotionForm(defaultPromotionForm());
+    if (activeTab === 'promotions' || activeTab === 'coupons') {
+      setPromotionForm({
+        ...defaultPromotionForm(),
+        recordType: activeTab === 'coupons' ? 'coupon' : 'promotion',
+      });
     } else {
       setBasicForm(defaultBasicForm());
     }
@@ -946,7 +960,7 @@ const AdminCouponsManagement: React.FC = () => {
     setFormErrors({});
     setSelectedImageFile(null);
 
-    if (activeTab === 'promotions') {
+    if (activeTab === 'promotions' || activeTab === 'coupons') {
       setPromotionForm(normalizePromotionItemToForm(item));
     } else {
       setBasicForm(normalizeBasicItemToForm(item, activeTab));
@@ -2052,7 +2066,7 @@ const AdminCouponsManagement: React.FC = () => {
                 className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
               >
                 <option value="">-- Chọn Promotion --</option>
-                {promotions.map((p: any) => (
+                {allPromotions.map((p: any) => (
                   <option key={toItemId(p)} value={toItemId(p)}>{p.title || `Promotion #${toItemId(p).slice(-6)}`}</option>
                 ))}
               </select>
@@ -2068,7 +2082,7 @@ const AdminCouponsManagement: React.FC = () => {
                 className="w-full px-4 py-3 bg-surface border border-slate-200 rounded-xl"
               >
                 <option value="">-- Chọn Coupon --</option>
-                {coupons.map((c: any) => (
+                {allCoupons.map((c: any) => (
                   <option key={toItemId(c)} value={toItemId(c)}>{c.code || c.title || `Coupon #${toItemId(c).slice(-6)}`}</option>
                 ))}
               </select>
@@ -2613,9 +2627,10 @@ const AdminCouponsManagement: React.FC = () => {
           </button>
         </section>
 
-        <div className="flex items-center gap-6 border-b border-slate-200 mb-6">
+        <div className="flex items-center gap-6 border-b border-slate-200 mb-6 overflow-x-auto whitespace-nowrap scrollbar-none">
           {[
-            { id: 'promotions', label: t('admin.promotions.tabPromotions', 'Khuyến mãi / Coupons') },
+            { id: 'promotions', label: t('admin.promotions.tabPromotionsOnly', 'Khuyến mãi') },
+            { id: 'coupons', label: t('admin.promotions.tabCouponsOnly', 'Coupons / Vouchers') },
             { id: 'banners', label: t('admin.promotions.tabBanners', 'Banners') },
             { id: 'hot_deals', label: t('admin.promotions.tabHotDeals', 'Giảm giá nhanh') },
             { id: 'popup_ads', label: t('admin.promotions.tabPopupAds', 'Popup Ads') }
@@ -2623,7 +2638,7 @@ const AdminCouponsManagement: React.FC = () => {
             <button
               key={tab.id}
               onClick={() => {
-                setActiveTab(tab.id as 'promotions' | 'banners' | 'hot_deals' | 'popup_ads');
+                setActiveTab(tab.id as 'promotions' | 'coupons' | 'banners' | 'hot_deals' | 'popup_ads');
                 setCurrentPage(1);
               }}
               className={`pb-4 px-2 font-bold text-sm border-b-2 transition-colors ${
@@ -2810,16 +2825,30 @@ const AdminCouponsManagement: React.FC = () => {
             </tbody>
           </table>
 
-          {totalPages > 1 && (
-            <div className="bg-surface-container-lowest px-6 py-4 flex items-center justify-between border-t border-slate-50">
-              <span className="text-xs font-medium text-secondary">
-                {t('admin.promotions.showing', 'Hiển thị')} {paginatedList.length} {t('admin.promotions.of', 'trong số')} {activeList.length} {t('admin.promotions.results', 'kết quả')}
-              </span>
+          {totalRecords > 0 && (
+            <div className="bg-surface-container-lowest px-6 py-4 flex flex-col sm:flex-row items-center justify-between border-t border-slate-50 gap-4">
+              <div className="flex items-center gap-4">
+                <span className="text-xs font-medium text-secondary">
+                  Hiển thị {Math.min(totalRecords, (currentPage - 1) * pageSize + 1)} - {Math.min(totalRecords, currentPage * pageSize)} trong số {totalRecords} kết quả
+                </span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-2 py-1 bg-surface-container border border-slate-200 rounded-lg text-xs font-bold"
+                >
+                  <option value={10}>10 bản ghi / trang</option>
+                  <option value={20}>20 bản ghi / trang</option>
+                  <option value={50}>50 bản ghi / trang</option>
+                </select>
+              </div>
               <div className="flex gap-2">
                 <button
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                  className="p-1.5 border border-slate-100 rounded-lg hover:bg-slate-50 text-secondary disabled:opacity-50"
+                  className="p-1.5 border border-slate-100 rounded-lg hover:bg-slate-50 text-secondary disabled:opacity-50 flex items-center justify-center"
                 >
                   <span className="material-symbols-outlined text-lg">chevron_left</span>
                 </button>
@@ -2827,7 +2856,7 @@ const AdminCouponsManagement: React.FC = () => {
                 <button
                   disabled={currentPage === totalPages}
                   onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                  className="p-1.5 border border-slate-100 rounded-lg hover:bg-slate-50 text-secondary disabled:opacity-50"
+                  className="p-1.5 border border-slate-100 rounded-lg hover:bg-slate-50 text-secondary disabled:opacity-50 flex items-center justify-center"
                 >
                   <span className="material-symbols-outlined text-lg">chevron_right</span>
                 </button>
@@ -2839,7 +2868,7 @@ const AdminCouponsManagement: React.FC = () => {
 
       {showFormModal && (
         <div className="fixed inset-0 z-60 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-3 md:p-4">
-          <div className={`bg-surface-container-lowest w-full ${activeTab === 'promotions' ? 'max-w-3xl' : 'max-w-lg'} rounded-2xl shadow-2xl overflow-hidden max-h-[88vh] flex flex-col`}>
+          <div className={`bg-surface-container-lowest w-full ${activeTab === 'promotions' || activeTab === 'coupons' ? 'max-w-3xl' : 'max-w-lg'} rounded-2xl shadow-2xl overflow-hidden max-h-[88vh] flex flex-col`}>
             <div className="px-5 py-3 border-b flex justify-between items-center bg-surface sticky top-0 z-10">
               <div>
                 <h3 className="text-xl font-black">

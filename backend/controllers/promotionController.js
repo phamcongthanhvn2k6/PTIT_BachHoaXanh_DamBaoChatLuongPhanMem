@@ -71,7 +71,6 @@ const normalizePromotionPayload = (body = {}) => {
 
     return normalized;
 };
-
 const validatePromotionPayload = (body = {}) => {
     const type = String(body.type || '').trim();
     const scope = String(body.scope || 'all').trim();
@@ -79,6 +78,10 @@ const validatePromotionPayload = (body = {}) => {
     if (!type) return 'Promotion type is required';
     if (!['percent', 'fixed_amount', 'bogo', 'free_shipping', 'points_multiplier', 'gift_item', 'flash_deal'].includes(type)) {
         return 'Invalid promotion type';
+    }
+
+    if ((type === 'percent' || type === 'flash_deal') && (Number(body.discount_value) < 0 || Number(body.discount_value) > 100)) {
+        return 'Discount value for percentage promotions must be between 0 and 100';
     }
 
     if (type === 'bogo') {
@@ -118,13 +121,30 @@ const validatePromotionPayload = (body = {}) => {
 // GET /api/promotions
 export const list = async (req, res) => {
     try {
-        const { status, type, scope, is_active, search } = req.query;
+        const { status, type, scope, is_active, search, page, limit, sort } = req.query;
         const isPrivileged = isPrivilegedRequest(req);
         const filter = {};
-        if (status) filter.status = status;
+        
         if (type) filter.type = type;
         if (scope) filter.scope = scope;
-        if (is_active !== undefined) filter.is_active = is_active === 'true';
+        
+        if (is_active !== undefined) {
+            filter.is_active = is_active === 'true';
+        }
+        
+        if (status && status !== 'all') {
+            const now = new Date();
+            if (status === 'active') {
+                filter.is_active = true;
+            } else if (status === 'inactive') {
+                filter.is_active = false;
+            } else if (status === 'expired') {
+                filter.end_date = { $lt: now };
+            } else {
+                filter.status = status;
+            }
+        }
+        
         if (search) {
             filter.$or = [
                 { title: { $regex: search, $options: 'i' } },
@@ -133,7 +153,40 @@ export const list = async (req, res) => {
             ];
         }
 
-        const promos = await Promotion.find(filter).sort({ priority: -1, created_at: -1 });
+        let sortQuery = { priority: -1, created_at: -1 };
+        if (sort === 'expiring') {
+            sortQuery = { end_date: 1 };
+        } else if (sort === 'newest') {
+            sortQuery = { created_at: -1 };
+        }
+
+        if (page !== undefined || limit !== undefined) {
+            const pageNum = Math.max(1, Number(page || 1));
+            const limitNum = Math.min(100, Math.max(1, Number(limit || 10)));
+            const [total, rows] = await Promise.all([
+                Promotion.countDocuments(filter),
+                Promotion.find(filter).sort(sortQuery).skip((pageNum - 1) * limitNum).limit(limitNum)
+            ]);
+            const mapped = rows.map(decoratePromotion);
+            const data = isPrivileged ? mapped : mapped.filter((promo) => {
+                const statusLower = String(promo.status || 'active').toLowerCase();
+                if (!promo.is_active) return false;
+                if (['draft', 'paused'].includes(statusLower)) return false;
+                return promo.is_visible_public;
+            });
+            return res.json({
+                success: true,
+                data,
+                pagination: {
+                    page: pageNum,
+                    limit: limitNum,
+                    total,
+                    totalPages: Math.ceil(total / limitNum) || 1
+                }
+            });
+        }
+
+        const promos = await Promotion.find(filter).sort(sortQuery);
         const mapped = promos.map(decoratePromotion);
 
         if (!isPrivileged) {

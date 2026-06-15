@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "node --watch server.js",
     "start": "node server.js",
-    "seed": "node seed/index.js",
+    "seed": "node seed/index.js && node scripts/mass_enterprise_seed.js",
     "test": "node --test tests/api.test.js"
   },
   "dependencies": {

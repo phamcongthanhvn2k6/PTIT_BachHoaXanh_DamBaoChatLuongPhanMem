@@ -51,6 +51,32 @@ couponSchema.index({ is_active: 1, start_date: 1, end_date: 1 });
 couponSchema.index({ scope: 1 });
 couponSchema.index({ voucher_type: 1 });
 
+couponSchema.pre('save', function (next) {
+  if (this.type === 'percent') {
+    if (this.discount_value > 100) {
+      this.discount_value = 100;
+    }
+    if (this.discount_value < 0) {
+      this.discount_value = 0;
+    }
+  }
+  next();
+});
+
+couponSchema.pre('findOneAndUpdate', function (next) {
+  const update = this.getUpdate();
+  if (update) {
+    if (update.type === 'percent') {
+      if (update.discount_value !== undefined && update.discount_value !== null) {
+        if (update.discount_value > 100) update.discount_value = 100;
+        if (update.discount_value < 0) update.discount_value = 0;
+      }
+    }
+  }
+  next();
+});
+
+
 // Usage tracking (when coupon is used in an order)
 const couponUsageSchema = new mongoose.Schema({
   coupon_id: { type: mongoose.Schema.Types.Mixed, required: true },

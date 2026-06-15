@@ -220,16 +220,70 @@ const normalizePayload = (body, isUpdate = false) => {
 
   return payload;
 };
-
 export const listFlashDeals = async (req, res) => {
   try {
     const includeInactive = toBoolean(req.query?.include_inactive, false) && isPrivilegedRequest(req);
     const debugMode = toBoolean(req.query?.debug, false);
+    const { page, limit, search, status, sort } = req.query;
     const query = {};
 
     if (req.query?.product_id) query.product_id = toId(req.query.product_id);
     if (req.query?.branch_product_id) query.branch_product_id = toId(req.query.branch_product_id);
     if (req.query?.is_active !== undefined) query.is_active = toBoolean(req.query.is_active, true);
+
+    if (status && status !== 'all') {
+      const now = new Date();
+      if (status === 'active') {
+        query.is_active = true;
+      } else if (status === 'inactive') {
+        query.is_active = false;
+      } else if (status === 'expired') {
+        query.end_date = { $lt: now };
+      }
+    }
+
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { product_name: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    let sortQuery = { priority: -1, created_at: -1 };
+    if (sort === 'expiring') {
+      sortQuery = { end_date: 1 };
+    } else if (sort === 'newest') {
+      sortQuery = { created_at: -1 };
+    }
+
+    if (page !== undefined || limit !== undefined) {
+      const pageNum = Math.max(1, Number(page || 1));
+      const limitNum = Math.min(100, Math.max(1, Number(limit || 10)));
+      
+      const total = await FlashDeal.countDocuments(query);
+      const docs = await FlashDeal.find(query).sort(sortQuery).skip((pageNum - 1) * limitNum).limit(limitNum);
+      
+      const normalized = docs.map(normalizeDeal);
+      const now = new Date();
+      
+      let data = normalized;
+      if (!includeInactive) {
+        data = normalized.filter((deal) => {
+          return evaluateVisibility(deal, now).eligible_for_user;
+        });
+      }
+      
+      return res.json({
+        success: true,
+        data,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum) || 1
+        }
+      });
+    }
 
     const docs = await FlashDeal.find(query).sort({ priority: -1, created_at: -1, createdAt: -1 });
     const normalized = docs.map(normalizeDeal);

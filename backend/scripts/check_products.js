@@ -33,7 +33,7 @@ async function run() {
 
   const rawTopProducts = await Product.find({ is_deleted: { $ne: true } })
     .sort({ sold_count: -1 })
-    .limit(10);
+    .limit(510);
 
   console.log('Top Products and Branch Prices:');
   for (const p of rawTopProducts) {

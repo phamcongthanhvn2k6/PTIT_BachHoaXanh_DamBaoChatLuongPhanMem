@@ -25,6 +25,7 @@ const router = Router();
 const uploadLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
+  skip: () => process.env.NODE_ENV !== 'production',
   message: { success: false, message: 'Quá nhiều yêu cầu upload, vui lòng thử lại sau.' }
 });
 

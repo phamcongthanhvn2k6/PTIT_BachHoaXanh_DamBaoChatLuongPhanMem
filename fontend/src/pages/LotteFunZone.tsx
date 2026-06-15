@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dataService } from '../services/dataService';
-import { useAppSelector } from '../store';
+import { useAppSelector, useAppDispatch } from '../store';
+import { authVerify } from '../slices/authSlice';
 
 // Confetti Effect Helper
 const triggerConfetti = () => {
@@ -67,6 +68,7 @@ const playSound = (freq = 440, type = 'sine', duration = 0.1, volume = 0.1) => {
 
 const LotteFunZone: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const dispatch = useAppDispatch();
   const user = useAppSelector(state => state.auth.user);
   const currentLang = i18n.language || 'vi';
 
@@ -100,6 +102,17 @@ const LotteFunZone: React.FC = () => {
   const isCheckedInToday = !!(checkinState?.data?.checkedInToday ?? checkinState?.checkedInToday);
   const streakCount = Number(checkinState?.data?.currentStreak ?? checkinState?.currentStreak ?? 0);
 
+  // Lock checks
+  const isSpinLocked = user?.status === 'LOCKED' || 
+    (user?.gamification_lock?.is_locked && 
+     (user.gamification_lock.scope === 'spin' || user.gamification_lock.scope === 'all') && 
+     (!user.gamification_lock.expires_at || new Date() < new Date(user.gamification_lock.expires_at)));
+
+  const isCheckinLocked = user?.status === 'LOCKED' || 
+    (user?.gamification_lock?.is_locked && 
+     (user.gamification_lock.scope === 'checkin' || user.gamification_lock.scope === 'all') && 
+     (!user.gamification_lock.expires_at || new Date() < new Date(user.gamification_lock.expires_at)));
+
   // Translation helpers
   const getLocalizedName = (item: any) => {
     if (!item) return '';
@@ -122,6 +135,9 @@ const LotteFunZone: React.FC = () => {
 
   const fetchActiveCampaigns = async () => {
     try {
+      // Refresh user session to get latest lotte_points and status/locks
+      dispatch(authVerify());
+
       const spinCamp = await dataService.getGamificationCampaign('spin');
       setSpinCampaign(spinCamp);
       
@@ -136,7 +152,8 @@ const LotteFunZone: React.FC = () => {
           ? logs.data.filter((l: any) => l.type === 'spin' && l.date_str === todayStr && l.status === 'delivered').length
           : 0;
         
-        setSpinsRemainingToday(Math.max(0, spinCamp.max_spins_per_user_day - spinsToday));
+        const extraSpins = spinCamp.extra_spins || 0;
+        setSpinsRemainingToday(Math.max(0, spinCamp.max_spins_per_user_day - spinsToday) + extraSpins);
       }
 
       const checkState = await dataService.getCheckinState();
@@ -201,7 +218,8 @@ const LotteFunZone: React.FC = () => {
       const baseSpins = 6;
       // Landing in the middle of segment
       const segmentOffset = degreesPerSegment / 2;
-      const targetDegrees = 360 * baseSpins + (360 - (rewardIndex * degreesPerSegment)) - segmentOffset;
+      // Correct mathematical formula to align segment rewardIndex under top pointer:
+      const targetDegrees = 360 * baseSpins + ((360 + 90 - (rewardIndex * degreesPerSegment + segmentOffset)) % 360);
 
       const finalRotation = wheelRotation + targetDegrees - (wheelRotation % 360);
       
@@ -279,7 +297,7 @@ const LotteFunZone: React.FC = () => {
           <div className="flex justify-center gap-3 mb-3 flex-wrap">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900 border border-red-500/20 text-red-500 text-xs font-bold uppercase tracking-wider shadow-md">
               <span className="material-symbols-outlined text-xs">sports_esports</span>
-              Lotte Fun Zone
+              {t('gamification.title', 'Lotte Fun Zone')}
             </div>
             <a href="/carrot-scene" className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/60 border border-amber-500/20 text-amber-400 text-xs font-bold uppercase tracking-wider shadow-md hover:bg-slate-900 hover:text-amber-300 transition-colors" style={{ textDecoration: 'none' }}>
               <span className="material-symbols-outlined text-xs">3d_rotation</span>
@@ -303,7 +321,7 @@ const LotteFunZone: React.FC = () => {
           <div className="w-full bg-slate-900/60 backdrop-blur-md border border-slate-800 rounded-xl py-3 px-6 mb-8 flex items-center gap-4 overflow-hidden relative shadow-lg">
             <span className="flex items-center gap-1.5 text-amber-400 text-xs font-bold uppercase tracking-wider border-r border-slate-800 pr-4 shrink-0">
               <span className="material-symbols-outlined text-sm animate-bounce">campaign</span>
-              {currentLang === 'vi' ? 'Chúc mừng' : currentLang === 'ja' ? 'おめでとう' : 'Congrats'}
+              {t('gamification.congrats', 'Chúc mừng')}
             </span>
             <div className="flex-1 overflow-hidden h-5 relative">
               <div className="flex gap-8 animate-marquee whitespace-nowrap text-slate-300 text-xs font-medium">
@@ -325,7 +343,7 @@ const LotteFunZone: React.FC = () => {
               <span className="material-symbols-outlined text-2xl">stars</span>
             </div>
             <div>
-              <p className="text-xs text-slate-400 uppercase font-bold tracking-widest">{currentLang === 'vi' ? 'Điểm Lotte hiện có' : currentLang === 'ja' ? '保有ロッテポイント' : 'Your Lotte Points'}</p>
+              <p className="text-xs text-slate-400 uppercase font-bold tracking-widest">{t('gamification.lottePoints', 'Điểm Lotte hiện có')}</p>
               <h3 className="text-2xl font-black text-white mt-1">{(user as any)?.lotte_points ?? 0} PTS</h3>
             </div>
           </div>
@@ -334,8 +352,8 @@ const LotteFunZone: React.FC = () => {
               <span className="material-symbols-outlined text-2xl">local_play</span>
             </div>
             <div>
-              <p className="text-xs text-slate-400 uppercase font-bold tracking-widest">{currentLang === 'vi' ? 'Lượt quay hôm nay' : currentLang === 'ja' ? '本日のスピン残り' : 'Spins Left Today'}</p>
-              <h3 className="text-2xl font-black text-white mt-1">{spinsRemainingToday} {currentLang === 'vi' ? 'lượt' : currentLang === 'ja' ? '回' : 'spins'}</h3>
+              <p className="text-xs text-slate-400 uppercase font-bold tracking-widest">{t('gamification.spinsRemaining', 'Lượt quay hôm nay')}</p>
+              <h3 className="text-2xl font-black text-white mt-1">{spinsRemainingToday} {t('gamification.spinsUnit', 'lượt')}</h3>
             </div>
           </div>
           <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 p-5 rounded-2xl flex items-center gap-4 shadow-xl">
@@ -343,8 +361,8 @@ const LotteFunZone: React.FC = () => {
               <span className="material-symbols-outlined text-2xl">calendar_month</span>
             </div>
             <div>
-              <p className="text-xs text-slate-400 uppercase font-bold tracking-widest">{currentLang === 'vi' ? 'Chuỗi điểm danh' : currentLang === 'ja' ? 'チェックイン継続' : 'Check-in Streak'}</p>
-              <h3 className="text-2xl font-black text-white mt-1">{streakCount} {currentLang === 'vi' ? 'ngày' : currentLang === 'ja' ? '日' : 'days'}</h3>
+              <p className="text-xs text-slate-400 uppercase font-bold tracking-widest">{t('gamification.streak', 'Chuỗi điểm danh')}</p>
+              <h3 className="text-2xl font-black text-white mt-1">{streakCount} {t('gamification.days', 'ngày')}</h3>
             </div>
           </div>
         </div>
@@ -360,7 +378,7 @@ const LotteFunZone: React.FC = () => {
             }`}
           >
             <span className="material-symbols-outlined text-lg">casino</span>
-            {currentLang === 'vi' ? 'Vòng Quay May Mắn' : currentLang === 'ja' ? 'ラッキースピン' : 'Lucky Spin'}
+            {t('gamification.spinWheel', 'Vòng Quay May Mắn')}
           </button>
           <button
             onClick={() => setActiveTab('checkin')}
@@ -371,7 +389,7 @@ const LotteFunZone: React.FC = () => {
             }`}
           >
             <span className="material-symbols-outlined text-lg">verified</span>
-            {currentLang === 'vi' ? 'Điểm Danh Hàng Ngày' : currentLang === 'ja' ? '毎日チェックイン' : 'Daily Check-in'}
+            {t('gamification.dailyCheckin', 'Điểm Danh Hàng Ngày')}
           </button>
         </div>
 
@@ -385,11 +403,54 @@ const LotteFunZone: React.FC = () => {
             {activeTab === 'spin' && (
               <div className="bg-slate-900/30 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 md:p-8 shadow-2xl relative">
                 
-                {!spinCampaign ? (
+                {isSpinLocked ? (
+                  <div className="text-center py-12 space-y-4 max-w-md mx-auto">
+                    <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mx-auto mb-4 animate-pulse">
+                      <span className="material-symbols-outlined text-4xl">lock</span>
+                    </div>
+                    <h3 className="text-xl font-black text-red-500 uppercase tracking-wide">
+                      {currentLang === 'vi' ? 'Tính Năng Đã Bị Khóa' : currentLang === 'ja' ? '機能がロックされました' : 'Feature Locked'}
+                    </h3>
+                    <p className="text-slate-400 text-sm leading-relaxed">
+                      {currentLang === 'vi' 
+                        ? 'Tài khoản của bạn đã bị khóa quyền truy cập tính năng Vòng Quay May Mắn do phát hiện hành vi bất thường hoặc theo yêu cầu của quản trị viên.'
+                        : currentLang === 'ja'
+                        ? '異常なアクティビティが検出されたか、管理者の要求により、この機能へのアクセスがロックされました。'
+                        : 'Your access to the Lucky Spin feature has been locked due to unusual activity or admin request.'}
+                    </p>
+                    <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 mt-6 text-left space-y-2 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Phạm vi khóa:</span>
+                        <span className="font-bold text-red-400 uppercase">
+                          {user?.gamification_lock?.scope === 'all' || user?.status === 'LOCKED' ? 'Tất cả (all)' : user?.gamification_lock?.scope}
+                        </span>
+                      </div>
+                      {(user?.gamification_lock?.reason || user?.status === 'LOCKED') && (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-slate-500">Lý do:</span>
+                          <span className="text-slate-300 italic">
+                            {user?.gamification_lock?.reason || 'Phát hiện hành vi lạm dụng/spam!'}
+                          </span>
+                        </div>
+                      )}
+                      {user?.gamification_lock?.expires_at && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Hết hạn khóa:</span>
+                          <span className="text-slate-300 font-mono">
+                            {new Date(user.gamification_lock.expires_at).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-6">
+                      Nếu bạn cho rằng đây là sự nhầm lẫn, vui lòng liên hệ Bộ phận hỗ trợ khách hàng Lotte Mart.
+                    </div>
+                  </div>
+                ) : !spinCampaign ? (
                   <div className="text-center py-12">
                     <span className="material-symbols-outlined text-5xl text-slate-600 animate-pulse">casino</span>
                     <h3 className="text-xl font-bold mt-4 text-slate-400">
-                      {currentLang === 'vi' ? 'Không có chương trình Vòng Quay nào khả dụng' : 'No spin campaign active at this moment.'}
+                      {t('gamification.noCampaign', 'Không có chương trình hoạt động lúc này.')}
                     </h3>
                   </div>
                 ) : (
@@ -399,7 +460,7 @@ const LotteFunZone: React.FC = () => {
                     <div className="text-center mb-6">
                       <h2 className="text-2xl font-black text-white">{spinCampaign.name}</h2>
                       <p className="text-slate-400 text-xs mt-1">
-                        {currentLang === 'vi' ? 'Hạn kết thúc:' : 'Ends on:'} {new Date(spinCampaign.end_date).toLocaleDateString()}
+                        {t('gamification.endsOn', 'Hạn kết thúc:')} {new Date(spinCampaign.end_date).toLocaleDateString()}
                       </p>
                     </div>
 
@@ -479,10 +540,10 @@ const LotteFunZone: React.FC = () => {
                         }`}
                       >
                         <span className="text-slate-950 font-black text-md tracking-wider">
-                          {isSpinning ? 'SPINNING' : 'QUAY'}
+                          {isSpinning ? (currentLang === 'vi' ? 'QUAY...' : currentLang === 'ja' ? '回転中' : 'SPINNING') : (currentLang === 'vi' ? 'QUAY' : currentLang === 'ja' ? 'スタート' : 'SPIN')}
                         </span>
                         <span className="text-slate-900/70 font-bold text-[9px] -mt-0.5">
-                          {spinsRemainingToday} Lượt
+                          {spinsRemainingToday} {t('gamification.spinsUnit', 'lượt')}
                         </span>
                       </button>
                     </div>
@@ -492,17 +553,17 @@ const LotteFunZone: React.FC = () => {
                       <div className="w-full max-w-md bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-4 mt-6 text-center animate-fadeIn shadow-lg">
                         <span className="material-symbols-outlined text-3xl text-emerald-400 animate-bounce">emoji_events</span>
                         <h4 className="text-emerald-400 font-bold text-sm mt-1 uppercase tracking-wider">
-                          {currentLang === 'vi' ? 'Xin chúc mừng!' : 'Congratulations!'}
+                          {t('gamification.congrats', 'Xin chúc mừng!')}
                         </h4>
                         <p className="text-white font-black text-lg mt-1">
                           {spinResult.reward_type === 'empty'
                             ? getLocalizedName(spinResult)
-                            : `${currentLang === 'vi' ? 'Bạn đã trúng' : 'You won'} ${getLocalizedName(spinResult)}!`}
+                            : `${t('gamification.youWon', 'Bạn đã trúng')} ${getLocalizedName(spinResult)}!`}
                         </p>
                         <p className="text-slate-400 text-xs mt-1">
                           {spinResult.reward_type === 'points' 
-                            ? (currentLang === 'vi' ? 'Điểm đã tự động cộng vào ví của bạn.' : 'Points auto-added to your wallet.')
-                            : (currentLang === 'vi' ? 'Voucher đã được gửi tới ví ưu đãi của bạn.' : 'Coupon added to your vouchers.')}
+                            ? t('gamification.pointsWalletMsg', 'Điểm đã tự động cộng vào ví của bạn.')
+                            : t('gamification.couponWalletMsg', 'Voucher đã được gửi tới ví ưu đãi của bạn.')}
                         </p>
                       </div>
                     )}
@@ -520,11 +581,54 @@ const LotteFunZone: React.FC = () => {
             {/* TAB 2: DAILY CHECK-IN */}
             {activeTab === 'checkin' && (
               <div className="bg-slate-900/30 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-6 md:p-8 shadow-2xl">
-                {!checkinCampaign ? (
+                {isCheckinLocked ? (
+                  <div className="text-center py-12 space-y-4 max-w-md mx-auto">
+                    <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 mx-auto mb-4 animate-pulse">
+                      <span className="material-symbols-outlined text-4xl">lock</span>
+                    </div>
+                    <h3 className="text-xl font-black text-red-500 uppercase tracking-wide">
+                      {currentLang === 'vi' ? 'Tính Năng Đã Bị Khóa' : currentLang === 'ja' ? '機能がロックされました' : 'Feature Locked'}
+                    </h3>
+                    <p className="text-slate-400 text-sm leading-relaxed">
+                      {currentLang === 'vi' 
+                        ? 'Tài khoản của bạn đã bị khóa quyền truy cập tính năng Điểm Danh Hàng Ngày do phát hiện hành vi bất thường hoặc theo yêu cầu của quản trị viên.'
+                        : currentLang === 'ja'
+                        ? '異常なアクティビティが検出されたか、管理者の要求により、この機能へのアクセスがロックされました。'
+                        : 'Your access to the Daily Check-in feature has been locked due to unusual activity or admin request.'}
+                    </p>
+                    <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 mt-6 text-left space-y-2 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Phạm vi khóa:</span>
+                        <span className="font-bold text-red-400 uppercase">
+                          {user?.gamification_lock?.scope === 'all' || user?.status === 'LOCKED' ? 'Tất cả (all)' : user?.gamification_lock?.scope}
+                        </span>
+                      </div>
+                      {(user?.gamification_lock?.reason || user?.status === 'LOCKED') && (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-slate-500">Lý do:</span>
+                          <span className="text-slate-300 italic">
+                            {user?.gamification_lock?.reason || 'Phát hiện hành vi lạm dụng/spam!'}
+                          </span>
+                        </div>
+                      )}
+                      {user?.gamification_lock?.expires_at && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Hết hạn khóa:</span>
+                          <span className="text-slate-300 font-mono">
+                            {new Date(user.gamification_lock.expires_at).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-6">
+                      Nếu bạn cho rằng đây là sự nhầm lẫn, vui lòng liên hệ Bộ phận hỗ trợ khách hàng Lotte Mart.
+                    </div>
+                  </div>
+                ) : !checkinCampaign ? (
                   <div className="text-center py-12">
                     <span className="material-symbols-outlined text-5xl text-slate-600 animate-pulse">verified</span>
                     <h3 className="text-xl font-bold mt-4 text-slate-400">
-                      {currentLang === 'vi' ? 'Không có chương trình Điểm danh nào hoạt động' : 'No check-in campaign active.'}
+                      {t('gamification.noCampaign', 'Không có chương trình hoạt động lúc này.')}
                     </h3>
                   </div>
                 ) : (
@@ -533,16 +637,20 @@ const LotteFunZone: React.FC = () => {
                     <div className="text-center mb-6">
                       <h2 className="text-2xl font-black text-white">{checkinCampaign.name}</h2>
                       <p className="text-slate-400 text-sm mt-1">
-                        {currentLang === 'vi' ? 'Điểm danh liên tục 7 ngày để mở khóa Rương Quà Đặc Biệt!' : 'Check in 7 days consecutively to unlock Special Rewards!'}
+                        {currentLang === 'vi' 
+                          ? 'Điểm danh liên tục 7 ngày để mở khóa Rương Quà Đặc Biệt!' 
+                          : currentLang === 'ja'
+                          ? '7日間連続でチェックインして特別宝箱を開けよう！'
+                          : 'Check in 7 days consecutively to unlock Special Rewards!'}
                       </p>
                     </div>
 
                     {/* Streak Progress Gauge */}
                     <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 mb-8">
                       <div className="flex justify-between items-center mb-3">
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{currentLang === 'vi' ? 'Tiến trình nhận rương' : 'Chest Progress'}</span>
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t('gamification.chestProgress', 'Tiến trình nhận rương')}</span>
                         <span className="text-xs font-black text-amber-400">
-                          {streakCount} / 7 {currentLang === 'vi' ? 'Ngày' : 'Days'}
+                          {streakCount} / 7 {currentLang === 'vi' ? 'Ngày' : currentLang === 'ja' ? '日' : 'Days'}
                         </span>
                       </div>
                       <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800 flex">
@@ -552,9 +660,7 @@ const LotteFunZone: React.FC = () => {
                         ></div>
                       </div>
                       <p className="text-[10px] text-slate-500 mt-2">
-                        {currentLang === 'vi' 
-                          ? '*Nếu đứt quãng chuỗi điểm danh, tiến trình sẽ được tính lại từ ngày đầu tiên.' 
-                          : '*Missing a day resets your check-in streak count.'}
+                        {t('gamification.chestNotice', '*Nếu đứt quãng chuỗi điểm danh, tiến trình sẽ được tính lại từ ngày đầu tiên.')}
                       </p>
                     </div>
 
@@ -578,7 +684,7 @@ const LotteFunZone: React.FC = () => {
                             }`}
                           >
                             <span className="text-xs font-bold uppercase tracking-wider">
-                              {currentLang === 'vi' ? `Ngày ${dayNum}` : `Day ${dayNum}`}
+                              {currentLang === 'vi' ? `Ngày ${dayNum}` : currentLang === 'ja' ? `${dayNum}日目` : `Day ${dayNum}`}
                             </span>
                             
                             <div className="my-3">
@@ -593,7 +699,7 @@ const LotteFunZone: React.FC = () => {
 
                             <span className="text-[9px] font-bold block truncate max-w-full">
                               {dayNum === 7 
-                                ? (currentLang === 'vi' ? 'Rương Quà' : 'Mega Chest') 
+                                ? t('gamification.megaChest', 'Rương Quà Đặc Biệt') 
                                 : `+${10 * dayNum} PTS`}
                             </span>
                           </div>
@@ -615,15 +721,15 @@ const LotteFunZone: React.FC = () => {
                         {checkinLoading ? (
                           <span className="flex items-center justify-center gap-2">
                             <span className="w-4 h-4 rounded-full border-2 border-slate-950 border-t-transparent animate-spin"></span>
-                            {currentLang === 'vi' ? 'Đang thực hiện...' : 'Processing...'}
+                            {t('gamification.processing', 'Đang thực hiện...')}
                           </span>
                         ) : isCheckedInToday ? (
                           <span className="flex items-center justify-center gap-1.5">
                             <span className="material-symbols-outlined text-lg">check_circle</span>
-                            {currentLang === 'vi' ? 'Đã Điểm Danh Hôm Nay' : 'Checked In Today'}
+                            {t('gamification.checkedInToday', 'Đã Điểm Danh Hôm Nay')}
                           </span>
                         ) : (
-                          currentLang === 'vi' ? 'ĐIỂM DANH NHẬN QUÀ NGAY' : 'CHECK IN NOW'
+                          t('gamification.checkInNow', 'ĐIỂM DANH NHẬN QUÀ NGAY')
                         )}
                       </button>
                     </div>
@@ -652,29 +758,13 @@ const LotteFunZone: React.FC = () => {
             <div className="bg-slate-900/30 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-5">
               <h3 className="text-md font-bold text-white mb-3 flex items-center gap-2 border-b border-slate-800 pb-2">
                 <span className="material-symbols-outlined text-amber-400 text-lg">info</span>
-                {currentLang === 'vi' ? 'Thể lệ chương trình' : 'Terms & Conditions'}
+                {t('gamification.terms', 'Thể lệ chương trình')}
               </h3>
               <ul className="space-y-2.5 text-xs text-slate-400 list-disc pl-4 leading-relaxed">
-                <li>
-                  {currentLang === 'vi' 
-                    ? 'Chương trình dành riêng cho thành viên có ví điểm Lotte Mart.'
-                    : 'Exclusive for registered Lotte Mart members.'}
-                </li>
-                <li>
-                  {currentLang === 'vi'
-                    ? 'Mỗi tài khoản được nhận 1 lượt quay miễn phí mỗi ngày.'
-                    : 'Each user is granted 1 free lucky spin per day.'}
-                </li>
-                <li>
-                  {currentLang === 'vi'
-                    ? 'Quà tặng voucher/mã giảm giá có thời hạn sử dụng được ghi rõ trong chi tiết voucher.'
-                    : 'Vouchers/coupons have expiration dates noted inside your wallet details.'}
-                </li>
-                <li>
-                  {currentLang === 'vi'
-                    ? 'Hành vi gian lận hoặc spam sẽ bị vô hiệu hóa tài khoản và thu hồi phần quà.'
-                    : 'Fraud, script abuses or duplicate logins will result in immediate account termination.'}
-                </li>
+                <li>{t('gamification.termsDetail1', 'Chương trình dành riêng cho thành viên có ví điểm Lotte Mart.')}</li>
+                <li>{t('gamification.termsDetail2', 'Mỗi tài khoản được nhận 1 lượt quay miễn phí mỗi ngày.')}</li>
+                <li>{t('gamification.termsDetail3', 'Quà tặng voucher/mã giảm giá có thời hạn sử dụng được ghi rõ trong chi tiết voucher.')}</li>
+                <li>{t('gamification.termsDetail4', 'Hành vi gian lận hoặc spam sẽ bị vô hiệu hóa tài khoản và thu hồi phần quà.')}</li>
               </ul>
             </div>
 
@@ -682,12 +772,12 @@ const LotteFunZone: React.FC = () => {
             <div className="bg-slate-900/30 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-5">
               <h3 className="text-md font-bold text-white mb-4 flex items-center gap-2 border-b border-slate-800 pb-2">
                 <span className="material-symbols-outlined text-red-500 text-lg">military_tech</span>
-                {currentLang === 'vi' ? 'Quà tặng đã nhận' : 'My Claimed Rewards'}
+                {t('gamification.myRewards', 'Quà tặng đã nhận')}
               </h3>
 
               {userHistory.length === 0 ? (
                 <div className="text-center py-6 text-slate-500 text-xs">
-                  {currentLang === 'vi' ? 'Chưa nhận phần quà nào.' : 'No rewards claimed yet.'}
+                  {t('gamification.noRewards', 'Chưa nhận phần quà nào.')}
                 </div>
               ) : (
                 <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
@@ -697,15 +787,15 @@ const LotteFunZone: React.FC = () => {
                         <p className="font-bold text-slate-200">{getLocalizedName(log.reward)}</p>
                         <p className="text-[10px] text-slate-500 mt-0.5">
                           {log.type === 'spin' 
-                            ? (currentLang === 'vi' ? 'Vòng quay' : 'Spin Wheel') 
-                            : (currentLang === 'vi' ? 'Điểm danh' : 'Check-in')}
+                            ? t('gamification.spin', 'Vòng quay') 
+                            : t('gamification.checkin', 'Điểm danh')}
                         </p>
                       </div>
                       <div className="text-right">
                         <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${
                           log.status === 'delivered' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
                         }`}>
-                          {log.status === 'delivered' ? 'Thành công' : 'Thất bại'}
+                          {log.status === 'delivered' ? t('gamification.statusSuccess', 'Thành công') : t('gamification.statusFailed', 'Thất bại')}
                         </span>
                         <p className="text-[9px] text-slate-500 mt-1">
                           {new Date(log.claimed_at).toLocaleDateString()}

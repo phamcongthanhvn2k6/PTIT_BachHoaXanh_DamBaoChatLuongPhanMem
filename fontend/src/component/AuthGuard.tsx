@@ -11,7 +11,7 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children }) => {
   const location = useLocation();
   const isLoading = status === 'loading';
 
-  if (!_initialized || isLoading) {
+  if (!_initialized || (isLoading && !isAuthenticated)) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center space-y-4">

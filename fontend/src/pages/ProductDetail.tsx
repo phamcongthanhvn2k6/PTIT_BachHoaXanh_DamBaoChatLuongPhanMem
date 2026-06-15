@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthRedirect } from '../hooks/useAuthRedirect';
 import StarRating from '../components/StarRating/StarRating';
 import ReviewList from '../components/ReviewList/ReviewList';
+import UserAvatar from '../components/UserAvatar/UserAvatar';
 import { toast } from '../components/Toast/toastEvent';
 import { productService } from '../services/productService';
 import { dataService } from '../services/dataService';
@@ -1444,12 +1445,22 @@ const ProductDetail: React.FC = () => {
                 const isPending = q.status === 'pending' || q.ai_status === 'pending' || q.ai_status === 'needs_review';
 
                 return (
-                  <div key={q.id || `${q.created_at || 'q'}-${index}`} className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm transition hover:shadow-md">
+                  <div 
+                    key={q.id || `${q.created_at || 'q'}-${index}`} 
+                    className={`bg-white dark:bg-slate-900 p-6 rounded-3xl border shadow-sm transition hover:shadow-md ${
+                      q.is_pinned 
+                        ? 'border-primary/40 bg-gradient-to-br from-white to-primary/2 dark:from-slate-900 dark:to-primary/5 shadow-md shadow-primary/5' 
+                        : 'border-slate-100 dark:border-slate-800'
+                    }`}
+                  >
                     <div className="flex items-center justify-between gap-4 mb-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-slate-600 dark:text-slate-300">
-                          {String(q.user_name || 'K').charAt(0).toUpperCase()}
-                        </div>
+                        <UserAvatar
+                          src={q.user_avatar}
+                          name={q.user_name || 'Khách hàng'}
+                          size={36}
+                          userId={q.user_id}
+                        />
                         <div>
                           <span className="font-extrabold text-sm text-slate-900 dark:text-slate-100 block">
                             {q.user_name || 'Khách hàng'}
@@ -1460,12 +1471,20 @@ const ProductDetail: React.FC = () => {
                         </div>
                       </div>
                       
-                      {isPending && (
-                        <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
-                          {t('qa.pendingReview', 'Chờ duyệt')}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {q.is_pinned && (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-50 text-red-600 dark:bg-red-950/20 dark:text-red-400 border border-red-200/50 flex items-center gap-1 shadow-2xs">
+                            <span className="material-symbols-outlined text-[12px] font-bold">push_pin</span>
+                            {t('qa.pinned', 'Đã ghim')}
+                          </span>
+                        )}
+                        {isPending && (
+                          <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                            {t('qa.pendingReview', 'Chờ duyệt')}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     
                     <p className="text-slate-800 dark:text-slate-200 font-bold mb-4 pl-1 text-sm">
@@ -1474,7 +1493,14 @@ const ProductDetail: React.FC = () => {
 
                     {answerList.length > 0 ? (
                       answerList.map((a: any, i: number) => (
-                        <div key={i} className="pl-4 mt-3 border-l-2 border-primary/20 py-1 bg-slate-50/50 dark:bg-slate-800/10 rounded-r-xl pr-4">
+                        <div 
+                          key={i} 
+                          className={`pl-4 mt-3 border-l-2 py-2 rounded-r-xl pr-4 ${
+                            q.is_official_answer
+                              ? 'border-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/5'
+                              : 'border-primary/20 bg-slate-50/50 dark:bg-slate-800/10'
+                          }`}
+                        >
                           <div className="flex flex-wrap items-center gap-2 mb-1.5">
                             <span className="text-xs font-black text-slate-900 dark:text-slate-100">
                               {a.admin_name || sourceLabel}
@@ -1482,6 +1508,12 @@ const ProductDetail: React.FC = () => {
                             <span className={`px-2 py-0.5 rounded text-[9px] font-bold tracking-wide uppercase ${sourceBadgeClass}`}>
                               {q.answer_source === 'ai' ? 'AI' : q.answer_source === 'mixed' ? 'Mixed' : 'Admin'}
                             </span>
+                            {q.is_official_answer && (
+                              <span className="px-2 py-0.5 rounded text-[9px] font-black tracking-wide uppercase bg-emerald-500/10 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-450 border border-emerald-500/25 flex items-center gap-0.5">
+                                <span className="material-symbols-outlined text-[10px] font-bold">verified</span>
+                                {t('qa.officialAnswer', 'Phản hồi chính thức')}
+                              </span>
+                            )}
                             <span className="text-[10px] text-slate-400 ml-1 font-bold">
                               {a.created_at ? new Date(a.created_at).toLocaleDateString('vi-VN') : ''}
                             </span>

@@ -241,8 +241,24 @@ export const adjustPoints = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Không thể điều chỉnh điểm cho tài khoản nhân viên' });
     }
 
+    const previousPoints = user.lotte_points || 0;
     user.lotte_points = Math.max(0, user.lotte_points + points);
     await user.save();
+
+    // Create LoyaltyTransaction entry for manual adjustment to maintain ledger integrity
+    try {
+      const { LoyaltyTransaction } = await import('../models/Loyalty.js');
+      await LoyaltyTransaction.create({
+        user_id: user._id,
+        type: 'adjust',
+        points: Number(points || 0),
+        source: 'admin_adjustment',
+        description: reason || 'Manual adjustment by admin',
+        balance_after: user.lotte_points
+      });
+    } catch (ledgerErr) {
+      console.error('[UserController] Failed to log LoyaltyTransaction for adjustment:', ledgerErr.message);
+    }
 
     try {
       await notifyPointsAdjusted({
@@ -253,6 +269,27 @@ export const adjustPoints = async (req, res) => {
       });
     } catch (notifyErr) {
       console.warn('[UserController] points notification failed:', notifyErr.message);
+    }
+
+    // Log admin activity for audit trace
+    try {
+      await logActivity({
+        userId: req.userId,
+        userName: req.user?.full_name || req.user?.username || 'Admin',
+        action: 'ADJUST_POINTS',
+        entity: 'user',
+        entityId: user._id,
+        details: {
+          target_username: user.username,
+          target_email: user.email,
+          points_adjusted: Number(points || 0),
+          reason: reason || 'Manual adjustment',
+          new_balance: user.lotte_points
+        },
+        ip: req.ip,
+      });
+    } catch (auditErr) {
+      console.error('[Audit] Failed to log points adjustment:', auditErr.message);
     }
 
     return res.json({ success: true, data: user.toPublic(), message: `Điều chỉnh ${points} điểm` });

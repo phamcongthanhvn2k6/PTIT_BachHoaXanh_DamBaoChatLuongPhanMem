@@ -1,6 +1,6 @@
 // src/pages/Products.tsx
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../store';
 import { addToCartAsync } from '../slices/cartSlice';
@@ -11,12 +11,14 @@ import { productService } from '../services/productService';
 import { normalizeCategories, normalizeProductLike } from '../utils/productNormalization';
 import { getProductUrl } from '../utils/productUrl';
 import { formatRating } from '../utils/formatRating';
+import { CategoryIcon } from '../components/CategoryIcon';
 
 const Products: React.FC = () => {
   const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'newest' | 'best-seller' | 'price-low' | 'price-high' | 'rating'>('newest');
-  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string | null>(searchParams.get('category') || null);
   const [currentPage, setCurrentPage] = useState(1);
   const [likedProducts, setLikedProducts] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -45,6 +47,11 @@ const Products: React.FC = () => {
     // Fetch categories on mount
     productService.getCategories().then((data: any) => setCategories(normalizeCategories(data || [])));
   }, []);
+
+  React.useEffect(() => {
+    setActiveCategory(searchParams.get('category') || null);
+    setCurrentPage(1);
+  }, [searchParams]);
 
   React.useEffect(() => {
     let active = true;
@@ -122,8 +129,13 @@ const Products: React.FC = () => {
   };
 
   const handleCategoryClick = (catId: string | null) => {
-    setActiveCategory(catId);
-    setCurrentPage(1);
+    const newParams = new URLSearchParams(searchParams);
+    if (catId) {
+      newParams.set('category', catId);
+    } else {
+      newParams.delete('category');
+    }
+    setSearchParams(newParams);
   };
 
   const handleToggleCompare = (item: any) => {
@@ -239,7 +251,7 @@ const Products: React.FC = () => {
                     <select
                       value={sortBy}
                       onChange={handleSortChange}
-                      className="w-full pl-3 pr-10 py-2.5 rounded-lg border-primary/10 bg-white/50 dark:bg-background-dark/50 focus:border-primary focus:ring-4 focus:ring-primary/10 appearance-none text-sm transition-all"
+                      className="w-full pl-3 pr-10 py-2.5 rounded-lg border-primary/10 bg-white/50 dark:bg-background-dark/50 focus:border-primary focus:ring-4 focus:ring-primary/10 appearance-none bg-none text-sm transition-all"
                     >
                       <option value="newest">{t('product.newest')}</option>
                       <option value="best-seller">{t('product.bestSeller')}</option>
@@ -284,11 +296,12 @@ const Products: React.FC = () => {
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <span
-                          className={`material-symbols-outlined text-[20px] transition-colors ${isActive ? 'text-white' : 'group-hover:text-primary'}`}
-                        >
-                          {cat.name.includes('Thực phẩm') ? 'set_meal' : 'category'}
-                        </span>
+                        <CategoryIcon
+                          category={cat}
+                          className={`w-5 h-5 shrink-0 transition-colors ${isActive ? 'text-white' : 'group-hover:text-primary'}`}
+                          iconClass="material-symbols-outlined text-[20px]"
+                          size={20}
+                        />
                         <span className="text-sm font-medium">{cat.name}</span>
                       </div>
                     </button>
@@ -540,7 +553,7 @@ const Products: React.FC = () => {
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="w-10 h-10 flex items-center justify-center rounded-lg border border-primary/10 hover:bg-primary/5 text-slate-500 transition-colors disabled:opacity-50"
+                className="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-[20px]">chevron_left</span>
               </button>
@@ -554,8 +567,8 @@ const Products: React.FC = () => {
                       onClick={() => setCurrentPage(page as number)}
                       className={`w-10 h-10 flex items-center justify-center rounded-lg transition-all ${
                         page === currentPage
-                          ? 'bg-gradient-to-br from-primary to-primary/80 text-white font-bold shadow-lg shadow-primary/20'
-                          : 'border border-primary/10 hover:bg-primary/5 text-slate-700 dark:text-slate-300 font-semibold'
+                          ? 'bg-primary text-white font-bold shadow-md'
+                          : 'border border-slate-200 dark:border-slate-700 text-slate-750 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 font-semibold'
                       }`}
                     >
                       {page}
@@ -567,7 +580,7 @@ const Products: React.FC = () => {
               <button
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="w-10 h-10 flex items-center justify-center rounded-lg border border-primary/10 hover:bg-primary/5 text-slate-500 transition-colors disabled:opacity-50"
+                className="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-[20px]">chevron_right</span>
               </button>

@@ -14,6 +14,7 @@ import { HotDealCountdown } from '../components/HotDealCountdown/HotDealCountdow
 import { resolveImageUrl, fallbackProductImage } from '../utils/imageUrl';
 import { resolveFlashDealProductContext } from '../utils/flashDealProductResolver';
 import { getProductUrl } from '../utils/productUrl';
+import { CategoryIcon } from '../components/CategoryIcon';
 
 const LOCAL_DICT: Record<string, Record<string, string>> = {
   vi: {
@@ -126,7 +127,7 @@ const Home: React.FC = () => {
   const { isAuthenticated } = useAppSelector((state) => state.auth);
   const redirectToLogin = useAuthRedirect();
   const { branches, currentBranch } = useAppSelector((state) => state.branch);
-  const { products, branchProducts } = useAppSelector((state) => state.product);
+  const { products, branchProducts, categories } = useAppSelector((state) => state.product);
 
   const [banners, setBanners] = useState<any[]>([]);
   const [flashDeals, setFlashDeals] = useState<any[]>([]);
@@ -148,6 +149,36 @@ const Home: React.FC = () => {
   const getTxt = (key: string) => {
     return LOCAL_DICT[lang]?.[key] || LOCAL_DICT['vi']?.[key] || '';
   };
+
+  const CATEGORY_STYLES = [
+    'bg-emerald-50/80 text-emerald-600 border-emerald-100 hover:bg-emerald-100/50 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/40',
+    'bg-blue-50/80 text-blue-600 border-blue-100 hover:bg-blue-100/50 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-900/40',
+    'bg-amber-50/80 text-amber-600 border-amber-100 hover:bg-amber-100/50 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/40',
+    'bg-sky-50/80 text-sky-600 border-sky-100 hover:bg-sky-100/50 dark:bg-sky-950/20 dark:text-sky-400 dark:border-sky-900/40',
+    'bg-yellow-50/80 text-yellow-600 border-yellow-100 hover:bg-yellow-100/50 dark:bg-yellow-950/20 dark:text-yellow-400 dark:border-yellow-900/40',
+    'bg-rose-50/80 text-rose-600 border-rose-100 hover:bg-rose-100/50 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/40',
+  ];
+
+  const homeCategories = useMemo(() => {
+    const activeCats = (categories || []).filter((c: any) => c.is_active !== false);
+    if (activeCats.length > 0) {
+      const roots = activeCats.filter((c: any) => !c.parent_id);
+      const list = roots.length > 0 ? roots : activeCats;
+      return list.slice(0, 6).map((cat, index) => ({
+        id: cat.id || (cat as any)._id,
+        name: cat.name,
+        nameEn: cat.name,
+        nameJa: cat.name,
+        categoryData: cat,
+        bg: CATEGORY_STYLES[index % CATEGORY_STYLES.length],
+        query: String(cat.id || (cat as any)._id),
+      }));
+    }
+    return PREDEFINED_CATEGORIES.map((cat, index) => ({
+      ...cat,
+      bg: CATEGORY_STYLES[index % CATEGORY_STYLES.length],
+    }));
+  }, [categories]);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -597,7 +628,7 @@ const Home: React.FC = () => {
             </h2>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-            {PREDEFINED_CATEGORIES.map(cat => {
+            {homeCategories.map(cat => {
               const displayName = lang === 'en' ? cat.nameEn : lang === 'ja' ? cat.nameJa : cat.name;
               return (
                 <Link 
@@ -605,7 +636,7 @@ const Home: React.FC = () => {
                   to={`/products?category=${encodeURIComponent(cat.query)}`} 
                   className={`flex flex-col items-center justify-center p-5 rounded-3xl border transition-all duration-300 hover:-translate-y-1 hover:shadow-md ${cat.bg}`}
                 >
-                  <span className="material-symbols-outlined !text-3xl mb-2.5">{cat.icon}</span>
+                  <CategoryIcon category={(cat as any).categoryData || cat} className="w-10 h-10 mb-2.5 flex items-center justify-center text-current" iconClass="material-symbols-outlined !text-3xl" size={40} />
                   <span className="font-extrabold text-[13px] text-center line-clamp-1">{displayName}</span>
                 </Link>
               );

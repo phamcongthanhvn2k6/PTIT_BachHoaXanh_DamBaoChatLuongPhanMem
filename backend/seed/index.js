@@ -186,63 +186,77 @@ const run = async () => {
   }))).catch(() => []);
 
   // Seed Promotions
-  await Promotion.insertMany((mock.promotions || []).map(p => ({
-    title: p.title || p.name || '',
-    description: p.description || '',
-    type: ['percent', 'fixed_amount', 'bogo', 'free_shipping', 'points_multiplier', 'gift_item', 'flash_deal'].includes(String(p.type || '').toLowerCase())
+  await Promotion.insertMany((mock.promotions || []).map(p => {
+    const pType = ['percent', 'fixed_amount', 'bogo', 'free_shipping', 'points_multiplier', 'gift_item', 'flash_deal'].includes(String(p.type || '').toLowerCase())
       ? String(p.type).toLowerCase()
-      : (String(p.type || '').toLowerCase() === 'percentage' ? 'percent' : 'fixed_amount'),
-    status: p.status || 'active',
-    scope: p.scope || 'all',
-    target_product_ids: p.target_product_ids || [],
-    target_category_ids: p.target_category_ids || [],
-    target_branch_ids: p.target_branch_ids || [],
-    excluded_product_ids: p.excluded_product_ids || [],
-    excluded_category_ids: p.excluded_category_ids || [],
-    start_date: p.start_date ? new Date(p.start_date) : null,
-    end_date: p.end_date ? new Date(p.end_date) : null,
-    usage_limit: p.usage_limit ?? null,
-    usage_per_user: p.usage_per_user ?? 1,
-    max_redemptions: p.max_redemptions ?? null,
-    max_discount_amount: p.max_discount_amount ?? null,
-    min_order_amount: p.min_order_amount ?? 0,
-    min_quantity: p.min_quantity ?? 0,
-    discount_value: p.discount_value || p.discount || 0,
-    gift_product_id: p.gift_product_id || null,
-    gift_quantity: p.gift_quantity || 0,
-    points_multiplier: p.points_multiplier || 1,
-    badge_text: p.badge_text || p.badge || '',
-    banner_image: p.banner_image || p.image || '',
-    banner_url: p.banner_url || p.link || '',
-    priority: p.priority || 0,
-    stackable: p.stackable === true,
-    is_active: p.is_active !== false,
-  }))).catch(() => []);
+      : (String(p.type || '').toLowerCase() === 'percentage' ? 'percent' : 'fixed_amount');
+    let discountVal = p.discount_value || p.discount || 0;
+    if ((pType === 'percent' || pType === 'flash_deal') && discountVal > 100) {
+      discountVal = 50; // safe fallback
+    }
+    return {
+      title: p.title || p.name || '',
+      description: p.description || '',
+      type: pType,
+      status: p.status || 'active',
+      scope: p.scope || 'all',
+      target_product_ids: p.target_product_ids || [],
+      target_category_ids: p.target_category_ids || [],
+      target_branch_ids: p.target_branch_ids || [],
+      excluded_product_ids: p.excluded_product_ids || [],
+      excluded_category_ids: p.excluded_category_ids || [],
+      start_date: p.start_date ? new Date(p.start_date) : null,
+      end_date: p.end_date ? new Date(p.end_date) : null,
+      usage_limit: p.usage_limit ?? null,
+      usage_per_user: p.usage_per_user ?? 1,
+      max_redemptions: p.max_redemptions ?? null,
+      max_discount_amount: p.max_discount_amount ?? null,
+      min_order_amount: p.min_order_amount ?? 0,
+      min_quantity: p.min_quantity ?? 0,
+      discount_value: discountVal,
+      gift_product_id: p.gift_product_id || null,
+      gift_quantity: p.gift_quantity || 0,
+      points_multiplier: p.points_multiplier || 1,
+      badge_text: p.badge_text || p.badge || '',
+      banner_image: p.banner_image || p.image || '',
+      banner_url: p.banner_url || p.link || '',
+      priority: p.priority || 0,
+      stackable: p.stackable === true,
+      is_active: p.is_active !== false,
+    };
+  })).catch(() => []);
 
   // Seed Coupons
-  await Coupon.insertMany((mock.coupons || []).map(c => ({
-    code: (c.code || `COUPON${c.id}`).toUpperCase(),
-    title: c.title || '',
-    description: c.description || '',
-    type: ['percent', 'fixed_amount', 'free_shipping', 'points'].includes(String(c.type || '').toLowerCase())
+  await Coupon.insertMany((mock.coupons || []).map(c => {
+    const cType = ['percent', 'fixed_amount', 'free_shipping', 'points'].includes(String(c.type || '').toLowerCase())
       ? String(c.type).toLowerCase()
-      : (String(c.type || '').toLowerCase() === 'percentage' ? 'percent' : 'fixed_amount'),
-    scope: c.scope || 'all',
-    target_product_ids: c.target_product_ids || [],
-    target_category_ids: c.target_category_ids || [],
-    target_branch_ids: c.target_branch_ids || [],
-    excluded_product_ids: c.excluded_product_ids || [],
-    excluded_category_ids: c.excluded_category_ids || [],
-    discount_value: c.discount_value || 0,
-    min_order_amount: c.min_order_amount || c.min_order_value || 0,
-    min_quantity: c.min_quantity || 0,
-    max_discount_amount: c.max_discount_amount || c.max_discount || null,
-    usage_limit: c.usage_limit ?? null,
-    usage_per_user: c.usage_per_user ?? 1,
-    start_date: c.start_date ? new Date(c.start_date) : null,
-    end_date: c.end_date ? new Date(c.end_date) : null,
-    is_active: c.is_active !== false,
-  }))).catch(() => []);
+      : (String(c.type || '').toLowerCase() === 'percentage' ? 'percent' : 'fixed_amount');
+    let discountVal = c.discount_value || 0;
+    if (cType === 'percent' && discountVal > 100) {
+      discountVal = 50; // safe fallback
+    }
+    return {
+      code: (c.code || `COUPON${c.id}`).toUpperCase(),
+      title: c.title || '',
+      description: c.description || '',
+      type: cType,
+      scope: c.scope || 'all',
+      target_product_ids: c.target_product_ids || [],
+      target_category_ids: c.target_category_ids || [],
+      target_branch_ids: c.target_branch_ids || [],
+      excluded_product_ids: c.excluded_product_ids || [],
+      excluded_category_ids: c.excluded_category_ids || [],
+      discount_value: discountVal,
+      min_order_amount: c.min_order_amount || c.min_order_value || 0,
+      min_quantity: c.min_quantity || 0,
+      max_discount_amount: c.max_discount_amount || c.max_discount || null,
+      usage_limit: c.usage_limit ?? null,
+      usage_per_user: c.usage_per_user ?? 1,
+      start_date: c.start_date ? new Date(c.start_date) : null,
+      end_date: c.end_date ? new Date(c.end_date) : null,
+      is_active: c.is_active !== false,
+    };
+  })).catch(() => []);
 
   // Seed EventPosts
   const seedEvents = [

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAppSelector, useAppDispatch } from '../store';
 import { loadOrders, cancelOrderThunk } from '../slices/orderSlice';
+import { validateLoyaltyBalance } from '../slices/authSlice';
 import { reorderFromOrder } from '../slices/cartSlice';
 import { toast } from '../components/Toast/toastEvent';
 import { dataService } from '../services/dataService';
@@ -149,6 +150,7 @@ const OrderDetail: React.FC = () => {
     setIsProcessing(true);
     try {
       await dispatch(cancelOrderThunk({id: String(order.id), reason: cancelReason})).unwrap();
+      dispatch(validateLoyaltyBalance() as any);
       setShowCancelModal(false);
       setCancelReason('');
       toast.success('Hủy đơn hàng thành công!');

@@ -77,9 +77,9 @@ export const list = async (req, res) => {
           { barcode: rx }
         ]
       }).select('_id').lean();
-      
+
       const matchedProductIds = matchedProducts.map(p => p._id);
-      
+
       filter.$or = [
         { sku: rx },
         { category_name: rx },
@@ -117,8 +117,8 @@ export const list = async (req, res) => {
       products.push(...prods);
     }
     const productMap = {};
-    products.forEach(p => { 
-      productMap[String(p._id)] = p; 
+    products.forEach(p => {
+      productMap[String(p._id)] = p;
       if (p.id) productMap[String(p.id)] = p;
     });
 
@@ -128,7 +128,7 @@ export const list = async (req, res) => {
 
     // Fetch batches to find expiry and supplier ONLY if inventory view
     const batches = isInventoryView ? await InventoryBatch.find({ branch_product_id: { $in: bpIds }, quantity: { $gt: 0 } }).lean() : [];
-    
+
     // Process batches per branch product
     const bpBatchesMap = {};
     if (isInventoryView) {
@@ -252,13 +252,13 @@ export const list = async (req, res) => {
       // Calculate Semantic Badges
       const badges = [];
       if (category) badges.push({ type: 'category', text: category.name, color: 'blue' });
-      
+
       if (isInventoryView) {
         if (expiry_status === 'expired') badges.push({ type: 'expiry', text: 'Hết hạn', color: 'red' });
         else if (expiry_status === 'critical') badges.push({ type: 'expiry', text: 'Sắp hết hạn', color: 'orange' });
         else if (expiry_status === 'warning') badges.push({ type: 'expiry', text: `Tới hạn: ${days_until_expiry} ngày`, color: 'yellow' });
       }
-      
+
       if (obj.stock <= (obj.min_stock || 5)) badges.push({ type: 'stock', text: 'Tồn thấp', color: 'red' });
       if (prod && prod.is_new) badges.push({ type: 'new', text: 'Nhập mới', color: 'emerald' });
       if (prod && prod.is_best_seller) badges.push({ type: 'sales', text: 'Best seller', color: 'emerald' });
@@ -338,7 +338,7 @@ export const create = async (req, res) => {
     delete body.available_quantity;
     body.stock = 0;
     body.reserved_quantity = 0;
-    return res.status(201).json({ success: true, data: await BranchProduct.create(body) }); 
+    return res.status(201).json({ success: true, data: await BranchProduct.create(body) });
   }
   catch (err) { return res.status(500).json({ success: false, message: err.message }); }
 };
@@ -364,7 +364,7 @@ export const update = async (req, res) => {
         handlePriceChange(updatedBp._id, oldPrice, updatedBp.price);
       }).catch(err => console.error('Failed to import priceWatchService:', err.message));
     }
-    return res.json({ success: true, data: updatedBp }); 
+    return res.json({ success: true, data: updatedBp });
   }
   catch (err) { return res.status(500).json({ success: false, message: err.message }); }
 };
@@ -434,7 +434,7 @@ export const adjustStock = async (req, res) => {
     } else {
       // Stock decrease: Deduct from batches using FIFO
       let toReduce = Math.abs(quantity);
-      
+
       const query = { branch_product_id: bp._id, quantity: { $gt: 0 } };
       if (resolvedBatchCode) {
         query.batch_code = resolvedBatchCode;
@@ -460,7 +460,7 @@ export const adjustStock = async (req, res) => {
         const fallbackBatches = await InventoryBatch.find({ branch_product_id: bp._id, quantity: { $gt: 0 } })
           .sort({ exp_date: 1, received_date: 1 })
           .session(session);
-        
+
         for (const batch of fallbackBatches) {
           if (toReduce <= 0) break;
           const used = Math.min(Number(batch.quantity || 0), toReduce);

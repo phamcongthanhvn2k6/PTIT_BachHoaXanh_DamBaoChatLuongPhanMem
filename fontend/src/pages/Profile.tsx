@@ -7,6 +7,7 @@ import { loadAddresses } from '../slices/addressSlice';
 import { dataService } from '../services/dataService';
 import { couponService } from '../services/couponService';
 import ProfileEditForm from './Account/ProfileEditForm';
+import UserAvatar from '../components/UserAvatar/UserAvatar';
 
 interface ProfileSummaryData {
   totalOrders: number;
@@ -143,10 +144,10 @@ const Profile: React.FC = () => {
             <div className="bg-white dark:bg-slate-900 p-8 rounded-xl soft-shadow flex flex-col md:flex-row items-center gap-8 border border-slate-100 dark:border-slate-800">
             <div className="relative">
               <div className="size-32 rounded-full border-4 border-primary/10 overflow-hidden shadow-xl">
-                <img
-                  className="w-full h-full object-cover"
-                  src={user.avatar || "https://i.pravatar.cc/100?img=12"}
-                  alt={user.full_name || user.username}
+                <UserAvatar
+                  src={user.avatar}
+                  name={user.full_name || user.username}
+                  size={128}
                 />
               </div>
               <div 

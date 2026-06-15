@@ -26,7 +26,7 @@ const buildIdCandidates = (value) => {
   const unique = [];
   const seen = new Set();
   out.forEach((item) => {
-    const key = String(item);
+    const key = (item instanceof mongoose.Types.ObjectId ? 'oid_' : 'str_') + String(item);
     if (seen.has(key)) return;
     seen.add(key);
     unique.push(item);
@@ -110,38 +110,66 @@ const upsertHistoryForUser = async ({ userId, item, dedupeWindowMs = TRACK_DEDUP
     viewed_at: toDateOrNow(item.viewed_at),
   };
 
-  const existing = await findLatestByUserAndProduct(userId, normalized.product_id);
-  if (!existing) {
-    return ViewedHistory.create({
-      ...normalized,
-      view_count: 1,
+  const executeUpsert = async () => {
+    const existing = await findLatestByUserAndProduct(userId, normalized.product_id);
+    if (!existing) {
+      return await ViewedHistory.create({
+        ...normalized,
+        view_count: 1,
+      });
+    }
+
+    const previousViewedAt = existing.viewed_at ? new Date(existing.viewed_at).getTime() : 0;
+    const nextViewedAt = normalized.viewed_at.getTime();
+    const shouldIncreaseViewCount = !previousViewedAt || (nextViewedAt - previousViewedAt) >= dedupeWindowMs;
+
+    existing.viewed_at = normalized.viewed_at;
+    if (shouldIncreaseViewCount) {
+      existing.view_count = Math.max(1, Number(existing.view_count || 1) + 1);
+    }
+    if (normalized.branch_product_id) existing.branch_product_id = normalized.branch_product_id;
+    if (normalized.product_name) existing.product_name = normalized.product_name;
+    if (normalized.product_image) existing.product_image = normalized.product_image;
+    if (normalized.category) existing.category = normalized.category;
+    if (item.price !== undefined) existing.price = normalized.price;
+    if (item.original_price !== undefined) existing.original_price = normalized.original_price;
+
+    await existing.save();
+
+    await ViewedHistory.deleteMany({
+      _id: { $ne: existing._id },
+      user_id: { $in: buildIdCandidates(userId) },
+      product_id: { $in: buildIdCandidates(normalized.product_id) },
     });
+
+    return existing;
+  };
+
+  try {
+    return await executeUpsert();
+  } catch (err) {
+    if (err.code === 11000 || String(err.message || '').includes('E11000')) {
+      console.warn('[ViewedHistory] Duplicate key error, falling back to direct update:', err.message);
+      const exactExisting = await ViewedHistory.findOne({
+        user_id: { $in: buildIdCandidates(userId) },
+        product_id: { $in: buildIdCandidates(normalized.product_id) },
+        branch_product_id: normalized.branch_product_id,
+      });
+
+      if (exactExisting) {
+        exactExisting.viewed_at = normalized.viewed_at;
+        exactExisting.view_count = Math.max(1, Number(exactExisting.view_count || 1) + 1);
+        if (normalized.product_name) exactExisting.product_name = normalized.product_name;
+        if (normalized.product_image) exactExisting.product_image = normalized.product_image;
+        if (normalized.category) exactExisting.category = normalized.category;
+        if (item.price !== undefined) exactExisting.price = normalized.price;
+        if (item.original_price !== undefined) exactExisting.original_price = normalized.original_price;
+        await exactExisting.save();
+        return exactExisting;
+      }
+    }
+    throw err;
   }
-
-  const previousViewedAt = existing.viewed_at ? new Date(existing.viewed_at).getTime() : 0;
-  const nextViewedAt = normalized.viewed_at.getTime();
-  const shouldIncreaseViewCount = !previousViewedAt || (nextViewedAt - previousViewedAt) >= dedupeWindowMs;
-
-  existing.viewed_at = normalized.viewed_at;
-  if (shouldIncreaseViewCount) {
-    existing.view_count = Math.max(1, Number(existing.view_count || 1) + 1);
-  }
-  if (normalized.branch_product_id) existing.branch_product_id = normalized.branch_product_id;
-  if (normalized.product_name) existing.product_name = normalized.product_name;
-  if (normalized.product_image) existing.product_image = normalized.product_image;
-  if (normalized.category) existing.category = normalized.category;
-  if (item.price !== undefined) existing.price = normalized.price;
-  if (item.original_price !== undefined) existing.original_price = normalized.original_price;
-
-  await existing.save();
-
-  await ViewedHistory.deleteMany({
-    _id: { $ne: existing._id },
-    user_id: { $in: buildIdCandidates(userId) },
-    product_id: { $in: buildIdCandidates(normalized.product_id) },
-  });
-
-  return existing;
 };
 
 const dedupeRowsByProduct = (rows = []) => {

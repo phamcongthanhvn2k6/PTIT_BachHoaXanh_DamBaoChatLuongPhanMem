@@ -20,13 +20,30 @@ export const listAll = async (req, res) => {
         const rawData = await ProductQuestion.find(filter).sort('-created_at').skip((p - 1) * l).limit(l).lean();
 
         const productIds = [...new Set(rawData.map(q => q.product_id).filter(Boolean))];
-        const products = await Product.find({ _id: { $in: productIds } }).select('name').lean();
+        const userIds = [...new Set(rawData.map(q => q.user_id).filter(Boolean))];
+
+        const [products, users] = await Promise.all([
+            Product.find({ _id: { $in: productIds } }).select('name').lean(),
+            (await import('../models/User.js')).default.find({ _id: { $in: userIds } }).select('avatar email phone').lean()
+        ]);
+
         const productMap = products.reduce((acc, curr) => ({ ...acc, [curr._id]: curr.name }), {});
+        const userMap = users.reduce((acc, curr) => ({
+            ...acc,
+            [curr._id]: {
+                avatar: curr.avatar || '',
+                email: curr.email || '',
+                phone: curr.phone || ''
+            }
+        }), {});
 
         const data = rawData.map(q => ({
             ...q,
             id: q._id,
             product_name: productMap[q.product_id] || 'Sản phẩm',
+            user_avatar: userMap[q.user_id]?.avatar || '',
+            user_email: userMap[q.user_id]?.email || '',
+            user_phone: userMap[q.user_id]?.phone || '',
         }));
 
         return res.json({ success: true, data, meta: { total, page: p, limit: l } });

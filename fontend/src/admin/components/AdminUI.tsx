@@ -373,9 +373,10 @@ interface DrawerProps {
   icon?: string;
   children: React.ReactNode;
   width?: string;
+  footer?: React.ReactNode;
 }
 
-export const DetailDrawer: React.FC<DrawerProps> = ({ open, onClose, title, subtitle, icon, children, width = 'max-w-lg' }) => {
+export const DetailDrawer: React.FC<DrawerProps> = ({ open, onClose, title, subtitle, icon, children, width = 'max-w-lg', footer }) => {
   useEffect(() => {
     if (!open) return;
     document.body.style.overflow = 'hidden';
@@ -414,6 +415,11 @@ export const DetailDrawer: React.FC<DrawerProps> = ({ open, onClose, title, subt
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        {footer && (
+          <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 flex-shrink-0 bg-slate-50/30">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -438,7 +438,7 @@ const run = async () => {
       bpIdIndex++;
       const bpQ7Id = makeId(bpIdIndex);
       const isOrganicOrImported = prod.name.includes('Organic') || prod.name.includes('Nhập khẩu') || prod.name.includes('Premium');
-      
+
       // Quận 7 pricing: 15% mark up, higher stock for premium/imported items
       const q7Price = Math.round((prod.price * 1.15) / 1000) * 1000;
       const q7Stock = isOrganicOrImported ? 120 : 50;
@@ -465,7 +465,7 @@ const run = async () => {
       // 2. Gò Vấp Branch Product (Popular, Family, Budget focus)
       bpIdIndex++;
       const bpGVId = makeId(bpIdIndex);
-      
+
       // Gò Vấp pricing: 10% mark down, higher stock for popular items
       const gvPrice = Math.round((prod.price * 0.9) / 1000) * 1000;
       const gvStock = isOrganicOrImported ? 20 : 180; // more stock for popular, standard items
@@ -495,7 +495,7 @@ const run = async () => {
 
     // 7. Generate Purchase Orders (ImportOrder) & Goods Receipts (ImportReceipt) & Inventory Batches (InventoryBatch) & Stock Movements
     console.log('Generating ERP pipeline records (POs, Receipts, Batches, Stock Movements)...');
-    
+
     const importOrdersToInsert = [];
     const importReceiptsToInsert = [];
     const inventoryBatchesToInsert = [];
@@ -508,7 +508,7 @@ const run = async () => {
 
     // Generate 200 Purchase Orders (100 per branch)
     let erpIndex = 0;
-    
+
     // We will distribute the POs among suppliers
     for (let branchNum = 1; branchNum <= 2; branchNum++) {
       const branchId = branchNum === 1 ? BRANCH_Q7_ID : BRANCH_GV_ID;
@@ -522,7 +522,7 @@ const run = async () => {
         const rcCode = `GR-${branchNum === 1 ? 'Q7' : 'GV'}-${poNum.toString().padStart(4, '0')}`;
 
         const supplier = seededSuppliers[(erpIndex) % seededSuppliers.length];
-        
+
         // Pick 5 random items from this branch product list
         const poItems = [];
         const receiptItems = [];

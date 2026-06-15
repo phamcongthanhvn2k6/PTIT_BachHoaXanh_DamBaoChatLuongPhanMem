@@ -14,16 +14,63 @@ const isPrivilegedRequest = (req) => {
 
 export const listBanners = async (req, res) => {
   try {
+    const { include_inactive, is_active, position, page, limit, search, status, sort } = req.query;
     const query = {};
-    const includeInactive = isTruthy(req.query.include_inactive) && isPrivilegedRequest(req);
+    const includeInactive = isTruthy(include_inactive) && isPrivilegedRequest(req);
+    
     if (!includeInactive) {
       query.is_active = true;
-    } else if (req.query.is_active !== undefined) {
-      query.is_active = isTruthy(req.query.is_active);
+    } else if (is_active !== undefined) {
+      query.is_active = isTruthy(is_active);
     }
-    if (req.query.position) query.position = req.query.position;
+    
+    if (status && status !== 'all') {
+      const now = new Date();
+      if (status === 'active') {
+        query.is_active = true;
+      } else if (status === 'inactive') {
+        query.is_active = false;
+      } else if (status === 'expired') {
+        query.end_date = { $lt: now };
+      }
+    }
+    
+    if (position) query.position = position;
+    
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { link: { $regex: search, $options: 'i' } },
+      ];
+    }
 
-    const data = await Banner.find(query).sort('sort_order');
+    let sortQuery = 'sort_order';
+    if (sort === 'newest') {
+      sortQuery = '-created_at';
+    } else if (sort === 'expiring') {
+      sortQuery = 'end_date';
+    }
+
+    if (page !== undefined || limit !== undefined) {
+      const pageNum = Math.max(1, Number(page || 1));
+      const limitNum = Math.min(100, Math.max(1, Number(limit || 10)));
+      const [total, data] = await Promise.all([
+        Banner.countDocuments(query),
+        Banner.find(query).sort(sortQuery).skip((pageNum - 1) * limitNum).limit(limitNum),
+      ]);
+      return res.json({
+        success: true,
+        data,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum) || 1
+        }
+      });
+    }
+
+    const data = await Banner.find(query).sort(sortQuery);
     return res.json({ success: true, data });
   }
   catch (err) { return res.status(500).json({ success: false, message: err.message }); }

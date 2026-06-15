@@ -47,6 +47,32 @@ export const generateAiAnswer = async (product, questionText) => {
     }
   }
 
+  // Format highlights and product_details
+  let highlightsStr = '';
+  if (product._highlights_text) {
+    highlightsStr = product._highlights_text;
+  } else if (Array.isArray(product.highlights) && product.highlights.length > 0) {
+    highlightsStr = product.highlights.join('; ');
+  }
+
+  let productDetailsStr = '';
+  if (product._product_details_text) {
+    productDetailsStr = product._product_details_text;
+  } else if (Array.isArray(product.product_details) && product.product_details.length > 0) {
+    productDetailsStr = product.product_details.join('; ');
+  }
+
+  let nutritionStr = '';
+  if (product.nutrition_info) {
+    if (typeof product.nutrition_info === 'object') {
+      nutritionStr = Object.entries(product.nutrition_info)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(', ');
+    } else {
+      nutritionStr = String(product.nutrition_info);
+    }
+  }
+
   const productContext = `
 Tên sản phẩm: ${product.name}
 SKU: ${product.sku || 'N/A'}
@@ -57,8 +83,11 @@ Xuất xứ: ${product.origin || product.origin_country || 'N/A'}
 Trọng lượng/Thể tích: ${product.weight || 'N/A'}
 Giá sản phẩm: ${product.price || 'N/A'}đ
 Mô tả chi tiết: ${product.description || product.short_description || 'N/A'}
+Điểm nổi bật: ${highlightsStr || 'N/A'}
+Thông tin chi tiết sản phẩm: ${productDetailsStr || 'N/A'}
 Thông số kỹ thuật/Chi tiết:
 ${specsStr || 'N/A'}
+Thông tin dinh dưỡng: ${nutritionStr || 'N/A'}
 Hướng dẫn sử dụng: ${product.usage_guide || 'N/A'}
 Hướng dẫn bảo quản: ${product.storage_guide || product.storage_instructions || 'N/A'}
 Lưu ý/Cảnh báo: ${product.notes || 'N/A'}

@@ -7,7 +7,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import passport from 'passport';
 import { v4 as uuidv4 } from 'uuid';
-import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import mongoSanitize from 'express-mongo-sanitize';
 import mongoose from 'mongoose';
@@ -67,6 +66,7 @@ import { ensureMarketingSeed } from './services/marketingSeedService.js';
 
 import { errorHandler, notFound } from './middlewares/errorHandler.js';
 import { localizationMiddleware } from './middlewares/localization.js';
+import { authLimiter, orderLimiter } from './middlewares/rateLimiters.js';
 import { configurePassportFacebook } from './config/passportFacebook.js';
 import { setupSwagger } from './config/swagger.js';
 import { seedDefaultFlags } from './services/featureFlagService.js';
@@ -190,22 +190,7 @@ app.get('/uploads/:category/:filename', serveFile);
 // Swagger API Documentation
 setupSwagger(app);
 
-// Rate limiters
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 50,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Quá nhiều yêu cầu, vui lòng thử lại sau.' }
-});
-
-const orderLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, message: 'Quá nhiều yêu cầu, vui lòng thử lại sau.' }
-});
+// Rate limiters are imported from ./middlewares/rateLimiters.js
 
 // Routes
 const apiRouter = express.Router();

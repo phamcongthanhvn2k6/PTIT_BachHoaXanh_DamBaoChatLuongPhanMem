@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAppDispatch } from '../../store';
 import { logout } from '../../slices/authSlice';
 import { resetOrders } from '../../slices/orderSlice';
+import UserAvatar from '../UserAvatar/UserAvatar';
 import type { User } from '../../types';
 
 interface AccountSidebarProps {
@@ -111,7 +112,7 @@ const AccountSidebar: React.FC<AccountSidebarProps> = ({
           
           /* Mobile behavior using fixed positioning */
           fixed md:sticky z-50 md:z-auto top-0
-          h-[100dvh] md:h-auto md:max-h-[100dvh] md:overflow-y-auto
+          h-[100dvh] md:h-auto md:max-h-[100dvh] md:overflow-y-auto overflow-x-hidden
           ${mobileOpen ? 'left-0 translate-x-0' : '-left-full -translate-x-full md:left-auto md:translate-x-0'}
         `}
       >
@@ -132,10 +133,11 @@ const AccountSidebar: React.FC<AccountSidebarProps> = ({
 
         {!isShrunk ? (
           <div className="flex flex-col items-center mb-6 px-2 text-center">
-              <img 
-                 src={currentUser.avatar || "https://i.pravatar.cc/100?img=12"} 
-                 alt={currentUser.full_name || currentUser.username} 
-                 className="w-20 h-20 rounded-full mb-3 border-2 border-primary/20 object-cover" 
+              <UserAvatar
+                 src={currentUser.avatar}
+                 name={currentUser.full_name || currentUser.username}
+                 size={80}
+                 className="mb-3 border-2 border-primary/20"
               />
               <h3 className="font-bold text-lg text-slate-900 dark:text-white line-clamp-1">{currentUser.full_name || currentUser.username}</h3>
               <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 mt-2">
@@ -149,16 +151,16 @@ const AccountSidebar: React.FC<AccountSidebarProps> = ({
           </div>
         ) : (
            <div className="flex justify-center mb-8">
-              <img 
-                 src={currentUser.avatar || "https://i.pravatar.cc/100?img=12"} 
-                 alt={currentUser.full_name || currentUser.username} 
-                 className="w-10 h-10 rounded-full border-2 border-primary/20 object-cover" 
-                 title={currentUser.full_name || currentUser.username}
+              <UserAvatar
+                 src={currentUser.avatar}
+                 name={currentUser.full_name || currentUser.username}
+                 size={40}
+                 className="border-2 border-primary/20"
               />
            </div>
         )}
 
-        <nav className="flex-1 space-y-1 w-full overflow-y-auto" role="navigation" aria-label="Account Sidebar Navigation">
+        <nav className="flex-1 space-y-1 w-full overflow-x-hidden" role="navigation" aria-label="Account Sidebar Navigation">
           <NavItem to="/account" icon="dashboard" label={t('accountSidebar.overview')} exact currentPath={currentPath} isShrunk={isShrunk} onNavigate={handleNavClick} />
           <NavItem to="/account/orders" icon="shopping_bag" label={t('accountSidebar.orders')} currentPath={currentPath} isShrunk={isShrunk} onNavigate={handleNavClick} />
           <NavItem to="/account/returns" icon="assignment_return" label={t('accountSidebar.returns')} currentPath={currentPath} isShrunk={isShrunk} onNavigate={handleNavClick} />

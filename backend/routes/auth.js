@@ -6,6 +6,7 @@ import { generateToken, generateRefreshToken } from '../utils/jwt.js';
 import { getPermissionsForUser, mapRoleIdToKey } from '../services/rbacService.js';
 import { z } from 'zod';
 import { validate } from '../middlewares/validate.js';
+import { strictAuthLimiter } from '../middlewares/rateLimiters.js';
 
 const router = Router();
 
@@ -84,9 +85,10 @@ const loginSchema = z.object({
   params: z.any().optional()
 });
 
-router.post('/register', c.register);
-router.post('/login', validate(loginSchema), c.login);
+router.post('/register', strictAuthLimiter, c.register);
+router.post('/login', strictAuthLimiter, validate(loginSchema), c.login);
 router.get('/verify', auth, c.verify);
+router.get('/validate-balance', auth, c.validateBalance);
 router.post('/google', c.googleLogin);
 
 router.get('/facebook', (req, res, next) => {
@@ -165,17 +167,17 @@ router.get('/facebook/callback', (req, res, next) => {
 });
 
 router.post('/facebook', c.facebookLogin);
-router.post('/email/request-otp', optionalAuth, c.requestEmailOtp);
-router.post('/email/resend-otp', optionalAuth, c.resendEmailOtp);
-router.post('/email/verify-otp', optionalAuth, c.verifyEmailOtp);
+router.post('/email/request-otp', strictAuthLimiter, optionalAuth, c.requestEmailOtp);
+router.post('/email/resend-otp', strictAuthLimiter, optionalAuth, c.resendEmailOtp);
+router.post('/email/verify-otp', strictAuthLimiter, optionalAuth, c.verifyEmailOtp);
 router.post('/refresh', c.refresh);
 router.post('/logout', auth, c.logout);
 router.post('/logout-all', auth, c.logoutAll);
 router.get('/profile/summary', auth, c.profileSummary);
 router.get('/profile', auth, c.getProfile);
 router.put('/profile', auth, c.updateProfile);
-router.post('/change-password', auth, c.changePassword);
-router.post('/forgot-password', c.forgotPassword);
-router.post('/reset-password', c.resetPassword);
+router.post('/change-password', strictAuthLimiter, auth, c.changePassword);
+router.post('/forgot-password', strictAuthLimiter, c.forgotPassword);
+router.post('/reset-password', strictAuthLimiter, c.resetPassword);
 
 export default router;

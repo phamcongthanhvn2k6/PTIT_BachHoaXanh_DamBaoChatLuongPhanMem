@@ -86,6 +86,14 @@ const userSchema = new mongoose.Schema({
     marketing_opt_in: { type: Boolean, default: true },
     sms_opt_in: { type: Boolean, default: true },
   },
+  gamification_lock: {
+    is_locked: { type: Boolean, default: false },
+    scope: { type: String, enum: ['spin', 'checkin', 'all', null], default: null },
+    reason: { type: String, default: '' },
+    expires_at: { type: Date, default: null },
+    locked_at: { type: Date, default: null },
+    locked_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
+  },
   last_login_at: { type: Date, default: null },
   refresh_token: { type: String, default: null },
   is_deleted: { type: Boolean, default: false },

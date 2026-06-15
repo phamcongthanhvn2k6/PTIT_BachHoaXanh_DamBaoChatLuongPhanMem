@@ -61,4 +61,30 @@ const promotionSchema = new mongoose.Schema({
 promotionSchema.index({ is_active: 1, status: 1, start_date: 1, end_date: 1, priority: -1 });
 promotionSchema.index({ scope: 1 });
 
+promotionSchema.pre('save', function (next) {
+  if (this.type === 'percent' || this.type === 'flash_deal') {
+    if (this.discount_value > 100) {
+      this.discount_value = 100;
+    }
+    if (this.discount_value < 0) {
+      this.discount_value = 0;
+    }
+  }
+  next();
+});
+
+promotionSchema.pre('findOneAndUpdate', function (next) {
+  const update = this.getUpdate();
+  if (update) {
+    if (update.type === 'percent' || update.type === 'flash_deal') {
+      if (update.discount_value !== undefined && update.discount_value !== null) {
+        if (update.discount_value > 100) update.discount_value = 100;
+        if (update.discount_value < 0) update.discount_value = 0;
+      }
+    }
+  }
+  next();
+});
+
 export default mongoose.model('Promotion', promotionSchema);
+

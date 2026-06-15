@@ -17,7 +17,7 @@ async function run() {
   for (const t of terms) {
     const prods = await Product.find({
       name: { $regex: t, $options: 'i' }
-    }).limit(10).lean();
+    }).limit(510).lean();
     console.log(`\nSearch term "${t}": found ${prods.length} products`);
     prods.forEach(p => {
       console.log(` - ID: ${p._id}, Name: "${p.name}", Cat: "${p.category_name}"`);

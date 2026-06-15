@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppSelector } from '../store';
+import UserAvatar from '../components/UserAvatar/UserAvatar';
 
 const Account: React.FC = () => {
   const { t } = useTranslation();
@@ -25,10 +26,11 @@ const Account: React.FC = () => {
     <div className="space-y-8">
       {/* User summary card */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-primary/10 shadow-sm p-6 flex flex-col sm:flex-row items-center sm:items-start gap-6">
-        <img
-          src={user.avatar || 'https://i.pravatar.cc/100?img=12'}
-          alt={user.full_name || user.username}
-          className="w-24 h-24 rounded-full border-4 border-primary/20 object-cover shrink-0"
+        <UserAvatar
+          src={user.avatar}
+          name={user.full_name || user.username}
+          size={96}
+          className="border-4 border-primary/20 shrink-0"
         />
         <div className="flex-1 text-center sm:text-left">
           <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white">

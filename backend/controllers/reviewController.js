@@ -111,9 +111,16 @@ export const stats = async (req, res) => {
 };
 
 // GET /api/products/:productId/reviews (mounted in products route)
+// Note: Product router uses /:id/reviews (param = 'id'),
+//       Top-level alias uses /:productId/reviews (param = 'productId').
+//       We accept both to ensure compatibility.
 export const forProduct = async (req, res) => {
   try {
-    const filter = { product_id: req.params.productId };
+    const productId = req.params.productId || req.params.id;
+    if (!productId) {
+      return res.status(400).json({ success: false, message: 'Missing product identifier' });
+    }
+    const filter = { product_id: productId };
     
     if (req.userId) {
       filter.$or = [
@@ -132,12 +139,14 @@ export const forProduct = async (req, res) => {
 };
 
 // POST /api/products/:productId/reviews
+// Note: Same param compatibility as forProduct — accept both :id and :productId.
 export const create = async (req, res) => {
   try {
     if (!req.userId || !req.user) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
-    if (!req.params.productId && !req.body.product_id) {
+    const productId = req.params.productId || req.params.id || req.body.product_id;
+    if (!productId) {
       return res.status(400).json({ success: false, message: 'Missing product_id' });
     }
     // Always set user_id from authenticated user to prevent spoofing
@@ -149,7 +158,7 @@ export const create = async (req, res) => {
 
     const review = await Review.create({
       ...req.body,
-      product_id: req.params.productId || req.body.product_id,
+      product_id: productId,
       user_id: userId,
       user_name: req.user?.full_name || req.user?.username || req.body.user_name || 'Khach hang',
       user_avatar: req.user?.avatar || req.body.user_avatar || null,

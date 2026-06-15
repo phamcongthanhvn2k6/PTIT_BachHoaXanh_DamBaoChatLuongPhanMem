@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { GamificationCampaign, GamificationLog } from '../models/Gamification.js';
+import { GamificationCampaign, GamificationLog, GamificationSpinGrant } from '../models/Gamification.js';
 import User from '../models/User.js';
 import { LoyaltyTransaction } from '../models/Loyalty.js';
 import { Coupon, CouponClaim } from '../models/Coupon.js';
@@ -35,6 +35,12 @@ export const getActiveCampaign = async (req, res) => {
 
     if (!campaign) {
       return res.json({ success: true, data: null, message: 'Không có chiến dịch nào đang diễn ra' });
+    }
+
+    if (type === 'spin' && req.userId) {
+      const userIds = [req.userId, String(req.userId)];
+      const grant = await GamificationSpinGrant.findOne({ user_id: { $in: userIds }, campaign_id: campaign._id });
+      campaign.extra_spins = grant ? Math.max(0, grant.spins_granted - grant.spins_used) : 0;
     }
 
     // Clean sensitive odds or configurations for regular users if needed, or send complete active data
@@ -144,6 +150,77 @@ export const spinWheel = async (req, res) => {
     const now = new Date();
     const todayStr = getLocalDateStr();
 
+    // Check user status and gamification locks
+    if (req.user) {
+      const lock = req.user.gamification_lock;
+      const isLocked = req.user.status === 'LOCKED' || 
+                       (lock && lock.is_locked && 
+                        (lock.scope === 'spin' || lock.scope === 'all') && 
+                        (!lock.expires_at || new Date() < new Date(lock.expires_at)));
+      if (isLocked) {
+        await session.abortTransaction();
+        session.endSession();
+        const reasonStr = lock?.reason ? `: ${lock.reason}` : '';
+        return res.status(403).json({ 
+          success: false, 
+          message: `Tài khoản của bạn đã bị khóa tính năng quay số${reasonStr}` 
+        });
+      }
+    }
+
+    // Spam protection check: if user has >= 3 gamification logs in the last 10 seconds
+    const tenSecondsAgo = new Date(Date.now() - 10000);
+    const recentLogsCount = await GamificationLog.countDocuments({
+      user_id: userId,
+      created_at: { $gte: tenSecondsAgo }
+    }).session(session);
+
+    if (recentLogsCount >= 3) {
+      // Lock user account
+      await User.findByIdAndUpdate(userId, { 
+        status: 'LOCKED',
+        gamification_lock: {
+          is_locked: true,
+          scope: 'all',
+          reason: 'Hệ thống tự động khóa do phát hiện spam/lạm dụng',
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000), // Auto-lock for 24h
+          locked_at: new Date(),
+          locked_by: null
+        }
+      }).session(session);
+
+      // Find active campaign to log against
+      const activeCamp = await GamificationCampaign.findOne({
+        type: 'spin',
+        is_active: true,
+        start_date: { $lte: now },
+        end_date: { $gte: now }
+      }).session(session);
+
+      if (activeCamp) {
+        await GamificationLog.create([{
+          user_id: userId,
+          campaign_id: activeCamp._id,
+          type: 'spin',
+          reward: {
+            reward_type: 'empty',
+            reward_name: 'Khóa tài khoản do spam/lạm dụng',
+            reward_name_en: 'Account locked due to spam/abuse',
+            reward_name_ja: '',
+            reward_value: '0'
+          },
+          status: 'failed',
+          error_message: 'SPAM_ABUSE_LOCKED',
+          date_str: todayStr,
+          ip: req.ip || ''
+        }], { session });
+      }
+
+      await session.commitTransaction();
+      session.endSession();
+      return res.status(429).json({ success: false, message: 'Phát hiện hành vi lạm dụng/spam! Tài khoản của bạn đã bị khóa.' });
+    }
+
     // 1. Fetch active spin campaign
     const campaign = await GamificationCampaign.findOne({
       type: 'spin',
@@ -159,23 +236,6 @@ export const spinWheel = async (req, res) => {
     }
 
     // 2. Validate per-user claims limit
-    // Check total claims
-    if (campaign.max_spins_per_user_total !== null) {
-      const totalSpins = await GamificationLog.countDocuments({
-        user_id: userId,
-        campaign_id: campaign._id,
-        type: 'spin',
-        status: 'delivered'
-      }).session(session);
-
-      if (totalSpins >= campaign.max_spins_per_user_total) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({ success: false, message: 'Bạn đã hết tổng lượt quay cho chương trình này' });
-      }
-    }
-
-    // Check daily claims
     const dailySpins = await GamificationLog.countDocuments({
       user_id: userId,
       campaign_id: campaign._id,
@@ -184,10 +244,38 @@ export const spinWheel = async (req, res) => {
       status: 'delivered'
     }).session(session);
 
-    if (dailySpins >= campaign.max_spins_per_user_day) {
+    const userIds = [userId, String(userId)];
+    const grant = await GamificationSpinGrant.findOne({ user_id: { $in: userIds }, campaign_id: campaign._id }).session(session);
+    const extraSpins = grant ? Math.max(0, grant.spins_granted - grant.spins_used) : 0;
+
+    const normalSpinsRemaining = Math.max(0, campaign.max_spins_per_user_day - dailySpins);
+    const totalSpinsRemaining = normalSpinsRemaining + extraSpins;
+
+    if (campaign.max_spins_per_user_total !== null) {
+      const totalSpins = await GamificationLog.countDocuments({
+        user_id: userId,
+        campaign_id: campaign._id,
+        type: 'spin',
+        status: 'delivered'
+      }).session(session);
+
+      if (totalSpins >= campaign.max_spins_per_user_total && extraSpins <= 0) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ success: false, message: 'Bạn đã hết tổng lượt quay cho chương trình này' });
+      }
+    }
+
+    if (totalSpinsRemaining <= 0) {
       await session.abortTransaction();
       session.endSession();
       return res.status(400).json({ success: false, message: 'Bạn đã hết lượt quay hôm nay. Vui lòng quay lại vào ngày mai!' });
+    }
+
+    // Determine whether to consume an extra spin
+    let consumeExtraSpin = false;
+    if (normalSpinsRemaining <= 0 && extraSpins > 0) {
+      consumeExtraSpin = true;
     }
 
     // 3. Find eligible rewards from reward pool
@@ -337,13 +425,19 @@ export const spinWheel = async (req, res) => {
 
     // 6. Update Campaign Reward count/stock
     if (status === 'delivered' && selectedReward._id) {
+      const incPayload = { 'rewards.$.claimed_count': 1 };
+      if (selectedReward.reward_stock !== undefined && selectedReward.reward_stock !== null) {
+        incPayload['rewards.$.reward_stock'] = -1;
+      }
       await GamificationCampaign.updateOne(
         { _id: campaign._id, 'rewards._id': selectedReward._id },
-        { 
-          $inc: { 'rewards.$.claimed_count': 1 },
-          ...(selectedReward.reward_stock !== null ? { $inc: { 'rewards.$.reward_stock': -1 } } : {})
-        }
+        { $inc: incPayload }
       ).session(session);
+    }
+
+    if (status === 'delivered' && consumeExtraSpin && grant) {
+      grant.spins_used += 1;
+      await grant.save({ session });
     }
 
     // 7. Record spin attempt in GamificationLog
@@ -395,6 +489,77 @@ export const dailyCheckin = async (req, res) => {
     const userId = req.userId;
     const now = new Date();
     const todayStr = getLocalDateStr();
+
+    // Check user status and gamification locks
+    if (req.user) {
+      const lock = req.user.gamification_lock;
+      const isLocked = req.user.status === 'LOCKED' || 
+                       (lock && lock.is_locked && 
+                        (lock.scope === 'checkin' || lock.scope === 'all') && 
+                        (!lock.expires_at || new Date() < new Date(lock.expires_at)));
+      if (isLocked) {
+        await session.abortTransaction();
+        session.endSession();
+        const reasonStr = lock?.reason ? `: ${lock.reason}` : '';
+        return res.status(403).json({ 
+          success: false, 
+          message: `Tài khoản của bạn đã bị khóa tính năng điểm danh${reasonStr}` 
+        });
+      }
+    }
+
+    // Spam protection check: if user has >= 3 gamification logs in the last 10 seconds
+    const tenSecondsAgo = new Date(Date.now() - 10000);
+    const recentLogsCount = await GamificationLog.countDocuments({
+      user_id: userId,
+      created_at: { $gte: tenSecondsAgo }
+    }).session(session);
+
+    if (recentLogsCount >= 3) {
+      // Lock user account
+      await User.findByIdAndUpdate(userId, { 
+        status: 'LOCKED',
+        gamification_lock: {
+          is_locked: true,
+          scope: 'all',
+          reason: 'Hệ thống tự động khóa do phát hiện spam/lạm dụng',
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000), // Auto-lock for 24h
+          locked_at: new Date(),
+          locked_by: null
+        }
+      }).session(session);
+
+      // Find active campaign to log against
+      const activeCamp = await GamificationCampaign.findOne({
+        type: 'checkin',
+        is_active: true,
+        start_date: { $lte: now },
+        end_date: { $gte: now }
+      }).session(session);
+
+      if (activeCamp) {
+        await GamificationLog.create([{
+          user_id: userId,
+          campaign_id: activeCamp._id,
+          type: 'checkin',
+          reward: {
+            reward_type: 'empty',
+            reward_name: 'Khóa tài khoản do spam/lạm dụng',
+            reward_name_en: 'Account locked due to spam/abuse',
+            reward_name_ja: '',
+            reward_value: '0'
+          },
+          status: 'failed',
+          error_message: 'SPAM_ABUSE_LOCKED',
+          date_str: todayStr,
+          ip: req.ip || ''
+        }], { session });
+      }
+
+      await session.commitTransaction();
+      session.endSession();
+      return res.status(429).json({ success: false, message: 'Phát hiện hành vi lạm dụng/spam! Tài khoản của bạn đã bị khóa.' });
+    }
 
     // 1. Fetch active checkin campaign
     const campaign = await GamificationCampaign.findOne({
@@ -452,6 +617,7 @@ export const dailyCheckin = async (req, res) => {
               reward_name_en: r.reward_name_en,
               reward_name_ja: r.reward_name_ja,
               reward_value: r.reward_value,
+              reward_stock: r.reward_stock,
               _id: r._id
             };
             break;
@@ -579,12 +745,13 @@ export const dailyCheckin = async (req, res) => {
 
     // 7. Update Campaign stock if randomized reward was selected and has stock count
     if (status === 'delivered' && selectedReward._id) {
+      const incPayload = { 'rewards.$.claimed_count': 1 };
+      if (selectedReward.reward_stock !== undefined && selectedReward.reward_stock !== null) {
+        incPayload['rewards.$.reward_stock'] = -1;
+      }
       await GamificationCampaign.updateOne(
         { _id: campaign._id, 'rewards._id': selectedReward._id },
-        { 
-          $inc: { 'rewards.$.claimed_count': 1 },
-          ...(selectedReward.reward_stock !== null ? { $inc: { 'rewards.$.reward_stock': -1 } } : {})
-        }
+        { $inc: incPayload }
       ).session(session);
     }
 
@@ -744,6 +911,7 @@ export const deleteCampaign = async (req, res) => {
 };
 
 // View detailed history / logs of claims (Admin only)
+// Populates user info (name, email, status) for admin readability
 export const getLogs = async (req, res) => {
   try {
     const { campaign_id, type, user_id, limit = 50, skip = 0 } = req.query;
@@ -760,7 +928,65 @@ export const getLogs = async (req, res) => {
 
     const total = await GamificationLog.countDocuments(query);
 
-    return res.json({ success: true, data: logs, total });
+    // Populate user info for each log entry
+    const userIds = [...new Set(logs.map(l => String(l.user_id)))];
+    const users = await User.find({ _id: { $in: userIds } })
+      .select('_id full_name username email phone status avatar')
+      .lean();
+    const userMap = {};
+    for (const u of users) {
+      userMap[String(u._id)] = {
+        _id: u._id,
+        full_name: u.full_name || '',
+        username: u.username || '',
+        email: u.email || '',
+        phone: u.phone || '',
+        status: u.status || 'ACTIVE',
+        avatar: u.avatar || null
+      };
+    }
+
+    const enrichedLogs = logs.map(log => ({
+      ...log,
+      user_info: userMap[String(log.user_id)] || null
+    }));
+
+    return res.json({ success: true, data: enrichedLogs, total });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Search users for gamification admin tools (Admin only)
+export const searchUsersForAdmin = async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || String(q).trim().length < 2) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const searchTerm = String(q).trim();
+    const filter = {
+      $or: [
+        { email: { $regex: searchTerm, $options: 'i' } },
+        { username: { $regex: searchTerm, $options: 'i' } },
+        { full_name: { $regex: searchTerm, $options: 'i' } },
+        { phone: { $regex: searchTerm, $options: 'i' } }
+      ]
+    };
+
+    // Also allow direct ObjectId lookup
+    if (searchTerm.match(/^[0-9a-fA-F]{24}$/)) {
+      filter.$or.push({ _id: searchTerm });
+    }
+
+    const users = await User.find(filter)
+      .select('_id full_name username email phone status avatar membership_level lotte_points gamification_lock')
+      .sort('-created_at')
+      .limit(10)
+      .lean();
+
+    return res.json({ success: true, data: users });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -770,20 +996,23 @@ export const getLogs = async (req, res) => {
 export const getAnalytics = async (req, res) => {
   try {
     const { campaign_id } = req.params;
+    const objectId = mongoose.Types.ObjectId.isValid(campaign_id)
+      ? new mongoose.Types.ObjectId(campaign_id)
+      : campaign_id;
     
-    const totalParticipation = await GamificationLog.countDocuments({ campaign_id });
-    const successfulClaims = await GamificationLog.countDocuments({ campaign_id, status: 'delivered' });
-    const failedClaims = await GamificationLog.countDocuments({ campaign_id, status: 'failed' });
+    const totalParticipation = await GamificationLog.countDocuments({ campaign_id: objectId });
+    const successfulClaims = await GamificationLog.countDocuments({ campaign_id: objectId, status: 'delivered' });
+    const failedClaims = await GamificationLog.countDocuments({ campaign_id: objectId, status: 'failed' });
 
     // Group wins by reward type
     const winsByType = await GamificationLog.aggregate([
-      { $match: { campaign_id: new mongoose.Types.ObjectId(campaign_id), status: 'delivered' } },
+      { $match: { campaign_id: objectId, status: 'delivered' } },
       { $group: { _id: '$reward.reward_type', count: { $sum: 1 } } }
     ]);
 
     // Daily participations
     const dailyShares = await GamificationLog.aggregate([
-      { $match: { campaign_id: new mongoose.Types.ObjectId(campaign_id) } },
+      { $match: { campaign_id: objectId } },
       { $group: { _id: '$date_str', count: { $sum: 1 } } },
       { $sort: { _id: 1 } },
       { $limit: 15 }
@@ -798,6 +1027,201 @@ export const getAnalytics = async (req, res) => {
         winsByType: winsByType.map(w => ({ type: w._id, count: w.count })),
         dailyParticipation: dailyShares.map(d => ({ date: d._id, count: d.count }))
       }
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Grant extra spins manually (Admin only)
+export const grantSpins = async (req, res) => {
+  try {
+    const { user_id, campaign_id, spins_count, reason } = req.body;
+
+    if (!user_id || !campaign_id || !spins_count || Number(spins_count) <= 0) {
+      return res.status(400).json({ success: false, message: 'Dữ liệu đầu vào không hợp lệ' });
+    }
+
+    const campaign = await GamificationCampaign.findById(campaign_id);
+    if (!campaign) {
+      return res.status(404).json({ success: false, message: 'Chiến dịch không tồn tại' });
+    }
+
+    const targetUser = await User.findById(user_id);
+    if (!targetUser) {
+      return res.status(404).json({ success: false, message: 'Người dùng không tồn tại' });
+    }
+
+    const userIds = [user_id];
+    if (mongoose.Types.ObjectId.isValid(user_id)) {
+      userIds.push(new mongoose.Types.ObjectId(user_id));
+    }
+    let grant = await GamificationSpinGrant.findOne({ user_id: { $in: userIds }, campaign_id });
+    if (!grant) {
+      grant = new GamificationSpinGrant({
+        user_id: mongoose.Types.ObjectId.isValid(user_id) ? new mongoose.Types.ObjectId(user_id) : user_id,
+        campaign_id,
+        granted_by: req.userId,
+        spins_granted: Number(spins_count),
+        spins_used: 0,
+        reason: reason || 'Manual grant'
+      });
+    } else {
+      grant.spins_granted += Number(spins_count);
+      if (reason) grant.reason = reason;
+      grant.granted_by = req.userId;
+    }
+    await grant.save();
+
+    // Log admin activity
+    await logActivity({
+      userId: req.userId,
+      userName: req.user?.full_name || req.user?.username || 'Admin',
+      action: 'GRANT_SPINS',
+      entity: 'gamification_campaign',
+      entityId: campaign_id,
+      details: {
+        target_user_id: user_id,
+        target_user_name: targetUser.full_name || targetUser.username,
+        spins_granted: Number(spins_count),
+        reason: reason || 'Manual grant'
+      },
+      ip: req.ip
+    });
+
+    return res.json({
+      success: true,
+      message: `Đã tặng thành công ${spins_count} lượt quay cho ${targetUser.full_name || targetUser.username}`
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Get user spin grant status (Admin only)
+export const getUserSpinStatus = async (req, res) => {
+  try {
+    const { user_id, campaign_id } = req.query;
+    if (!user_id || !campaign_id) {
+      return res.status(400).json({ success: false, message: 'Thiếu user_id hoặc campaign_id' });
+    }
+
+    const userIds = [user_id];
+    if (mongoose.Types.ObjectId.isValid(user_id)) {
+      userIds.push(new mongoose.Types.ObjectId(user_id));
+    }
+
+    const grant = await GamificationSpinGrant.findOne({ user_id: { $in: userIds }, campaign_id });
+    
+    return res.json({
+      success: true,
+      data: {
+        spins_granted: grant ? grant.spins_granted : 0,
+        spins_used: grant ? grant.spins_used : 0,
+        spins_remaining: grant ? Math.max(0, grant.spins_granted - grant.spins_used) : 0
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Unlock blocked user account (Admin only)
+export const unlockUser = async (req, res) => {
+  try {
+    const { user_id } = req.body;
+    if (!user_id) {
+      return res.status(400).json({ success: false, message: 'ID người dùng không được để trống' });
+    }
+
+    const targetUser = await User.findById(user_id);
+    if (!targetUser) {
+      return res.status(404).json({ success: false, message: 'Người dùng không tồn tại' });
+    }
+
+    targetUser.status = 'ACTIVE';
+    targetUser.gamification_lock = {
+      is_locked: false,
+      scope: null,
+      reason: '',
+      expires_at: null,
+      locked_at: null,
+      locked_by: null
+    };
+    await targetUser.save();
+
+    // Log admin activity
+    await logActivity({
+      userId: req.userId,
+      userName: req.user?.full_name || req.user?.username || 'Admin',
+      action: 'UNLOCK_USER',
+      entity: 'user',
+      entityId: user_id,
+      details: {
+        target_user_name: targetUser.full_name || targetUser.username
+      },
+      ip: req.ip
+    });
+
+    return res.json({
+      success: true,
+      message: `Đã mở khóa tài khoản cho ${targetUser.full_name || targetUser.username}`
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Lock user account from gamification (Admin only)
+export const lockUser = async (req, res) => {
+  try {
+    const { user_id, scope, reason, duration_hours } = req.body;
+    if (!user_id) {
+      return res.status(400).json({ success: false, message: 'ID người dùng không được để trống' });
+    }
+    if (!scope || !['spin', 'checkin', 'all'].includes(scope)) {
+      return res.status(400).json({ success: false, message: 'Phạm vi khóa không hợp lệ' });
+    }
+
+    const targetUser = await User.findById(user_id);
+    if (!targetUser) {
+      return res.status(404).json({ success: false, message: 'Người dùng không tồn tại' });
+    }
+
+    const expires_at = duration_hours && Number(duration_hours) > 0
+      ? new Date(Date.now() + Number(duration_hours) * 60 * 60 * 1000)
+      : null;
+
+    targetUser.gamification_lock = {
+      is_locked: true,
+      scope,
+      reason: reason || 'Bị khóa bởi quản trị viên',
+      expires_at,
+      locked_at: new Date(),
+      locked_by: req.userId
+    };
+
+    await targetUser.save();
+
+    // Log admin activity
+    await logActivity({
+      userId: req.userId,
+      userName: req.user?.full_name || req.user?.username || 'Admin',
+      action: 'LOCK_USER',
+      entity: 'user',
+      entityId: user_id,
+      details: {
+        target_user_name: targetUser.full_name || targetUser.username,
+        scope,
+        reason: reason || 'Bị khóa bởi quản trị viên',
+        expires_at
+      },
+      ip: req.ip
+    });
+
+    return res.json({
+      success: true,
+      message: `Đã khóa tính năng gamification (${scope}) cho ${targetUser.full_name || targetUser.username}`
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

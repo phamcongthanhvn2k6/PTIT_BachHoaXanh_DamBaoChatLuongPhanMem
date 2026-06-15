@@ -4,9 +4,75 @@ import type { Order } from "../../types";
 import { toast } from "../../components/Toast/toastEvent";
 import { useAppSelector } from '../../store';
 import { useTranslation } from "react-i18next";
+import UserAvatar from "../../components/UserAvatar/UserAvatar";
 
 const AdminLotteMartOrderManagement: React.FC = () => {
   const { t } = useTranslation();
+
+  // Helper to resolve customer name with robust fallbacks
+  const getCustomerName = (order: Order): string => {
+    const user = (order as any).user;
+    if (user) {
+      const name = user.full_name || user.username || user.name;
+      if (name) return name;
+    }
+    const addr = order.order_address;
+    if (addr && typeof addr === 'object' && addr.receiver_name) {
+      return addr.receiver_name;
+    }
+    const anyOrder = order as any;
+    if (anyOrder.customer_name) return anyOrder.customer_name;
+    if (anyOrder.customerName) return anyOrder.customerName;
+    if (anyOrder.receiverName) return anyOrder.receiverName;
+    if (anyOrder.receiver_name) return anyOrder.receiver_name;
+    if (typeof addr === 'string') {
+      return 'Khách vãng lai';
+    }
+    if (anyOrder.user_id) {
+      return `Khách hàng (ID: ${String(anyOrder.user_id).substring(0, 8)})`;
+    }
+    return 'Khách vãng lai';
+  };
+
+  // Helper to resolve customer avatar with robust fallbacks
+  const getCustomerAvatar = (order: Order): string | null => {
+    const user = (order as any).user;
+    if (user) {
+      const avatar = user.avatar || user.avatarUrl || user.profileImage || user.image;
+      if (avatar) return avatar;
+    }
+    const anyOrder = order as any;
+    if (anyOrder.customer_avatar) return anyOrder.customer_avatar;
+    if (anyOrder.customerAvatar) return anyOrder.customerAvatar;
+    if (anyOrder.user_avatar) return anyOrder.user_avatar;
+    return null;
+  };
+
+  const getCustomerPhone = (order: Order): string => {
+    const addr = order.order_address;
+    if (addr && typeof addr === 'object' && addr.phone) {
+      return addr.phone;
+    }
+    const user = (order as any).user;
+    if (user && user.phone) {
+      return user.phone;
+    }
+    return '';
+  };
+
+  const getFullAddress = (order: Order): string => {
+    const addr = order.order_address;
+    if (addr) {
+      if (typeof addr === 'object') {
+        return addr.full_address || [addr.street, addr.ward, addr.district, addr.city].filter(Boolean).join(', ') || 'N/A';
+      }
+      if (typeof addr === 'string') {
+        return addr;
+      }
+    }
+    return 'N/A';
+  };
+
   // State for data
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -76,8 +142,8 @@ const AdminLotteMartOrderManagement: React.FC = () => {
       const lower = searchTerm.toLowerCase();
       result = result.filter(o => 
         (o.id || '').toLowerCase().includes(lower) || 
-        (o.order_address?.receiver_name || '').toLowerCase().includes(lower) ||
-        (o.order_address?.phone || '').includes(lower) ||
+        getCustomerName(o).toLowerCase().includes(lower) ||
+        getCustomerPhone(o).includes(lower) ||
         (o.tracking_number || '').toLowerCase().includes(lower)
       );
     }
@@ -250,9 +316,9 @@ const AdminLotteMartOrderManagement: React.FC = () => {
             <p>Ngày tạo: ${new Date(selectedOrder.created_at).toLocaleString("vi-VN")}</p>
           </div>
           <div class="details">
-            <p><strong>Khách hàng:</strong> ${selectedOrder.order_address?.receiver_name}</p>
-            <p><strong>SĐT:</strong> ${selectedOrder.order_address?.phone}</p>
-            <p><strong>Địa chỉ:</strong> ${selectedOrder.order_address?.full_address}</p>
+            <p><strong>Khách hàng:</strong> ${getCustomerName(selectedOrder)}</p>
+            <p><strong>SĐT:</strong> ${getCustomerPhone(selectedOrder)}</p>
+            <p><strong>Địa chỉ:</strong> ${getFullAddress(selectedOrder)}</p>
             <p><strong>Thanh toán:</strong> ${selectedOrder.payment?.method || selectedOrder.payment_method} - ${selectedOrder.payment?.status}</p>
           </div>
           <table>
@@ -503,12 +569,15 @@ const AdminLotteMartOrderManagement: React.FC = () => {
                       <td className="px-6 py-4 text-sm font-bold text-primary">#{order.id}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold">
-                            {((order.order_address && order.order_address.receiver_name) || 'KH').substring(0,2).toUpperCase()}
-                          </div>
+                          <UserAvatar
+                            src={getCustomerAvatar(order)}
+                            name={getCustomerName(order)}
+                            size={32}
+                            userId={order.user_id || (order as any).user?.id || (order as any).user?._id}
+                          />
                           <div>
-                            <p className="text-xs font-bold text-on-surface">{(order.order_address && order.order_address.receiver_name) || "N/A"}</p>
-                            <p className="text-[10px] text-slate-400">{(order.order_address && order.order_address.phone) || ""}</p>
+                            <p className="text-xs font-bold text-on-surface">{getCustomerName(order) || "N/A"}</p>
+                            <p className="text-[10px] text-slate-400">{getCustomerPhone(order) || ""}</p>
                           </div>
                         </div>
                       </td>
@@ -637,16 +706,25 @@ const AdminLotteMartOrderManagement: React.FC = () => {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium text-slate-400">Tên:</span>
-                    <span className="text-xs font-bold">{selectedOrder.order_address?.receiver_name}</span>
+                    <div className="flex items-center gap-2">
+                      <UserAvatar
+                        src={getCustomerAvatar(selectedOrder)}
+                        name={getCustomerName(selectedOrder)}
+                        size={24}
+                        userId={selectedOrder.user_id || (selectedOrder as any).user?.id || (selectedOrder as any).user?._id}
+                      />
+                      <span className="text-xs font-bold">{getCustomerName(selectedOrder)}</span>
+                    </div>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium text-slate-400">SĐT:</span>
-                    <span className="text-xs font-bold">{selectedOrder.order_address?.phone}</span>
+                    <span className="text-xs font-bold">{getCustomerPhone(selectedOrder)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium text-slate-400">Địa chỉ:</span>
-                    <span className="text-xs font-bold text-right max-w-[200px] leading-tight">{selectedOrder.order_address?.full_address}</span>
+                    <span className="text-xs font-bold text-right max-w-[200px] leading-tight">{getFullAddress(selectedOrder)}</span>
                   </div>
+
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-medium text-slate-400">Thanh toán:</span>
                     {getPaymentBadge(selectedOrder)}

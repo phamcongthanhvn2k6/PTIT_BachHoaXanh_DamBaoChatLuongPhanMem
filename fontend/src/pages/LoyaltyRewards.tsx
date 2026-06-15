@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../store';
 import { loadLoyaltyTransactions } from '../slices/loyaltySlice';
+import { validateLoyaltyBalance } from '../slices/authSlice';
 import toast from 'react-hot-toast';
 
 /* ── reward catalogue (static for now — replace with API later) ── */
@@ -121,6 +122,7 @@ const LoyaltyRewards: React.FC = () => {
       );
       // Reload transactions to show the new redemption
       dispatch(loadLoyaltyTransactions());
+      dispatch(validateLoyaltyBalance() as any);
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || '';
       toast.error(msg || (lang === 'en' ? 'Failed to redeem reward' : lang === 'ja' ? '交換に失敗しました' : 'Không thể đổi phần thưởng'));

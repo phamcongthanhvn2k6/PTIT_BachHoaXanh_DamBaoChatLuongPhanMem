@@ -1106,5 +1106,24 @@ export const dataService = {
   adminGetAnalytics: async (campaignId: string): Promise<any> => {
     return safeObj(httpClient.get(`/gamification/admin/analytics/${campaignId}`));
   },
+  adminGrantSpins: async (payload: { user_id: string; campaign_id: string; spins_count: number; reason?: string }): Promise<any> => {
+    const res = await httpClient.post('/gamification/admin/grant-spins', payload);
+    return res.data ?? res;
+  },
+  adminGetUserSpinStatus: async (userId: string, campaignId: string): Promise<any> => {
+    const res = await httpClient.get('/gamification/admin/user-spin-status', { params: { user_id: userId, campaign_id: campaignId } });
+    return res.data ?? res;
+  },
+  adminUnlockUser: async (user_id: string): Promise<any> => {
+    const res = await httpClient.post('/gamification/admin/unlock-user', { user_id });
+    return res.data ?? res;
+  },
+  adminLockUser: async (payload: { user_id: string; scope: 'spin' | 'checkin' | 'all'; reason?: string; duration_hours?: number }): Promise<any> => {
+    const res = await httpClient.post('/gamification/admin/lock-user', payload);
+    return res.data ?? res;
+  },
+  adminSearchUsers: async (query: string): Promise<any[]> => {
+    return safeArr(httpClient.get('/gamification/admin/search-users', { params: { q: query } }));
+  },
 };
 

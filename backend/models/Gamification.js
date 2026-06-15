@@ -78,5 +78,17 @@ const gamificationLogSchema = new mongoose.Schema({
 gamificationLogSchema.index({ user_id: 1, campaign_id: 1, type: 1, date_str: 1 });
 gamificationLogSchema.index({ campaign_id: 1, created_at: -1 });
 
+const gamificationSpinGrantSchema = new mongoose.Schema({
+  user_id: { type: mongoose.Schema.Types.Mixed, required: true },
+  campaign_id: { type: mongoose.Schema.Types.ObjectId, ref: 'GamificationCampaign', required: true },
+  granted_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  spins_granted: { type: Number, required: true, default: 0 },
+  spins_used: { type: Number, required: true, default: 0 },
+  reason: { type: String, default: '' }
+}, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
+
+gamificationSpinGrantSchema.index({ user_id: 1, campaign_id: 1 });
+
 export const GamificationCampaign = mongoose.model('GamificationCampaign', gamificationCampaignSchema);
 export const GamificationLog = mongoose.model('GamificationLog', gamificationLogSchema);
+export const GamificationSpinGrant = mongoose.model('GamificationSpinGrant', gamificationSpinGrantSchema);
