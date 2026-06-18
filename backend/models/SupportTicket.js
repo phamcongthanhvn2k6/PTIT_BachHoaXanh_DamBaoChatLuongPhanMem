@@ -17,9 +17,11 @@ const ticketSchema = new mongoose.Schema({
   attachments: [String],
   thread: [{
     sender_type: { type: String, default: 'user', enum: ['user', 'agent', 'admin', 'system'] },
+    sender_role: { type: String, default: 'customer' },
     sender_id: { type: mongoose.Schema.Types.Mixed, default: null },
     sender_name: { type: String, default: '' },
     content: { type: String, required: true },
+    message: { type: String, default: '' },
     attachments: [String],
     created_at: { type: Date, default: Date.now },
   }],

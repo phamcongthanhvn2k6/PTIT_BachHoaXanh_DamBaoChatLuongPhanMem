@@ -88,6 +88,9 @@ const start = async () => {
     global.io = io; // Make io globally accessible without cyclic imports
     app.set('io', io);
 
+    // Import Family Cart socket handler
+    const { handleFamilyCartSocket } = await import('./services/familyCartSocket.js');
+
     io.on('connection', (socket) => {
       socket.on('join_user', (userId) => {
         if (userId) {
@@ -101,6 +104,9 @@ const start = async () => {
       socket.on('leave_ticket', (ticketId) => {
         socket.leave(ticketId);
       });
+
+      // Handle family cart events
+      handleFamilyCartSocket(io, socket);
     });
 
     console.log('[startup] Socket.IO attached successfully.');

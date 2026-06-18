@@ -76,18 +76,28 @@ const AdminSupportTickets: React.FC = () => {
   // Socket listener for new messages on active ticket
   useEffect(() => {
     if (!detailTicket) return;
+    
+    // Ensure socket connection is active
+    if (!socket.connected) {
+      socket.connect();
+    }
+
     const ticketIdStr = String(detailTicket._id || detailTicket.id);
     
     // Join ticket room
     socket.emit('join_ticket', ticketIdStr);
 
     const handleNewMessage = (newMsg: any) => {
-      if (String(newMsg.ticket_id) === ticketIdStr) {
+      const msgTicketId = String(newMsg.ticket_id || newMsg.id || '');
+      if (msgTicketId === ticketIdStr) {
         setDetailTicket((prev: any) => {
           if (!prev) return prev;
           const thread = prev.thread ? [...prev.thread] : [];
           // Avoid duplicate messages
-          const exists = thread.some((m: any) => m._id === newMsg._id || (m.created_at === newMsg.created_at && m.content === newMsg.content));
+          const exists = thread.some((m: any) => 
+            String(m._id || m.id) === String(newMsg._id || newMsg.id) || 
+            (m.created_at === newMsg.created_at && m.content === newMsg.content)
+          );
           if (exists) return prev;
           return {
             ...prev,
@@ -100,17 +110,25 @@ const AdminSupportTickets: React.FC = () => {
     };
 
     socket.on('new_message', handleNewMessage);
+    
+    // Re-join room on reconnection
+    const handleConnect = () => {
+      socket.emit('join_ticket', ticketIdStr);
+    };
+    socket.on('connect', handleConnect);
+
     return () => {
       socket.emit('leave_ticket', ticketIdStr);
       socket.off('new_message', handleNewMessage);
+      socket.off('connect', handleConnect);
     };
-  }, [detailTicket, loadData]);
+  }, [detailTicket?._id, detailTicket?.id, loadData]);
 
   const reloadDetail = async (id: string) => {
     try {
       const res = await supportService.detail(id);
-      if (res?.success) {
-        setDetailTicket(res.data);
+      if (res) {
+        setDetailTicket(res);
       }
     } catch {
       toast.error(t('adminSupport.detailError', 'Không thể tải chi tiết ticket'));
@@ -147,7 +165,7 @@ const AdminSupportTickets: React.FC = () => {
   const submitReply = async () => {
     if (!detailTicket || !replyText.trim()) return;
     try {
-      await supportService.reply(detailTicket._id || detailTicket.id, replyText);
+      await supportService.reply(detailTicket._id || detailTicket.id, { content: replyText });
       toast.success(t('adminSupport.sendReplySuccess', 'Đã gửi phản hồi'));
       setReplyText('');
       reloadDetail(detailTicket._id || detailTicket.id);

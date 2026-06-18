@@ -77,9 +77,11 @@ export const create = async (req, res) => {
       message: initialContent,
       thread: [{ 
          sender_type: 'user', 
+         sender_role: req.user?.role_key || (req.user?.role_id === 1 ? 'super_admin' : req.user?.role_id === 2 ? 'admin' : req.user?.role_id === 3 ? 'customer' : 'customer'),
          sender_id: userId,
          sender_name: userName, 
          content: initialContent,
+         message: initialContent,
          attachments: req.body.attachments || []
       }],
       messages: [{ 
@@ -128,16 +130,21 @@ export const sendMessage = async (req, res) => {
     if (req.user?.role_id === 3 && String(ticket.user_id) !== String(req.userId)) return res.status(403).json({ success: false, message: 'Forbidden' });
     
     const isUser = req.user?.role_id === 3;
+    const content = req.body.content || req.body.message || '';
+    const roleKey = req.user?.role_key || (req.user?.role_id === 1 ? 'super_admin' : req.user?.role_id === 2 ? 'admin' : req.user?.role_id === 3 ? 'customer' : 'agent');
+    
     const msg = { 
       sender_type: isUser ? 'user' : 'agent', 
-      sender_name: req.body.sender_name || req.user?.username || (isUser ? 'User' : 'Agent'), 
+      sender_role: roleKey,
       sender_id: req.userId,
-      content: req.body.content,
+      sender_name: req.body.sender_name || req.user?.username || (isUser ? 'User' : 'Agent'), 
+      content: content,
+      message: content,
       attachments: req.body.attachments || []
     };
     
     ticket.thread.push(msg);
-    ticket.messages.push({ sender: msg.sender_type, sender_name: msg.sender_name, content: msg.content, attachments: msg.attachments }); // Legacy fallback
+    ticket.messages.push({ sender: msg.sender_type, sender_name: msg.sender_name, content: msg.content, message: msg.content, attachments: msg.attachments }); // Legacy fallback
     
     // Auto status transition
     if (isUser && ticket.status === 'waiting_customer') ticket.status = 'open';

@@ -91,15 +91,31 @@ const SupportCenter: React.FC = () => {
   useEffect(() => {
     if (activeTicketId) {
       dispatch(loadMessages(activeTicketId));
+      if (!socket.connected) {
+        socket.connect();
+      }
       socket.emit('join_ticket', activeTicketId);
     }
     const handleNewMessage = (msg: any) => {
-      if (msg.ticket_id === activeTicketId) dispatch(addMessage(msg));
+      const msgTicketId = String(msg.ticket_id || msg.ticketId || msg.id || '');
+      const activeIdStr = String(activeTicketId || '');
+      if (msgTicketId && activeIdStr && msgTicketId === activeIdStr) {
+        dispatch(addMessage(msg));
+      }
     };
     socket.on('new_message', handleNewMessage);
+
+    const handleConnect = () => {
+      if (activeTicketId) {
+        socket.emit('join_ticket', activeTicketId);
+      }
+    };
+    socket.on('connect', handleConnect);
+
     return () => {
       if (activeTicketId) socket.emit('leave_ticket', activeTicketId);
       socket.off('new_message', handleNewMessage);
+      socket.off('connect', handleConnect);
     };
   }, [dispatch, activeTicketId]);
 
