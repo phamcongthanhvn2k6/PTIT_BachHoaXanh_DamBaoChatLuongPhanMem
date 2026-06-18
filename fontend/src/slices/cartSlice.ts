@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk, createSelector } from '@reduxjs/toolkit'
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { CartItem, Coupon } from '../types';
 import { dataService } from '../services/dataService';
+import { showBranchConflictModal } from '../components/BranchConflictModal/BranchConflictModal';
 
 // ═══════════════════════════════════════════════
 // ASYNC THUNKS
@@ -29,9 +30,10 @@ export const addToCartAsync = createAsyncThunk(
     product_name?: string;
     product_image?: string;
     branchProduct?: any;
+    clearOtherCarts?: boolean;
   }, { rejectWithValue }) => {
     console.log('[cartSlice] addToCartAsync payload:', payload);
-    const result = await dataService.addToCart(
+    let result = await dataService.addToCart(
       0, // userId ignored — JWT used on backend
       payload.branch_product_id,
       payload.quantity,
@@ -39,13 +41,37 @@ export const addToCartAsync = createAsyncThunk(
       payload.price,
       payload.unit_price || payload.price,
       payload.product_name,
-      payload.product_image
+      payload.product_image,
+      payload.clearOtherCarts
     );
     console.log('[cartSlice] addToCartAsync API result:', result);
 
-    // result is { success, message, cart } from our fixed dataService
     if (!result.success) {
-      return rejectWithValue(result.message || 'Lỗi thêm vào giỏ hàng');
+      if (result.code === 'CROSS_BRANCH_CONFLICT') {
+        const confirmMessage = result.message || 'Bạn đang có sản phẩm ở giỏ hàng thuộc chi nhánh khác. Bạn có muốn xóa giỏ hàng cũ để tiếp tục không?';
+        const shouldClear = await showBranchConflictModal(confirmMessage);
+        if (shouldClear) {
+          console.log('[cartSlice] User agreed to clear other branch carts. Retrying add to cart...');
+          result = await dataService.addToCart(
+            0,
+            payload.branch_product_id,
+            payload.quantity,
+            payload.branchId,
+            payload.price,
+            payload.unit_price || payload.price,
+            payload.product_name,
+            payload.product_image,
+            true // clearOtherCarts = true
+          );
+          if (!result.success) {
+            return rejectWithValue(result.message || 'Lỗi thêm vào giỏ hàng');
+          }
+        } else {
+          return rejectWithValue('Đã hủy thao tác để giữ giỏ hàng chi nhánh cũ.');
+        }
+      } else {
+        return rejectWithValue(result.message || 'Lỗi thêm vào giỏ hàng');
+      }
     }
 
     // Return both the server cart AND the original payload for branchProduct metadata

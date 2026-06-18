@@ -1,4 +1,23 @@
 {
+  "familyCart": {
+    "needIt": "Cần mua",
+    "delete": "Xóa",
+    "consensus": "Đồng thuận",
+    "addedBy": "Thêm bởi",
+    "sharedCartTitle": "Giỏ Hàng Chung",
+    "title": "Giỏ Hàng Gia Đình",
+    "desc": "Cùng gia đình thêm sản phẩm vào chung một giỏ hàng — đồng bộ realtime",
+    "createNew": "Tạo phòng mới",
+    "createDesc": "Tạo mã phòng và chia sẻ cho thành viên",
+    "createCart": "Tạo giỏ hàng",
+    "joinRoom": "Tham gia phòng",
+    "joinDesc": "Nhập mã phòng được chia sẻ",
+    "leaveRoom": "Rời phòng",
+    "emptyCart": "Giỏ hàng trống — thêm sản phẩm bên dưới",
+    "members": "Thành viên",
+    "you": "Bạn",
+    "shareCode": "Chia sẻ mã phòng"
+  },
   "recipe": {
     "enterDishNameWarning": "Vui lòng nhập tên món ăn",
     "dishNameTooShort": "Tên món ăn quá ngắn (tối thiểu 2 ký tự)",
@@ -1219,20 +1238,7 @@
     "cat_account_issue": "Vấn đề tài khoản",
     "cat_refund_request": "Yêu cầu hoàn tiền"
   },
-  "familyCart": {
-    "title": "Giỏ Hàng Gia Đình",
-    "desc": "Cùng gia đình thêm sản phẩm vào chung một giỏ hàng — đồng bộ realtime",
-    "createNew": "Tạo phòng mới",
-    "createDesc": "Tạo mã phòng và chia sẻ cho thành viên",
-    "createCart": "Tạo giỏ hàng",
-    "joinRoom": "Tham gia phòng",
-    "joinDesc": "Nhập mã phòng được chia sẻ",
-    "leaveRoom": "Rời phòng",
-    "emptyCart": "Giỏ hàng trống — thêm sản phẩm bên dưới",
-    "members": "Thành viên",
-    "you": "Bạn",
-    "shareCode": "Chia sẻ mã phòng"
-  },
+
   "loyalty": {
     "loading": "Đang tải dữ liệu điểm...",
     "title": "Điểm thưởng & Ưu đãi thành viên",

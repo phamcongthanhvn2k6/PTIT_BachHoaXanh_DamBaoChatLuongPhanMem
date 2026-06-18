@@ -38,13 +38,13 @@ export const createUserNotification = async (data) => {
 };
 
 const ORDER_STATUS_LABELS = {
-  PENDING: 'Dang cho xac nhan',
-  CONFIRMED: 'Da xac nhan',
-  PROCESSING: 'Dang chuan bi hang',
-  SHIPPING: 'Dang giao hang',
-  DELIVERED: 'Da giao hang',
-  CANCELLED: 'Da huy',
-  RETURNED: 'Da hoan tra',
+  PENDING: 'Đang chờ xác nhận',
+  CONFIRMED: 'Đã xác nhận',
+  PROCESSING: 'Đang chuẩn bị hàng',
+  SHIPPING: 'Đang giao hàng',
+  DELIVERED: 'Đã giao hàng',
+  CANCELLED: 'Đã hủy',
+  RETURNED: 'Đã hoàn trả',
 };
 
 export const notifyOrderStatusChanged = async ({
@@ -56,8 +56,8 @@ export const notifyOrderStatusChanged = async ({
   const statusLabel = ORDER_STATUS_LABELS[String(status || '').toUpperCase()] || String(status || 'Unknown');
   return createUserNotification({
     userId,
-    title: `Don hang #${orderId} cap nhat`,
-    message: note ? `${statusLabel}. ${note}` : `Trang thai moi: ${statusLabel}`,
+    title: `Đơn hàng #${orderId} cập nhật`,
+    message: note ? `${statusLabel}. ${note}` : `Trạng thái mới: ${statusLabel}`,
     type: 'order',
     icon: 'local_shipping',
     link: `/account/orders/${orderId}`,
@@ -76,10 +76,10 @@ export const notifyPointsEarned = async ({
 }) => {
   return createUserNotification({
     userId,
-    title: `Ban vua nhan ${Number(points || 0).toLocaleString('vi-VN')} L.Point`,
+    title: `Bạn vừa nhận ${Number(points || 0).toLocaleString('vi-VN')} L.Point`,
     message: newBalance !== null
-      ? `So du hien tai: ${Number(newBalance || 0).toLocaleString('vi-VN')} L.Point`
-      : 'Diem thuong da duoc cap nhat.',
+      ? `Số dư hiện tại: ${Number(newBalance || 0).toLocaleString('vi-VN')} L.Point`
+      : 'Điểm thưởng đã được cập nhật.',
     type: 'loyalty',
     icon: 'military_tech',
     link: '/account/loyalty',
@@ -102,11 +102,11 @@ export const notifyPointsAdjusted = async ({
   return createUserNotification({
     userId,
     title: increase
-      ? `Ban duoc cong ${amount.toLocaleString('vi-VN')} L.Point`
-      : `Ban bi tru ${Math.abs(amount).toLocaleString('vi-VN')} L.Point`,
+      ? `Bạn được cộng ${amount.toLocaleString('vi-VN')} L.Point`
+      : `Bạn bị trừ ${Math.abs(amount).toLocaleString('vi-VN')} L.Point`,
     message: reason
-      ? `${reason}. So du hien tai: ${Number(newBalance || 0).toLocaleString('vi-VN')} L.Point`
-      : `So du hien tai: ${Number(newBalance || 0).toLocaleString('vi-VN')} L.Point`,
+      ? `${reason}. Số dư hiện tại: ${Number(newBalance || 0).toLocaleString('vi-VN')} L.Point`
+      : `Số dư hiện tại: ${Number(newBalance || 0).toLocaleString('vi-VN')} L.Point`,
     type: 'loyalty',
     icon: 'military_tech',
     link: '/account/loyalty',
@@ -121,8 +121,8 @@ export const notifyPointsAdjusted = async ({
 export const notifyPaymentSuccess = async ({ userId, orderId, amount }) => {
   return createUserNotification({
     userId,
-    title: 'Thanh toan thanh cong',
-    message: `Don hang #${orderId} da duoc thanh toan ${Number(amount || 0).toLocaleString('vi-VN')}d`,
+    title: 'Thanh toán thành công',
+    message: `Đơn hàng #${orderId} đã được thanh toán ${Number(amount || 0).toLocaleString('vi-VN')}đ`,
     type: 'payment',
     icon: 'check_circle',
     link: `/account/orders/${orderId}`,
@@ -133,8 +133,8 @@ export const notifyPaymentSuccess = async ({ userId, orderId, amount }) => {
 export const notifyPaymentFailed = async ({ userId, orderId, reason = '' }) => {
   return createUserNotification({
     userId,
-    title: 'Thanh toan that bai',
-    message: reason || `Don hang #${orderId} chua duoc thanh toan. Vui long thu lai.`,
+    title: 'Thanh toán thất bại',
+    message: reason || `Đơn hàng #${orderId} chưa được thanh toán. Vui lòng thử lại.`,
     type: 'payment',
     icon: 'error',
     link: `/account/orders/${orderId}`,

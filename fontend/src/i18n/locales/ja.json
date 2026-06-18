@@ -1,4 +1,23 @@
 {
+  "familyCart": {
+    "needIt": "必要",
+    "delete": "削除",
+    "consensus": "合意",
+    "addedBy": "追加者",
+    "sharedCartTitle": "共有カート",
+    "title": "ファミリーカート",
+    "desc": "家族と一緒に共有カートに商品を追加 — リアルタイムで同期",
+    "createNew": "新しいルームを作成",
+    "createDesc": "ルームコードを作成してメンバーと共有します",
+    "createCart": "カートを作成",
+    "joinRoom": "ルームに参加",
+    "joinDesc": "共有されたルームコードを入力します",
+    "leaveRoom": "ルームを退出",
+    "emptyCart": "空のカート — 下に商品を追加します",
+    "members": "メンバー",
+    "you": "あなた",
+    "shareCode": "ルームコードを共有"
+  },
   "recipe": {
     "enterDishNameWarning": "料理名を入力してください",
     "dishNameTooShort": "料理名が短すぎます (最小2文字)",
@@ -1147,20 +1166,7 @@
     "cat_account_issue": "アカウント問題",
     "cat_refund_request": "返金リクエスト"
   },
-  "familyCart": {
-    "title": "ファミリーカート",
-    "desc": "家族と一緒に共有カートに商品を追加 — リアルタイムで同期",
-    "createNew": "新しいルームを作成",
-    "createDesc": "ルームコードを作成してメンバーと共有します",
-    "createCart": "カートを作成",
-    "joinRoom": "ルームに参加",
-    "joinDesc": "共有されたルームコードを入力します",
-    "leaveRoom": "ルームを退出",
-    "emptyCart": "空のカート — 下に商品を追加します",
-    "members": "メンバー",
-    "you": "あなた",
-    "shareCode": "ルームコードを共有"
-  },
+
   "loyalty": {
     "loading": "ポイントデータを読み込み中...",
     "title": "リワードとメンバーシップ特典",

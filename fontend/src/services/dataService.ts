@@ -382,8 +382,9 @@ export const dataService = {
     price?: number,
     unitPrice?: number,
     productName?: string,
-    productImage?: string
-  ): Promise<{success: boolean, message?: string, cart?: any}> => {
+    productImage?: string,
+    clearOtherCarts?: boolean
+  ): Promise<{success: boolean, message?: string, code?: string, cart?: any}> => {
     try {
       const res = await httpClient.post(endpoints.cart.add, {
         branch_id: branchId,
@@ -393,6 +394,7 @@ export const dataService = {
         unit_price: unitPrice || price || 0,
         product_name: productName || '',
         product_image: productImage || '',
+        clear_other_carts: clearOtherCarts,
       });
       // Backend returns: { success: true, data: cart, message: '...' }
       // After axios: res.data = { success: true, data: cart, message: '...' }
@@ -412,7 +414,11 @@ export const dataService = {
       return { success: true, message: 'Đã thêm vào giỏ hàng' };
     } catch (err: any) {
       console.error('[dataService] addToCart error:', err);
-      return { success: false, message: err?.response?.data?.message || 'Lỗi thêm giỏ hàng' };
+      return {
+        success: false,
+        code: err?.code || err?.response?.data?.code || 'ERROR',
+        message: err?.message || 'Lỗi thêm giỏ hàng'
+      };
     }
   },
   updateCartItem: async (branchProductId: string, quantity: number, branchId: string): Promise<{success: boolean}> => {

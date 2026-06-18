@@ -339,7 +339,13 @@ httpClient.interceptors.response.use(
       }
     }
 
-    return Promise.reject(new Error(error?.response?.data?.message || error?.message || 'API Error'));
+    const apiError = new Error(error?.response?.data?.message || error?.message || 'API Error');
+    if (error?.response) {
+      (apiError as any).response = error.response;
+      (apiError as any).status = error.response.status;
+      (apiError as any).code = error.response.data?.code;
+    }
+    return Promise.reject(apiError);
   }
 );
 

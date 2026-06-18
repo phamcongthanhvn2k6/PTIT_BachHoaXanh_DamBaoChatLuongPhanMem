@@ -1,4 +1,23 @@
 {
+  "familyCart": {
+    "needIt": "Need It",
+    "delete": "Delete",
+    "consensus": "Consensus",
+    "addedBy": "Added by",
+    "sharedCartTitle": "Shared Cart",
+    "title": "Family Cart",
+    "desc": "Add products to a shared cart with your family — synced in realtime",
+    "createNew": "Create New Room",
+    "createDesc": "Create a room code and share it with members",
+    "createCart": "Create Cart",
+    "joinRoom": "Join Room",
+    "joinDesc": "Enter the shared room code",
+    "leaveRoom": "Leave Room",
+    "emptyCart": "Empty cart — add products below",
+    "members": "Members",
+    "you": "You",
+    "shareCode": "Share Room Code"
+  },
   "recipe": {
     "enterDishNameWarning": "Please enter a dish name",
     "dishNameTooShort": "Dish name is too short (minimum 2 characters)",
@@ -1219,20 +1238,7 @@
     "cat_account_issue": "Account Issue",
     "cat_refund_request": "Refund Request"
   },
-  "familyCart": {
-    "title": "Family Cart",
-    "desc": "Add products to a shared cart with your family — synced in realtime",
-    "createNew": "Create New Room",
-    "createDesc": "Create a room code and share it with members",
-    "createCart": "Create Cart",
-    "joinRoom": "Join Room",
-    "joinDesc": "Enter the shared room code",
-    "leaveRoom": "Leave Room",
-    "emptyCart": "Empty cart — add products below",
-    "members": "Members",
-    "you": "You",
-    "shareCode": "Share Room Code"
-  },
+
   "loyalty": {
     "loading": "Loading points data...",
     "title": "Rewards & Member Offers",

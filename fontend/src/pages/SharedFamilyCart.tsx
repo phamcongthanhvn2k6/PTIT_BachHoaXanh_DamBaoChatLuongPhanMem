@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAppSelector } from '../store';
 import { socket } from '../services/socket';
 import { toast } from '../components/Toast/toastEvent';
 import { useBranchData } from '../hooks/useBranchData';
+import { resolveImageUrl } from '../utils/imageUrl';
 
 interface FamilyCartItem { 
   id: string; 
@@ -48,6 +50,7 @@ interface ActivityItem {
 }
 
 const SharedFamilyCart: React.FC = () => {
+  const { t } = useTranslation();
   const { user } = useAppSelector(s => s.auth);
   const { availableProducts } = useBranchData();
 
@@ -80,16 +83,22 @@ const SharedFamilyCart: React.FC = () => {
   const [socketConnected, setSocketConnected] = useState(socket.connected);
   const [copied, setCopied] = useState(false);
 
+  const guestIdRef = useRef<string>('');
+  if (!guestIdRef.current) {
+    guestIdRef.current = 'guest-' + Math.random().toString(36).substring(2, 9);
+  }
+
+  const userId = String(user?.id || user?._id || guestIdRef.current);
   const userName = user?.full_name || user?.email || 'Guest';
-  const userId = String(user?.id || user?._id || 'guest-' + Date.now());
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   // Avatar lookup and resolution helper
   const resolveAvatar = (member: FamilyMember) => {
     const av = member.avatar || member.avatarUrl;
-    if (av && (av.startsWith('http') || av.startsWith('/') || av.startsWith('data:'))) {
-      return av;
+    if (av && av !== 'null' && av !== 'undefined' && String(av).trim() !== '' && String(av).trim() !== 'N/A' && String(av).trim() !== 'none') {
+      return resolveImageUrl(av);
     }
     const term = String(member.name || '').toLowerCase();
     if (term.includes('mẹ') || term.includes('mom')) {
@@ -137,6 +146,15 @@ const SharedFamilyCart: React.FC = () => {
       if (avatar) return avatar;
     }
     return getAvatarUrl(msg.senderName);
+  };
+
+  const getItemAddedByAvatar = (addedByName: string) => {
+    const m = members.find(member => member.name === addedByName);
+    if (m) {
+      const avatar = resolveAvatar(m);
+      if (avatar) return avatar;
+    }
+    return getAvatarUrl(addedByName);
   };
 
   // Socket connect indicators
@@ -187,17 +205,23 @@ const SharedFamilyCart: React.FC = () => {
     };
   }, [joined, roomCode, userId, userName]);
 
-  // Scroll chat to bottom
+  // Scroll chat to bottom inside container
+  const prevChatLengthRef = useRef(0);
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatMessages.length > prevChatLengthRef.current) {
+      if (chatContainerRef.current) {
+        chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      }
+    }
+    prevChatLengthRef.current = chatMessages.length;
   }, [chatMessages]);
 
-  // Re-emit join if page refreshed but localStorage exists
+  // Re-emit join when connection params or user credentials load
   useEffect(() => {
     if (joined && roomCode) {
       socket.emit('family_cart_join', { roomCode, userId, userName, avatar: user?.avatar, avatarUrl: user?.avatar });
     }
-  }, []);
+  }, [joined, roomCode, userId, userName, user?.avatar]);
 
   // Room actions
   const handleCreateRoom = () => {
@@ -611,7 +635,7 @@ const SharedFamilyCart: React.FC = () => {
             <div>
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-bold text-slate-800 dark:text-white" style={{ fontFamily: 'Nunito, sans-serif' }}>
-                  Giỏ Hàng Chung ({items.length})
+                  {t('familyCart.sharedCartTitle', 'Giỏ Hàng Chung')} ({items.length})
                 </h3>
                 <div className="flex gap-2">
                   <span className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-rose-600/10 text-rose-600">Tất cả</span>
@@ -631,7 +655,6 @@ const SharedFamilyCart: React.FC = () => {
                   {items.map(item => {
                     const hasConsensus = item.votes.length >= Math.max(1, Math.ceil(members.length / 2));
                     const userVotedNeed = item.votes.includes(userId);
-                    const userVotedWant = item.wants.includes(userId);
 
                     return (
                       <div key={item.id} className="bg-slate-50 dark:bg-slate-900/40 p-5 rounded-2xl flex flex-col gap-4 border border-slate-100 dark:border-slate-800 hover:shadow-md transition">
@@ -647,7 +670,7 @@ const SharedFamilyCart: React.FC = () => {
                               {hasConsensus && (
                                 <div className="flex items-center gap-1 text-emerald-600">
                                   <span className="material-symbols-outlined text-sm font-bold">check_circle</span>
-                                  <span className="text-[9px] font-bold uppercase tracking-wider">Consensus</span>
+                                  <span className="text-[9px] font-bold uppercase tracking-wider">{t('familyCart.consensus', 'Đồng thuận')}</span>
                                 </div>
                               )}
                             </div>
@@ -657,10 +680,10 @@ const SharedFamilyCart: React.FC = () => {
                         </div>
 
                         <div className="flex items-center justify-between pt-3.5 border-t border-slate-200/50 dark:border-slate-800">
-                          <div className="flex items-center gap-2">
-                            <img className="w-6 h-6 rounded-full object-cover" src={getAvatarUrl(item.addedBy)} alt={item.addedBy}/>
-                            <span className="text-[10px] text-slate-500">
-                              Added by <strong className="text-slate-750 dark:text-white">{item.addedBy}</strong>
+                          <div className="flex items-center gap-2 font-medium bg-slate-100 dark:bg-slate-800/60 px-2.5 py-1 rounded-full">
+                            <img className="w-5 h-5 rounded-full object-cover border border-white dark:border-slate-700" src={getItemAddedByAvatar(item.addedBy)} alt={item.addedBy}/>
+                            <span className="text-[10px] text-slate-600 dark:text-slate-300">
+                              {t('familyCart.addedBy', 'Thêm bởi')} <strong className="text-slate-900 dark:text-white font-extrabold">{item.addedBy}</strong>
                             </span>
                           </div>
                           
@@ -691,21 +714,12 @@ const SharedFamilyCart: React.FC = () => {
                             }`}
                           >
                             <span className="material-symbols-outlined text-xs" style={{ fontVariationSettings: "'FILL' 1" }}>thumb_up</span>
-                            Need It ({item.votes.length})
-                          </button>
-                          <button 
-                            onClick={() => handleVoteItem(item.id, 'want')}
-                            className={`px-3.5 py-2 rounded-lg transition ${
-                              userVotedWant ? 'bg-amber-500 text-white shadow-sm' : 'bg-slate-200/60 hover:bg-slate-300/60 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                            }`}
-                            title="Want It"
-                          >
-                            <span className="material-symbols-outlined text-xs" style={{ fontVariationSettings: userVotedWant ? "'FILL' 1" : "'FILL' 0" }}>favorite</span>
+                            {t('familyCart.needIt', 'Cần mua')} ({item.votes.length})
                           </button>
                           <button 
                             onClick={() => handleRemoveItem(item.id)}
                             className="px-3.5 py-2 bg-slate-200/60 hover:bg-rose-100 hover:text-rose-600 dark:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-400 transition"
-                            title="Xóa"
+                            title={t('familyCart.delete', 'Xóa')}
                           >
                             <span className="material-symbols-outlined text-xs">delete</span>
                           </button>
@@ -857,7 +871,10 @@ const SharedFamilyCart: React.FC = () => {
               </div>
 
               {/* Chat bubble list */}
-              <div className="flex-1 px-6 py-4 space-y-4 overflow-y-auto max-h-[320px] hide-scrollbar bg-slate-50/20 dark:bg-slate-900/5 flex flex-col justify-end">
+              <div 
+                ref={chatContainerRef}
+                className="flex-1 px-6 py-4 space-y-4 overflow-y-auto max-h-[320px] hide-scrollbar bg-slate-50/20 dark:bg-slate-900/5 flex flex-col justify-end"
+              >
                 {chatMessages.length === 0 ? (
                   <div className="my-auto flex flex-col items-center justify-center text-center text-slate-400 space-y-2 py-8">
                     <span className="material-symbols-outlined text-3xl opacity-30">forum</span>
