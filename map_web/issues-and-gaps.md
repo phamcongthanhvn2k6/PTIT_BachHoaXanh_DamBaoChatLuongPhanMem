@@ -21,6 +21,7 @@
 | P2-02 | Naming drift aliases (`origin/origin_country`, `rating/average_rating`, `link/action_url`, `sort_order/display_order`) | Partially improved | updated schemas + docs | Standardize API response key policy.
 | P2-03 | Placeholder enterprise routes (stock-takes/internal-requisitions) | Unchanged | [backend/routes/stockTakes.js](../backend/routes/stockTakes.js), [backend/routes/internalRequisitions.js](../backend/routes/internalRequisitions.js) | Implement real lifecycle or flag as beta.
 | P2-04 | Sample schema under-models support/review richness | Unchanged | [fontend/schema_extract.json](../fontend/schema_extract.json), [backend/models/Review.js](../backend/models/Review.js), [backend/models/SupportTicket.js](../backend/models/SupportTicket.js) | Regenerate sample schema from real DB snapshots.
+| P2-05 | Empty Pages & Stub Routes (`Contact.tsx`, `HotDeals.tsx`, `Notifications.tsx`) | Unchanged | [fontend/src/pages/Contact.tsx](../fontend/src/pages/Contact.tsx), [fontend/src/pages/Notifications.tsx](../fontend/src/pages/Notifications.tsx) | Design UI for Contact/HotDeals and wire Notifications to Socket.IO.
 
 ## 4. Fixed In This Re-Audit
 | Item | Change |

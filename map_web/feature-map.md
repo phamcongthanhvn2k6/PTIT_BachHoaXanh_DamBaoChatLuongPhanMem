@@ -1,75 +1,67 @@
-# Feature Map Re-Audit (Synced To Data Fidelity)
+# Bản đồ Tính năng Dự án Lotte Mart (Feature Map - Updated)
 
-## 1. Status Legend
-- ✅ Implemented and data contract aligned.
-- ⚠️ Implemented but payload/schema drift exists.
-- ❌ Missing or non-functional.
+Bản đồ tính năng này mô tả chi tiết trạng thái thực tế của toàn bộ hệ thống Web & Backend Lotte Mart hiện tại, đối chiếu trực tiếp giữa mã nguồn và kế hoạch Trello.
 
-## 2. User Features
-| Feature | Status | Data-Model Note |
-|---|---|---|
-| Product browse/search/detail | ✅ | Product schema now includes rich detail fields used by FE.
-| Product detail highlights/spec tables/rating histogram | ✅ | `highlights`, `specifications`, `rating_breakdown`, `total_reviews` now schema-backed.
-| Eco filtering in listing/search | ✅ | `eco_label` now schema-backed.
-| Cart by branch | ✅ | Cart + BranchProduct core fields aligned. Map-based selector active. |
-| Checkout/order/payment flow | ⚠️ | Works, but order sample aliases (tax/pickup/payment fields) are not canonical schema fields.
-| Promotions/coupons wallet claim | ⚠️ | Works, but sample key naming drift (`value`, `min_order`) still exists.
-| Viewed history merge | ✅ | Unique composite dedupe and FE merge flow aligned.
-| Reviews and product review summary | ⚠️ | Works, but sample has `comment/replies` alias vs schema `content/reply`.
-| Support ticket chat realtime | ⚠️ | Runtime works, sample docs are under-modeled relative to schema richness.
-| User settings/security/privacy preferences | ✅ | User schema now includes `settings`, `security`, `profile_completed`, `wallet_balance`.
-| Contact page | ❌ | page remains empty/unrouted.
+## 1. Ký hiệu Trạng thái (Status Legend)
+*   ✅ **Implemented:** Đã hoàn thành cả giao diện Frontend, logic Backend và đồng bộ dữ liệu vào Database.
+*   ⚠️ **Gaps / Partially Implemented:** Đã có giao diện hoặc API nhưng còn lỗi kỹ thuật, thiếu một số trường dữ liệu hoặc đang sử dụng dữ liệu tĩnh (mock).
+*   ❌ **Missing / Backlog:** Tính năng chưa được triển khai hoặc thiếu sự kết nối giữa FE và BE.
 
-## 3. Admin Features
-| Feature | Status | Data-Model Note |
-|---|---|---|
-| Product/category management | ✅ | Category schema aligned with `description/display_order`; sort alias still mixed.
-| Campaign management (promotion/coupon/banner/flash deal) | ⚠️ | Functional, but Promotion schema has duplicate field declarations.
-| Orders/customers/reviews management | ✅ | major entities mapped.
-| RBAC roles/permissions | ✅ | Role + Permission models aligned with admin guard usage.
-| System settings | ✅ | API + UI active.
-| Supplier/import/inventory/stock movement | ✅ | enterprise models exist and are usable.
-| Stock takes/internal requisitions | ⚠️ | endpoints are placeholder/static.
-| Branch management (full CRUD) | ✅ | Create/Edit/Delete + Geocoding + Duplicate Detection + Coverage Radius + Route visualization.
-| Smart Shopping Mode | ✅ | Personalized feed (recommended/buy-again/trending), Smart Mode toggle, /smart-shopping route.
-| Recipe to Cart | ✅ | **Recipe-to-Cart System (Production-Ready)**:
-  - DB-first recipe lookup with MongoDB caching (normalized key = dish+servings+appetite).
-  - Generative AI fallback using Gemini (`@google/generative-ai`) with hyper-specific prompt engineering.
-  - AI prompt enforces: min 8 ingredients with exact quantities, min 5 detailed steps with timing/fire level, min 3 practical tips.
-  - Banned-phrase validation rejects vague AI output ("vừa đủ", "tùy khẩu phần", "sơ chế nguyên liệu", etc.).
-  - Retry logic: 2 attempts with stricter re-prompt on second try. Safe JSON parsing handles markdown fences.
-  - User inputs: dish name (required), servings 1-10 (required, default 2), appetite (small/normal/large).
-  - Recipe display: title, description, prep/cook time, difficulty, ingredients with store-product matching, step-by-step with duration, tips, tags.
-  - Badges: "AI Generated" (indigo) or "Saved Recipe" (green). No mock/fallback data.
-  - Custom UI `RecipeDetail.tsx` with loading/generating/error/empty states, dark mode, Enter-key submit.
-  - Files: `aiService.js`, `recipeController.js`, `Recipe.js`, `recipeService.ts`, `RecipeDetail.tsx`.
-| Shared Family Cart | ✅ | Socket.IO realtime room-based cart sharing, /family-cart route (auth required).
-| Price Watch System | ✅ | Product follow/unfollow via 🔔, localStorage watchlist, alert banner.
+---
 
-## 4. Enterprise And Inventory Features
-| Feature | Status | Data-Model Note |
-|---|---|---|
-| Supplier master | ✅ | full schema and admin services aligned.
-| Import order lifecycle | ✅ | timeline/items modeled.
-| Import receipt and batch tracking | ✅ | receipt and batch schemas aligned.
-| Stock movement reporting | ⚠️ | duplicate StockMovement schema in Misc remains a risk.
+## 2. Tính năng phía Khách hàng (User Features)
 
-## 5. Authentication Features
-| Feature | Status | Data-Model/API Note |
-|---|---|---|
-| Email/password login + refresh | ✅ | aligned.
-| Email OTP verification | ✅ | aligned.
-| OAuth Google/Facebook | ✅ | aligned.
-| Phone OTP login | ❌ | FE endpoint contract exists; BE route missing.
-| Forgot/reset password UX | ⚠️ | backend routes exist; FE flow not fully implemented.
+| Tính năng | Trạng thái | Mô tả thực tế trong mã nguồn |
+| :--- | :---: | :--- |
+| **Duyệt & Tìm kiếm Sản phẩm** | ⚠️ **Gaps** | Trang chủ, danh mục và chi tiết sản phẩm hoạt động tốt. Tuy nhiên trang tìm kiếm (`SearchResults.tsx`) vẫn tự lọc ở Client-side, chưa gọi API tìm kiếm thật ở Backend. |
+| **So sánh Sản phẩm bằng AI** | ✅ **Implemented** | Cho phép so sánh 2 sản phẩm tương đương. Sử dụng Gemini AI API để tóm tắt phân tích ưu/nhược điểm hiển thị trực quan ở trang `Compare.tsx`. |
+| **Giỏ hàng theo Chi nhánh** | ✅ **Implemented** | Giỏ hàng được chia tách độc lập theo từng chi nhánh siêu thị. Đồng bộ giữa LocalStorage và MongoDB. |
+| **Giỏ hàng Gia đình (Shared Cart)** | ✅ **Implemented** | Chia sẻ giỏ hàng chung giữa các thành viên gia đình qua mã phòng, tự động cập nhật sản phẩm thời gian thực (Real-time) qua Socket.IO. |
+| **Smart Shopping Mode** | ✅ **Implemented** | Cung cấp luồng dữ liệu cá nhân hóa (Sản phẩm gợi ý, Mua lại, Sản phẩm xu hướng) dựa trên lịch sử mua sắm. |
+| **Theo dõi biến động Giá (Price Watch)** | ✅ **Implemented** | Người dùng bấm biểu tượng chuông 🔔 để theo dõi sản phẩm, lưu trữ danh sách theo dõi và hiển thị banner cảnh báo khi sản phẩm giảm giá. |
+| **Gợi ý Công thức Nấu ăn (AI Recipe)** | ✅ **Implemented** | Người dùng nhập tên món ăn, khẩu phần $\rightarrow$ Gemini AI tạo công thức chi tiết. Tích hợp nút **"Mua tất cả"** tự động tìm sản phẩm tương ứng trong siêu thị bỏ vào giỏ hàng. Có cache DB. |
+| **Thanh toán & Hóa đơn (Checkout)** | ⚠️ **Gaps** | Đã tích hợp luồng thanh toán mô phỏng (VNPAY/QR). Tuy nhiên, logic kiểm tra/xác thực thanh toán trong `Payment.tsx` đang bị comment, và mẫu Order có một số trường phẳng chưa lưu vào Schema DB. |
+| **Tích điểm thành viên L.Point** | ⚠️ **Gaps** | Đã có trường điểm trong tài khoản User, nhưng tên trường chưa đồng bộ (`loyalty_points` ở FE và `lotte_points` ở Schema DB). |
+| **Quản lý tài khoản (Account Area)** | ✅ **Implemented** | Đầy đủ giao diện quản lý hồ sơ, lịch sử đơn hàng, danh sách địa chỉ nhận hàng, ví mã giảm giá và cài đặt bảo mật. |
+| **Trò chơi tích điểm (Gamification)** | ✅ **Implemented** | Khu vui chơi **Lotte Fun Zone** gồm Vòng quay may mắn (Lucky Spin) và Điểm danh hàng ngày (Daily Check-in) được validate chặt chẽ ở Backend. |
+| **Đa ngôn ngữ (i18n)** | ⚠️ **Gaps** | Frontend đã có `react-i18next` dịch nhãn tĩnh. Backend đã có middleware ngôn ngữ, tuy nhiên dữ liệu sản phẩm đa ngôn ngữ chưa được khai báo đầy đủ trong Schema DB. |
+| **Hệ thống Thông báo (Notifications)** | ❌ **Backlog** | Trang `Notifications.tsx` hiện tại là file trống, chưa kết nối API đẩy thông báo đơn hàng hay thông báo khuyến mãi. |
+| **Trang Liên hệ (Contact Page)** | ❌ **Backlog** | File `Contact.tsx` rỗng và chưa được cấu hình định tuyến trong ứng dụng. |
 
-## 6. Feature-Level Drift Summary
-1. BranchProduct FE-visible sample fields (`badges`, `policies`, `lead_time_days`, `status`, `last_updated`) are not schema-defined.
-2. Order sample payload contains tax/pickup aliases not modeled directly in schema.
-3. Notification payload naming (`action_url` vs `link`) still drifts.
-4. Promotion schema duplication and StockMovement duplication still unresolved.
+---
 
-## 7. What Changed In This Re-Audit
-- Product/User/Category data contracts are now far closer to full-fidelity usage.
-- Seed path now preserves these fields into Mongo instead of dropping them.
-- Documentation now explicitly tracks field provenance and drift, not only endpoint existence.
+## 3. Tính năng phía Quản trị viên (Admin Panel)
+
+| Tính năng | Trạng thái | Mô tả thực tế trong mã nguồn |
+| :--- | :---: | :--- |
+| **Dashboard Analytics** | ✅ **Implemented** | Hiển thị biểu đồ thống kê doanh thu theo thời gian, trạng thái đơn hàng và các mặt hàng bán chạy sử dụng thư viện Recharts. |
+| **Bản đồ Chi nhánh (Branch Locations)** | ✅ **Implemented** | Tích hợp bản đồ Leaflet cho phép Admin ghim chi nhánh siêu thị mới, vẽ bán kính giao hàng trực quan. |
+| **Quản lý Sản phẩm & Danh mục** | ✅ **Implemented** | CRUD danh mục và sản phẩm. Có tích hợp tải ảnh sản phẩm lên hệ thống GridFS của MongoDB. |
+| **Quản lý Đơn hàng & Đánh giá** | ✅ **Implemented** | Xem danh sách đơn hàng, cập nhật trạng thái đơn, kiểm duyệt đánh giá và trả lời câu hỏi của khách hàng. |
+| **Phân quyền người dùng (RBAC)** | ✅ **Implemented** | Hệ thống quản lý Vai trò (Roles) và Quyền hạn (Permissions). Bảo vệ các route admin thông qua `AdminPermissionGuard`. |
+| **Quản lý Nhà cung cấp & Đơn nhập** | ✅ **Implemented** | Quản lý thông tin nhà cung cấp, lập đơn đặt hàng nhập kho (Import Orders) và lập phiếu nhập kho (Import Receipts). |
+| **Quản lý Lô hàng (Inventory Batches)** | ✅ **Implemented** | Theo dõi hạn sử dụng và số lượng tồn kho của từng lô sản phẩm cụ thể theo nguyên tắc nhập trước xuất trước (FIFO). |
+| **Nhật ký di chuyển kho (Movements)** | ⚠️ **Gaps** | Đã hiển thị lịch sử xuất/nhập/điều chuyển kho, tuy nhiên Model `StockMovement` đang bị định nghĩa trùng lặp trong Misc.js gây rủi ro dữ liệu. |
+| **Kiểm kê & Yêu cầu nội bộ (Stock Takes)** | ⚠️ **Gaps** | Giao diện đã có, nhưng API backend mới chỉ là mock data trả về tĩnh (stub), chưa lưu trữ dữ liệu kiểm kê thật vào MongoDB. |
+| **Cài đặt Hệ thống (System Settings)** | ✅ **Implemented** | Cấu hình thông tin siêu thị, thiết lập mẫu email thông báo và cài đặt các cổng thanh toán. |
+
+---
+
+## 4. Hệ thống Xác thực & Bảo mật (Auth & Security)
+
+| Tính năng | Trạng thái | Mô tả thực tế trong mã nguồn |
+| :--- | :---: | :--- |
+| **Đăng nhập Email/Mật khẩu** | ✅ **Implemented** | Đăng ký, đăng nhập xác thực bằng JWT (Access Token & Refresh Token). Mật khẩu được mã hóa bằng `bcryptjs`. |
+| **Xác thực Email OTP** | ✅ **Implemented** | Gửi mã OTP xác thực đăng ký tài khoản qua Nodemailer và hàng đợi BullMQ. |
+| **OAuth Mạng xã hội** | ✅ **Implemented** | Hỗ trợ đăng nhập nhanh bằng tài khoản Google và Facebook. |
+| **Đăng nhập Phone OTP** | ❌ **Backlog** | Frontend có giao diện và gọi endpoint gửi OTP qua SĐT, nhưng Backend hoàn toàn thiếu các route xử lý này. |
+| **Khôi phục mật khẩu (Forgot Password)** | ❌ **Backlog** | Backend đã viết route đổi mật khẩu, nhưng Frontend chưa làm giao diện (hiện tại service đang báo NOT_IMPLEMENTED). |
+| **Cơ chế kiểm soát truy cập (CORS)** | ✅ **Implemented** | Đã cấu hình CORS động thích ứng với domain chạy thực tế của Vercel bao gồm cả các bản build preview. |
+
+---
+
+## 5. Tổng kết khoảng cách kỹ thuật cần xử lý ưu tiên
+1.  **Backend Auth:** Viết thêm API cho Đăng nhập bằng Số điện thoại (Phone OTP) và kết nối giao diện Quên/Khôi phục mật khẩu.
+2.  **Schema Database:** Bổ sung các trường thông tin chi tiết của `BranchProduct` và `Order` vào Schema DB để tránh mất mát dữ liệu mẫu của Frontend.
+3.  **Dọn dẹp code:** Xóa bỏ model trùng lặp `StockMovement` và chuẩn hóa trường tích điểm thành viên `lotte_points`.
+4.  **Hoàn thiện tính năng trống:** Viết giao diện/API cho Hệ thống Thông báo (Notifications), trang Liên hệ (Contact) và trang Khuyến mãi hot (HotDeals).

@@ -9,7 +9,7 @@
 ## 1. PROJECT OVERVIEW
 
 **Tech Stack:**
-- **Frontend:** React 18 + TypeScript + Vite + Tailwind CSS + Redux Toolkit
+- **Frontend:** React 19 + TypeScript + Vite 7 + Tailwind CSS v4 + Redux Toolkit
 - **Backend:** Node.js + Express.js (ESM modules)
 - **Database:** MongoDB + Mongoose ODM
 - **Communication:** RESTful API (Axios httpClient)
@@ -580,7 +580,7 @@ cd fontend && npm run dev
 ## APPENDIX B: KEY DEPENDENCIES
 
 ### Frontend
-- React 18, React Router 6
+- React 19, React Router 7
 - Redux Toolkit
 - Axios
 - Tailwind CSS
