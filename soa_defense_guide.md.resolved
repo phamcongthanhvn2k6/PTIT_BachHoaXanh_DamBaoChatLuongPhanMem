@@ -1,0 +1,53 @@
+CẨM NANG BẢO VỆ VẤN ĐÁP - PHÁT TRIỂN PHẦN MỀM HƯỚNG DỊCH VỤ (SOA)
+Tài liệu này hệ thống lại toàn bộ kiến trúc, công nghệ và các nguyên lý Hướng dịch vụ (Service-Oriented) được áp dụng trong dự án Lotte Mart của bạn để trả lời các câu hỏi thi vấn đáp miệng.
+
+1. CÔNG NGHỆ & DỊCH VỤ SỬ DỤNG TRONG DỰ ÁN (BẢN ĐỒ CÔNG NGHỆ)
+Cô giáo sẽ hỏi: "Dự án này sử dụng những công nghệ gì và tại sao lại dùng chúng?". Bạn hãy trả lời theo bản đồ dưới đây:
+
+1.1 Khách hàng (Client Layer - Đa kênh Omnichannel)
+
+Website Storefront & Admin Portal: Xây dựng bằng React 19 SPA, TypeScript, đóng gói bằng Vite 7, và styling bằng Tailwind CSS v4. Trạng thái giao diện quản lý bằng Redux Toolkit. Kết nối dịch vụ qua Axios Client.
+Ứng dụng di động (Lotte App): Xây dựng bằng Android Kotlin & Jetpack Compose sử dụng kiến trúc đa module (Clean Architecture).
+Đặc điểm hướng dịch vụ: Cả Web và Mobile đều tiêu thụ (consume) chung một tập hợp các API từ máy chủ Backend. Dữ liệu giỏ hàng, điểm tích lũy, khuyến mãi đồng bộ 100% giữa các kênh.
+1.2 Máy chủ dịch vụ (Service Backend Layer)
+API Engine: Node.js kết hợp framework Express.js chạy ở cổng 3001.
+Cơ sở dữ liệu: MongoDB (NoSQL Document-oriented) thông qua Mongoose ODM. Giúp lưu trữ các cấu trúc dữ liệu thương mại điện tử linh hoạt (sản phẩm nhiều thuộc tính, snapshot đơn hàng...).
+Dịch vụ thời gian thực (Real-time Service): Socket.IO được cấu hình để đồng bộ hóa giỏ hàng gia đình (Family Cart) và hệ thống Chat hỗ trợ khách hàng theo thời gian thực.
+Hàng đợi & Tác vụ nền (Message Queue): Redis kết hợp thư viện BullMQ đảm nhận các tác vụ chạy ngầm tốn thời gian như gửi email xác nhận hàng loạt, xử lý phiếu nhập kho FIFO, giải phóng các đơn hàng giữ chỗ hết hạn mà không làm nghẽn luồng xử lý API chính.
+1.3 Dịch vụ bên thứ ba tích hợp (External Services Integration)
+Hệ thống kết nối trực tiếp với 4 dịch vụ đám mây lớn:
+
+Gemini AI API (Google): Dịch vụ AI thực hiện so sánh sản phẩm, trả lời câu hỏi tự động (Q&A) và tự động sinh công thức nấu ăn dựa trên nguyên liệu trong giỏ hàng.
+VNPAY Sandbox Gateway: Dịch vụ thanh toán điện tử trực tuyến thông qua cơ chế tạo URL thanh toán và xử lý kết quả thông qua địa chỉ IPN callback bảo mật.
+Nodemailer SMTP Service: Dịch vụ gửi thư điện tử tự động (gửi mã OTP đăng nhập, hóa đơn đơn hàng).
+Google/Facebook OAuth2: Dịch vụ xác thực danh tính người dùng liên kết không cần mật khẩu.
+2. CÁC NGUYÊN LÝ HƯỚNG DỊCH VỤ (SOA) ÁP DỤNG TRONG DỰ ÁN
+Cô giáo dạy môn này sẽ tập trung vào lý thuyết SOA (Service-Oriented Architecture). Dưới đây là các luận điểm bạn cần trình bày:
+
+Hợp đồng dịch vụ chuẩn hóa (Standardized Service Contract):
+Thể hiện: Backend định nghĩa các điểm cuối (endpoints) API rõ ràng theo chuẩn RESTful (ví dụ: GET /api/products, POST /api/orders). Đây là "hợp đồng" cam kết dữ liệu truyền lên và trả về giữa Frontend Web, Mobile App và Backend.
+Liên kết lỏng (Service Loose Coupling):
+Thể hiện: Tầng giao diện (Frontend) hoàn toàn không biết cấu trúc bảng cơ sở dữ liệu MongoDB bên trong Backend ra sao. Frontend chỉ gửi request và nhận về JSON thô. Khi database thay đổi cấu trúc hoặc tối ưu hóa query, giao diện vẫn chạy bình thường mà không cần viết lại.
+Khả năng tái sử dụng (Service Reusability):
+Thể hiện: Dịch vụ lấy danh sách sản phẩm (GET /api/products) được dùng chung cho cả trang chủ Web, thanh tìm kiếm Admin, và trang danh mục trên Android App. Dịch vụ gửi email dùng chung cho cả gửi mã OTP lẫn gửi hóa đơn mua hàng.
+Tính không lưu trạng thái (Service Statelessness):
+Thể hiện: Toàn bộ API của hệ thống là Stateless. Backend không dùng Session để ghi nhớ người dùng đăng nhập. Thay vào đó, mỗi request gửi lên từ Web/App đều đính kèm một mã JWT (JSON Web Token) ở header để tự xác thực quyền truy cập. Điều này giúp hệ thống dễ dàng mở rộng, nâng cấp thêm nhiều máy chủ Backend chạy song song (load balancing) mà không lo lỗi đồng bộ session.
+Khả năng kết hợp dịch vụ (Service Composability):
+Thể hiện: Quy trình thanh toán đơn hàng (Checkout) là sự kết hợp của nhiều dịch vụ nhỏ:
+Gọi Catalog Service để kiểm tra và giữ chỗ kho.
+Gọi Loyalty Service để trừ/cộng điểm tích lũy L.Point.
+Gọi Payment Service (VNPAY/COD) để xử lý dòng tiền.
+Gọi Notification Service (Email) để gửi xác nhận cho khách hàng.
+3. CÂU HỎI VẤN ĐÁP THƯỜNG GẶP & GỢI Ý CÂU TRẢ LỜI
+Câu 1: "Kiến trúc hệ thống của em là gì? Tại sao em chọn kiến trúc này?"
+Trả lời: Dạ thưa cô/thầy, hệ thống của nhóm em được xây dựng theo kiến trúc Omnichannel đa nền tảng kết hợp Service Layer. Backend của tụi em tổ chức theo mô hình tách lớp rõ ràng (Routes - Controllers - Services - Models). Tụi em chọn kiến trúc hướng dịch vụ này vì nó cho phép các thiết bị khách nhau (Website React và Mobile App Android) tái sử dụng chung toàn bộ logic xử lý nghiệp vụ của Backend thông qua API REST. Điều này giúp dữ liệu luôn được tập trung, đồng bộ thời gian thực và dễ dàng nâng cấp các dịch vụ độc lập mà không ảnh hưởng đến toàn bộ hệ thống.
+Câu 2: "Socket.IO trong dự án giải quyết bài toán hướng dịch vụ gì?"
+Trả lời: Dạ thưa cô/thầy, Socket.IO đóng vai trò là Dịch vụ truyền tin thời gian thực (Real-time Event Service). Tụi em sử dụng nó cho 2 tính năng chính:
+Giỏ hàng gia đình (Family Cart): Khi một thành viên trong gia đình quét mã QR tham gia phòng giỏ hàng chung, mọi thao tác thêm/bớt sản phẩm của thành viên đó sẽ được phát sự kiện (broadcast) qua Socket.IO để đồng bộ giỏ hàng của tất cả các thành viên khác ngay lập tức.
+Hỗ trợ trực tuyến (Support Ticket Chat): Nhân viên chăm sóc khách hàng và khách hàng có thể trao đổi tin nhắn trực tiếp không có độ trễ thông qua kết nối Socket.IO kết nối trực tiếp đến phòng hỗ trợ.
+Câu 3: "Hệ thống xử lý đồng bộ và không đồng bộ (Asynchronous) như thế nào?"
+Trả lời: Dạ thưa cô/thầy, hệ thống phân tách rõ:
+Đồng bộ (Synchronous): Các tác vụ cần phản hồi ngay như đăng nhập, lấy danh sách sản phẩm, kiểm tra tồn kho, kiểm tra mã giảm giá được xử lý trực tiếp qua giao thức HTTP REST API để trả kết quả ngay cho người dùng.
+Không đồng bộ (Asynchronous): Các tác vụ tốn tài nguyên và thời gian như gửi email xác nhận đơn hàng, xử lý biến động tồn kho chi tiết, xử lý đồng bộ điểm định kỳ được chuyển vào hàng đợi BullMQ lưu trữ trên Redis. Backend sẽ có các Worker chạy ngầm tự động nhặt các task này từ hàng đợi ra xử lý dần ở luồng riêng, giúp API chính phản hồi cực nhanh (dưới 100ms) và không bao giờ bị nghẽn (timeout) khi lượng truy cập tăng cao.
+Câu 4: "Em tích hợp AI vào dự án dưới dạng dịch vụ như thế nào?"
+Trả lời: Dạ thưa cô/thầy, tụi em tích hợp Google Gemini AI như một dịch vụ ngoài thông qua SDK chính thức. Trong Backend, em xây dựng lớp geminiService đóng vai trò kết nối, thiết lập các prompt mẫu (System Instruction) và gửi yêu cầu. Khi người dùng cần so sánh sản phẩm hoặc hỏi đáp, Backend sẽ gọi dịch vụ này để nhận phân tích, sau đó chuẩn hóa dữ liệu trả về cho Frontend hiển thị.

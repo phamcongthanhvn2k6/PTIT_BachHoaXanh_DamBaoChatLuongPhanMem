@@ -100,7 +100,7 @@ const getErrorMessage = (error: any) => {
     'Authentication failed';
   const code = error?.response?.data?.code || '';
   // Append provider collision code so UI can detect and display special guidance
-  if (code && (code.startsWith('PROVIDER_COLLISION') || code.startsWith('USE_'))) {
+  if (code && (code.startsWith('PROVIDER_COLLISION') || code.startsWith('USE_') || code === 'EMAIL_NOT_VERIFIED')) {
     return `[${code}] ${message}`;
   }
   return message;

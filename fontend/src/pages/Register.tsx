@@ -210,12 +210,8 @@ const Register: React.FC = () => {
     dispatch(clearAuthMessages());
     try {
       await dispatch(register({ username, email, phone, password })).unwrap();
-      setOtpEmail(email.trim().toLowerCase());
-      setOtpCode('');
-      setOtpCooldown(0);
-      setOtpInfoMessage('Mã OTP đã được gửi tới email của bạn. Vui lòng nhập OTP để hoàn tất đăng ký.');
-      setShowEmailOtpModal(true);
-      toast.success('Đăng ký thành công. Vui lòng xác thực email bằng OTP.');
+      toast.success('Đăng ký thành công!');
+      handlePostAuthRedirect();
     } catch (err: any) {
       setErrors({ form: getErrorText(err, 'Đăng ký thất bại') });
     }
@@ -523,7 +519,7 @@ const Register: React.FC = () => {
                 ))}
               </div>
               <p className="text-xs font-semibold text-slate-500">
-                Độ bảo mật: <span className="text-primary">{[t('auth.weak'), t('auth.medium'), t('auth.good'), t('auth.strong')][passwordStrength] || t('auth.weak')}</span>
+                Độ bảo mật: <span className="text-primary">{[t('auth.weak'), t('auth.weak'), t('auth.medium'), t('auth.good'), t('auth.strong')][passwordStrength] || t('auth.weak')}</span>
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div className={`flex items-center gap-2 text-xs ${password.length >= 8 ? 'text-primary font-medium' : 'text-slate-400'}`}>

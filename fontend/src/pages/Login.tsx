@@ -29,6 +29,15 @@ const Login: React.FC = () => {
   const [forgotNewPassword, setForgotNewPassword] = useState('');
   const [isForgotLoading, setIsForgotLoading] = useState(false);
 
+  // Email OTP state for unverified accounts
+  const [showEmailOtpModal, setShowEmailOtpModal] = useState(false);
+  const [otpEmail, setOtpEmail] = useState('');
+  const [emailOtpCode, setEmailOtpCode] = useState('');
+  const [emailOtpInfoMessage, setEmailOtpInfoMessage] = useState<string | null>(null);
+  const [emailOtpCooldown, setEmailOtpCooldown] = useState(0);
+  const [emailOtpSending, setEmailOtpSending] = useState(false);
+  const [emailOtpVerifying, setEmailOtpVerifying] = useState(false);
+
   const dispatch = useAppDispatch();
   const authState = useAppSelector((state) => state.auth);
   const navigate = useNavigate();
@@ -164,6 +173,20 @@ const Login: React.FC = () => {
   }, [resendCountdown]);
 
   useEffect(() => {
+    if (emailOtpCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setEmailOtpCooldown((prev) => {
+        if (prev <= 1) {
+          window.clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [emailOtpCooldown]);
+
+  useEffect(() => {
     if (authState.error) {
       setErrors((prev) => ({ ...prev, form: authState.error || undefined }));
     }
@@ -194,7 +217,14 @@ const Login: React.FC = () => {
       await dispatch(login({ emailOrPhone: identifier, password })).unwrap();
       handlePostLoginRedirect();
     } catch (err: any) {
-      setErrors({ form: getErrorText(err, 'Đăng nhập thất bại') });
+      const errorMsg = getErrorText(err, 'Đăng nhập thất bại');
+      if (errorMsg.includes('[EMAIL_NOT_VERIFIED]')) {
+         setOtpEmail(identifier);
+         setShowEmailOtpModal(true);
+         setEmailOtpInfoMessage('Tài khoản chưa xác thực. Một mã OTP mới đã được gửi vào email của bạn.');
+      } else {
+         setErrors({ form: errorMsg });
+      }
     }
   }
 
@@ -239,6 +269,47 @@ const Login: React.FC = () => {
       handlePostLoginRedirect();
     } catch (err: any) {
       setErrors({ form: getErrorText(err, 'Xác thực OTP thất bại') });
+    }
+  };
+
+  const handleResendEmailOtp = async () => {
+    if (!otpEmail) return;
+    setEmailOtpSending(true);
+    setEmailOtpInfoMessage(null);
+    try {
+      const result = await authService.resendEmailOtp(otpEmail);
+      const cooldown = Math.max(0, Number(result?.retry_after || 60));
+      setEmailOtpCooldown(cooldown);
+      setEmailOtpInfoMessage(result?.message || 'Đã gửi lại OTP, vui lòng kiểm tra email.');
+      toast.success(result?.message || 'Đã gửi lại OTP');
+    } catch (err: any) {
+      const retryAfter = Number(err?.response?.data?.retry_after || 0);
+      if (retryAfter > 0) setEmailOtpCooldown(retryAfter);
+      const message = getErrorText(err?.response?.data || err, 'Không thể gửi lại OTP');
+      setEmailOtpInfoMessage(message);
+      toast.error(message);
+    } finally {
+      setEmailOtpSending(false);
+    }
+  };
+
+  const handleVerifyEmailOtp = async () => {
+    if (!otpEmail || !emailOtpCode.trim()) {
+      setEmailOtpInfoMessage('Vui lòng nhập OTP để xác thực email.');
+      return;
+    }
+    setEmailOtpVerifying(true);
+    setEmailOtpInfoMessage(null);
+    try {
+      await authService.verifyEmailOtp({ email: otpEmail, otp: emailOtpCode.trim() });
+      setShowEmailOtpModal(false);
+      toast.success('Xác thực email thành công. Vui lòng đăng nhập lại.');
+    } catch (err: any) {
+      const message = getErrorText(err?.response?.data || err, 'OTP không hợp lệ hoặc đã hết hạn');
+      setEmailOtpInfoMessage(message);
+      toast.error(message);
+    } finally {
+      setEmailOtpVerifying(false);
     }
   };
 
@@ -637,6 +708,67 @@ const Login: React.FC = () => {
                 </button>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Email OTP Verification Modal for unverified login */}
+      {showEmailOtpModal && (
+        <div className="fixed inset-0 z-220 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-md p-6 relative shadow-2xl">
+            <button
+              onClick={() => setShowEmailOtpModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:bg-slate-100 rounded-full w-8 h-8 flex items-center justify-center transition"
+            >
+              <span className="material-symbols-outlined">close</span>
+            </button>
+
+            <h3 className="text-xl font-bold mb-2">{t('auth.verifyRegEmail', 'Xác thực Email')}</h3>
+            <p className="text-sm text-slate-500 mb-4">{t('auth.enterOtpToActivate', 'Vui lòng nhập mã OTP để kích hoạt tài khoản.')}</p>
+
+            <div className="mb-3">
+              <label className="block text-sm font-semibold mb-1">Email</label>
+              <input
+                type="email"
+                value={otpEmail}
+                readOnly
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-slate-500 outline-none"
+              />
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-semibold mb-1">OTP</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={emailOtpCode}
+                  onChange={(e) => setEmailOtpCode(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-lg border border-slate-300 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+                  placeholder="Nhập OTP 6 số"
+                />
+                <button
+                  type="button"
+                  onClick={handleResendEmailOtp}
+                  disabled={emailOtpSending || emailOtpCooldown > 0}
+                  className="px-3 py-2 rounded-lg border border-primary text-primary font-bold hover:bg-primary/5 disabled:opacity-60"
+                >
+                  {emailOtpSending ? 'Đang gửi...' : emailOtpCooldown > 0 ? `Gửi lại (${emailOtpCooldown}s)` : 'Gửi lại OTP'}
+                </button>
+              </div>
+            </div>
+
+            {emailOtpInfoMessage && (
+              <p className="text-xs text-slate-500 mb-3">{emailOtpInfoMessage}</p>
+            )}
+
+            <button
+              type="button"
+              onClick={handleVerifyEmailOtp}
+              disabled={emailOtpVerifying}
+              className="w-full py-3 rounded-lg bg-primary text-white font-bold hover:bg-primary/90 disabled:opacity-60"
+            >
+              {emailOtpVerifying ? 'Đang xác thực...' : 'Xác thực email'}
+            </button>
           </div>
         </div>
       )}

@@ -301,26 +301,20 @@ export const register = async (req, res) => {
       phone: normalizedPhone,
       role_key: 'customer',
       permissions: [],
-      email_verified: false,
+      email_verified: true,
       signup_method: 'email',
       login_provider: 'local',
       authProviders: ['local'],
     });
-
-    try {
-      await issueEmailOtpForUser(user, user.email, { bypassResendLimit: true });
-    } catch (otpErr) {
-      console.error('[Auth][register] send OTP failed:', otpErr.message);
-    }
 
     const payload = await hydrateUserAuthPayload(user);
     return res.status(201).json({
       success: true,
       data: {
         ...payload,
-        needs_email_verification: true,
+        needs_email_verification: false,
       },
-      message: 'Đăng ký thành công. Vui lòng xác thực email bằng OTP.',
+      message: 'Đăng ký thành công.',
     });
   } catch (err) {
     console.error('Register error:', err);
@@ -958,18 +952,7 @@ export const forgotPassword = async (req, res) => {
     if (!user) {
       return res.json({ success: true, message: 'Nếu email tồn tại trên hệ thống, bạn sẽ nhận được mã OTP' });
     }
-
-    // SECURITY: Block forgot-password for OAuth-only accounts (no local password)
-    // This prevents attackers from using forgot-password to claim an OAuth account
-    if (!user.password_hash) {
-      const providers = Array.isArray(user.authProviders) ? user.authProviders : [];
-      const oauthOnly = providers.some(p => ['google', 'facebook'].includes(p)) && !providers.includes('local');
-      if (oauthOnly) {
-        // Return generic message to avoid email enumeration, but don't send OTP
-        return res.json({ success: true, message: 'Nếu email tồn tại trên hệ thống, bạn sẽ nhận được mã OTP' });
-      }
-    }
-
+    // Allow forgot-password for OAuth-only accounts to let them define a password
     try {
       await issueEmailOtpForUser(user, normalizedEmail, { bypassResendLimit: true });
     } catch (err) {
@@ -998,15 +981,7 @@ export const resetPassword = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Người dùng không tồn tại' });
     }
 
-    // SECURITY: Block password reset for OAuth-only accounts
-    const providers = Array.isArray(user.authProviders) ? user.authProviders : [];
-    if (!user.password_hash && !providers.includes('local')) {
-      return res.status(403).json({
-        success: false,
-        message: 'Tài khoản này sử dụng đăng nhập qua mạng xã hội. Vui lòng đăng nhập bằng Google/Facebook trước rồi tạo mật khẩu.',
-      });
-    }
-
+    // Allow password reset for OAuth-only accounts once they verify with OTP
     if (!user.email_verification_code || !user.email_verification_expires_at) {
       return res.status(400).json({ success: false, message: 'OTP chưa được yêu cầu hoặc đã hết hạn' });
     }
@@ -1034,7 +1009,8 @@ export const resetPassword = async (req, res) => {
     user.password_hash = newPassword;
 
     // Add 'local' to authProviders if not present
-    if (!providers.includes('local')) {
+    if (!Array.isArray(user.authProviders)) user.authProviders = [];
+    if (!user.authProviders.includes('local')) {
       user.authProviders.push('local');
     }
 

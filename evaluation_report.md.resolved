@@ -1,0 +1,256 @@
+# ĐÁNH GIÁ CHI TIẾT BÁO CÁO DỰ ÁN LOTTE MART & ĐỀ XUẤT HOÀN THIỆN
+
+Báo cáo dự án **"Xây dựng hệ thống website và ứng dụng di động siêu thị Lotte Mart"** đã có nội dung rất đầy đủ, bao quát toàn bộ nghiệp vụ của một hệ thống thương mại điện tử kết hợp quản trị kho và chuỗi cung ứng thực tế.
+
+Để báo cáo đạt điểm tối đa và hoàn toàn chính xác so với mã nguồn hiện tại, dưới đây là đánh giá chi tiết và các phần nội dung đề xuất bổ sung (bao gồm sơ đồ Mermaid, cấu trúc cây thư mục, đặc tả Use Case thiếu và bổ sung database schema).
+
+---
+
+## 1. PHẦN BỔ SUNG CHO CHƯƠNG 1 (GIỚI THIỆU & CẤU TRÚC THƯ MỤC)
+
+### 1.1 Bảng phân công thành viên dự án (Mục 1.5)
+Dưới đây là bảng phân công chi tiết nhiệm vụ và vai trò cho các thành viên trong nhóm 3:
+
+| Họ và tên | MSSV | Vai trò | Nhiệm vụ chính trong dự án |
+| :--- | :--- | :--- | :--- |
+| **Lê Thanh Cường** | N24DTCN009 | Trưởng nhóm / Backend Lead | Thiết kế kiến trúc hệ thống, phát triển RESTful API Backend (Node.js/Express), quản lý Database MongoDB, thiết kế dịch vụ nền (Redis/BullMQ, Socket.io), tích hợp thanh toán (VNPAY) và triển khai hệ thống. |
+| **Phạm Công Thành** | N24DTCN079 | Frontend Developer | Phát triển giao diện Storefront Website (React 19), quản lý State toàn cục bằng Redux Toolkit, phát triển tính năng Giỏ hàng chi nhánh, Family Cart, trang Đặt hàng & Thanh toán. |
+| **Đỗ Tiến Phúc** | N24DTCN069 | Admin Panel Developer | Phát triển phân hệ Quản trị hệ thống (Admin Dashboard), thiết kế các trang quản lý Kho hàng (Inventory Batches), Nhập hàng (PO/GRN), Nhà cung cấp và phân quyền RBAC. |
+| **Mai Sơn Việt** | | Android Mobile App Developer | Phát triển ứng dụng di động Lotte Mart App (Kotlin & Jetpack Compose), tích hợp định vị GPS phục vụ chấm công và giao hàng, viết tài liệu kỹ thuật và thực hiện kiểm thử. |
+
+---
+
+### 1.2 Cấu trúc mã nguồn Android Mobile (Mục 1.6.2)
+Dưới đây là cấu trúc thư mục chi tiết của ứng dụng Android theo mô hình **Clean Architecture** đa module (Multi-module):
+
+```text
+Lotte-Mart-Super-App/
+├── app/                         # Module ứng dụng chính (Application)
+│   ├── src/main/
+│   │   ├── java/com/lottemart/superapp/
+│   │   │   ├── MainActivity.kt  # Entry point chạy ứng dụng
+│   │   │   └── LotteMartApp.kt  # Application Class khởi tạo Dependency Injection (Hilt)
+│   │   └── res/                 # Tài nguyên giao diện (Layouts, Drawables, Values)
+│   └── build.gradle.kts
+│
+├── core/                        # Module dùng chung (Core utilities)
+│   ├── common/                  # Các hàm tiện ích, Base Classes, Extension functions
+│   ├── network/                 # Client Ktor/Retrofit kết nối API Backend
+│   ├── database/                # SQLite/Room database lưu cache offline
+│   └── model/                   # Domain Models dùng chung
+│
+└── features/                    # Các module tính năng (Features Multi-module)
+    ├── auth/                    # Xác thực tài khoản (Email OTP, Social Login)
+    ├── home/                    # Trang chủ hiển thị sản phẩm theo chi nhánh (GPS)
+    ├── cart/                    # Giỏ hàng cá nhân & Giỏ hàng gia đình (Family Cart qua WebSockets)
+    ├── checkout/                # Thanh toán đơn hàng, tích hợp SDK VNPay, QR
+    ├── employee/                # Chức năng nhân viên (Chấm công GPS, Barcode scanner)
+    └── support/                 # Chăm sóc khách hàng (Tickets, Live chat)
+        └── src/main/java/com/lottemart/features/...
+            ├── data/            # Lớp Data: Repository Impl, API Services, DTOs
+            ├── domain/          # Lớp Domain: UseCases, Repository Interfaces
+            └── presentation/    # Lớp Presentation: Jetpack Compose UI (Screens, ViewModels)
+```
+
+---
+
+## 2. PHẦN BỔ SUNG CHO CHƯƠNG 2 (KIẾN TRÚC & USE CASE)
+
+### 2.1 Sơ đồ Omnichannel đa nền tảng (Mục 2.4)
+Sơ đồ mô tả cách thức tương tác đa kênh giữa Web, Mobile App và hệ thống dữ liệu tập trung:
+
+```mermaid
+graph TD
+    %% Clients
+    Web[Website React 19] -->|HTTPS / REST API| Gateway[API Gateway / Express Server]
+    Mobile[Lotte Mobile App - Android] -->|HTTPS / REST API| Gateway
+    Web -.->|WebSocket / Socket.IO| Gateway
+    Mobile -.->|WebSocket / Socket.IO| Gateway
+
+    %% Backend Layer
+    Gateway -->|Auth & Business Logic| Core[Express Business Services]
+    Core -->|Read / Write| DB[(MongoDB Database)]
+    Core -->|Cache / Queue| Redis[(Redis / BullMQ)]
+    
+    %% Third-party integrations
+    Core -->|AI Features| Gemini[Gemini AI API]
+    Core -->|Payments| VNPay[VNPAY Gateway]
+```
+
+---
+
+### 2.2 Đồng bộ đánh số đề mục
+Cần điều chỉnh đề mục Chương 2 trong nội dung khớp với Mục lục:
+* **2.1**: Mô tả tổng quan hệ thống.
+* **2.2**: Các chức năng chính (dành cho phân quyền).
+* **2.3**: Biểu đồ Use Case và Đặc tả Use Case.
+  * *2.3.1*: Use Case 1: Đăng nhập bằng Email OTP.
+  * *2.3.2*: Use Case 2: Thanh toán đơn hàng.
+  * *2.3.3*: Use Case 3: Chấm công GPS cho nhân viên (đề xuất bổ sung dưới đây).
+
+---
+
+### 2.3 Bổ sung Use Case 3: Chấm công GPS cho nhân viên (Mục 2.3.3)
+Đây là tính năng độc đáo dành cho đối tượng nhân viên vận hành chi nhánh:
+
+* **Mục tiêu**: Cho phép nhân viên chi nhánh thực hiện chấm công vào/ra ca làm việc bằng cách đối chiếu vị trí GPS trên thiết bị di động với vị trí địa lý của chi nhánh được phân công.
+* **Actor**: Nhân viên (Employee).
+* **Tiền điều kiện**: 
+  1. Nhân viên đã đăng nhập thành công vào ứng dụng di động.
+  2. Thiết bị di động đã kích hoạt dịch vụ định vị (GPS) và có kết nối Internet.
+  3. Tài khoản nhân viên đã được gán mã chi nhánh làm việc (`branch_id`).
+* **Hậu điều kiện**: Ghi nhận thời gian check-in/check-out thành công vào cơ sở dữ liệu nếu vị trí hợp lệ; từ chối nếu nằm ngoài bán kính chi nhánh.
+
+**Luồng chính**:
+1. Nhân viên truy cập chức năng "Chấm công GPS" trên Lotte Mart App.
+2. Ứng dụng yêu cầu quyền truy cập GPS và thực hiện quét tọa độ hiện tại (Vĩ độ - Latitude, Kinh độ - Longitude).
+3. Ứng dụng gửi yêu cầu chấm công kèm tọa độ GPS lên Backend.
+4. Backend truy vấn thông tin tọa độ và bán kính phủ sóng cho phép (ví dụ: 200 mét) của chi nhánh mà nhân viên này trực thuộc.
+5. Backend tính toán khoảng cách thực tế giữa nhân viên và chi nhánh bằng công thức Haversine.
+6. Nếu khoảng cách nằm trong bán kính cho phép, hệ thống tiến hành ghi nhận thời gian chấm công và lưu vào cơ sở dữ liệu.
+7. Trả về kết quả thành công kèm thông báo chào mừng nhân viên vào ca.
+
+**Luồng ngoại lệ**:
+* *Vị trí GPS không hợp lệ (ngoài bán kính)*: Hệ thống báo lỗi "Bạn đang nằm ngoài khu vực chi nhánh" và từ chối chấm công.
+* *Thiết bị tắt định vị hoặc từ chối cấp quyền*: Hệ thống yêu cầu nhân viên cấp quyền định vị trong phần cài đặt thiết bị để tiếp tục.
+
+---
+
+## 3. PHẦN BỔ SUNG CHO CHƯƠNG 3 (PHÂN TÍCH THIẾT KẾ & SƠ ĐỒ)
+
+### 3.1 Sơ đồ Hoạt động (Activity Diagram) - Luồng Chấm công GPS
+Sơ đồ hoạt động mô tả tiến trình xác thực vị trí khi nhân viên chấm công:
+
+```mermaid
+stateDiagram-v2
+    [*] --> BatDau
+    BatDau --> LayToaDoGPS : Nhân viên nhấn Chấm công
+    LayToaDoGPS --> KiemTraQuyenGPS
+    
+    KiemTraQuyenGPS --> YeuCauCapQuyen : Chưa cấp quyền định vị
+    YeuCauCapQuyen --> BatDau
+    
+    KiemTraQuyenGPS --> TinhKhoangCach : Đã có tọa độ GPS
+    TinhKhoangCach --> SoSanhBanKinh : Tính bằng công thức Haversine
+    
+    SoSanhBanKinh --> GhiNhanChamCong : Khoảng cách <= Bán kính chi nhánh
+    SoSanhBanKinh --> TuChoiChamCong : Khoảng cách > Bán kính chi nhánh
+    
+    GhiNhanChamCong --> HienThiThanhCong
+    TuChoiChamCong --> HienThiBaoLoi
+    
+    HienThiThanhCong --> [*]
+    HienThiBaoLoi --> [*]
+```
+
+---
+
+### 3.2 Sơ đồ Tuần tự (Sequence Diagram) - Luồng Thanh toán (COD / Online)
+Sơ đồ mô tả luồng giao tiếp giữa Client, Server, Database và Payment Gateway khi thanh toán:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Khách hàng
+    participant FE as Frontend Web/App
+    participant BE as Express API Server
+    participant DB as MongoDB
+    participant PG as VNPAY Gateway
+
+    User->{FE}: Xác nhận đặt hàng (Chọn PTTT)
+    FE->>BE: POST /api/orders (địa chỉ, giỏ hàng, PTTT)
+    activate BE
+    BE->>DB: Truy vấn & Giữ chỗ tồn kho (Reserved Stock)
+    BE->>DB: Tạo bản ghi Order (Trạng thái: PENDING)
+    
+    alt Phương thức là COD (Thanh toán khi nhận hàng)
+        BE->>DB: Trừ kho trực tiếp, Cập nhật trạng thái CONFIRMED
+        BE-->>FE: Phản hồi Đặt hàng thành công
+        FE-->>User: Hiển thị màn hình thành công
+    else Phương thức là VNPAY (Thanh toán Online)
+        BE->>PG: Gửi thông tin hóa đơn & Tạo URL thanh toán
+        activate PG
+        PG-->>BE: Trả về URL thanh toán VNPAY
+        deactivate PG
+        BE-->>FE: Trả về URL thanh toán
+        FE->>User: Chuyển hướng người dùng sang VNPAY
+        User->>PG: Nhập thông tin & Xác thực OTP
+        PG->>BE: Gọi Callback IPN (Xác nhận kết quả giao dịch)
+        BE->>DB: Cập nhật trạng thái Đơn hàng (PAID) & Trừ kho thực tế
+        BE-->>FE: Gửi sự kiện realtime (Socket.IO) cập nhật trạng thái đơn
+        FE-->>User: Hiển thị màn hình giao dịch thành công
+    end
+    deactivate BE
+```
+
+---
+
+## 4. PHẦN BỔ SUNG CHO CHƯƠNG 4 (DATABASE SCHEMA)
+
+### 4.1 Bổ sung các Collection còn thiếu trong báo cáo
+Trong báo cáo của bạn còn thiếu mô tả của một số Collection rất quan trọng đang hoạt động trực tiếp trong source code:
+
+#### 4.1.1. Collection PopupAds (Quản lý các banner pop-up quảng cáo thông minh)
+* **_id**: `ObjectId` - Khóa chính
+* **title**: `String` - Tiêu đề quảng cáo
+* **subtitle**: `String` - Phụ đề
+* **image_url**: `String` - Đường dẫn ảnh popup quảng cáo
+* **cta_link**: `String` - Liên kết khi người dùng click vào popup
+* **target_branch**: `String` - Chi nhánh áp dụng (`all` hoặc `branch_id`)
+* **status**: `String` - Trạng thái (`active`, `paused`, `scheduled`)
+* **priority**: `Number` - Độ ưu tiên hiển thị
+
+#### 4.1.2. Collection FamilyCarts (Giỏ hàng gia đình dùng chung thời gian thực)
+* **_id**: `ObjectId` - Khóa chính
+* **room_code**: `String` - Mã phòng giỏ hàng gia đình (độc nhất)
+* **owner_id**: `ObjectId` - Người sở hữu phòng
+* **members**: `Array` - Danh sách các thành viên cùng tham gia giỏ hàng
+* **items**: `Array` - Danh sách các sản phẩm và số lượng do các thành viên thêm vào
+* **branch_id**: `String` - Chi nhánh áp dụng cho giỏ hàng chung
+
+#### 4.1.3. Collection Gamification (Nhật ký vòng quay & điểm danh)
+* **user_id**: `ObjectId` - Người chơi
+* **spin_records**: `Array` - Lịch sử các lượt quay (thời gian, giải thưởng)
+* **checkin_records**: `Array` - Lịch sử điểm danh nhận quà hàng ngày
+* **daily_spins_used**: `Number` - Số lượt quay đã dùng trong ngày
+
+#### 4.1.4. Collection Recipes (Gợi ý công thức nấu ăn bằng AI)
+* **_id**: `ObjectId` - Khóa chính
+* **title**: `String` - Tên công thức nấu ăn
+* **ingredients**: `Array` - Nguyên liệu cần thiết (mỗi nguyên liệu có thể liên kết đến `product_id`)
+* **instructions**: `Array` - Các bước thực hiện
+* **ai_generated**: `Boolean` - Đánh dấu công thức sinh ra bởi trí tuệ nhân tạo (Gemini)
+
+#### 4.1.5. Collection Role & Permission (Phân quyền RBAC nâng cao)
+* **Role**: Lưu trữ vai trò (`admin`, `store_manager`, `warehouse_keeper`, `employee`, `user`) kèm danh sách `permission_ids`.
+* **Permission**: Lưu trữ quyền chi tiết (ví dụ: `manage_inventory`, `view_audit_logs`, `approve_returns`).
+
+---
+
+### 4.2 Sơ đồ ERD mối quan hệ cốt lõi
+Sơ đồ quan hệ thực thể mô tả các liên kết chính của cơ sở dữ liệu MongoDB trong hệ thống Lotte Mart:
+
+```mermaid
+erDiagram
+    USERS ||--o{ ORDERS : "đặt"
+    USERS ||--o{ REVIEWS : "viết"
+    CATEGORIES ||--o{ PRODUCTS : "thuộc"
+    PRODUCTS ||--o{ BRANCH-PRODUCTS : "được bán tại"
+    BRANCHES ||--o{ BRANCH-PRODUCTS : "sở hữu"
+    BRANCH-PRODUCTS ||--o{ INVENTORY-BATCHES : "quản lý theo"
+    ORDERS ||--|{ ORDER-ITEMS : "chứa"
+    BRANCH-PRODUCTS ||--o{ ORDER-ITEMS : "cung cấp"
+    ORDERS ||--|| PAYMENTS : "thanh toán bằng"
+```
+
+---
+
+## 5. PHẦN BỔ SUNG CHO CHƯƠNG 6 (KẾT LUẬN & KIỂM THỬ)
+
+### 5.1 Đề xuất bổ sung về đánh giá bảo mật (Mục 6.2)
+Nên nêu rõ các giải pháp bảo mật kỹ thuật đã được áp dụng trực tiếp trong mã nguồn để tăng tính thuyết phục:
+1. **Helmet & CORS**: Đã cấu hình CSP (Content Security Policy) và CORS bảo vệ cổng API khỏi các cuộc tấn công Cross-Origin.
+2. **Rate Limiting**: Giới hạn tần suất gửi request cho các API nhạy cảm (`authLimiter` cho đăng nhập, `orderLimiter` cho đặt hàng/áp mã giảm giá).
+3. **Mongoose Sanitization**: Sử dụng `express-mongo-sanitize` để loại bỏ các ký tự đặc biệt như `$` và `.`, ngăn chặn triệt để tấn công NoSQL Injection vào MongoDB.
+4. **BCrypt Hashing**: Mã hóa một chiều mật khẩu người dùng trước khi lưu vào Database.
+5. **Audit Logs**: Toàn bộ thao tác nghiệp vụ quan trọng của Admin (như thay đổi thông tin kho, phê duyệt đổi trả, cập nhật vai trò) đều được ghi nhận tự động vào bảng `AuditLog` để phục vụ công tác giám sát.
