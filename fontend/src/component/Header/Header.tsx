@@ -47,8 +47,6 @@ const Header: React.FC = () => {
       .catch(() => {});
   }, []);
 
-  const headerText = settings?.header_logo_text || settings?.brand_name || "LOTTE Mart";
-  const [brandFirst, brandSecond] = headerText.split(" ");
   const brandLogoUrl = settings?.brand_logo_url || '';
 
   const navItems = [
@@ -113,7 +111,7 @@ const Header: React.FC = () => {
     <header
       className="sticky top-0 z-50 text-white shadow-md transition-shadow"
       style={{
-        background: "#C1121F",
+        background: "#008848",
         fontFamily: "'Nunito', sans-serif",
       }}
     >
@@ -130,7 +128,7 @@ const Header: React.FC = () => {
       {/* ═══ Top bar ═══ */}
       <div
         className="flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-4 px-4 sm:px-6 py-1.5 sm:py-1 text-xs text-white/85"
-        style={{ background: "#9B0E17" }}
+        style={{ background: "#006E3A" }}
       >
         {/* Left — Branch selector */}
         <div className="flex items-center gap-1.5 sm:gap-2">
@@ -161,21 +159,21 @@ const Header: React.FC = () => {
         <div className="flex items-center justify-between w-full md:w-auto shrink-0 gap-4">
           <Link to="/home" style={{ textDecoration: "none" }}>
             <div className="flex items-center gap-2 sm:gap-2.5 cursor-pointer">
-              {brandLogoUrl && (
+              {brandLogoUrl ? (
                 <img
                   src={brandLogoUrl}
                   alt="Brand Logo"
                   className="h-8 w-8 sm:h-9.5 sm:w-9.5 object-contain rounded-full bg-white p-0.5 shadow-sm"
                 />
-              )}
+              ) : null}
               <div
-                className="bg-white rounded-lg px-2 sm:px-2.5 py-1 flex items-center gap-1 shadow-sm"
+                className="bg-emerald-900 border border-emerald-600 rounded-lg px-3 py-1 flex items-center gap-1 shadow-inner"
               >
-                <span className="text-red-700 font-black text-lg sm:text-2xl tracking-tighter leading-none">
-                  {brandFirst || "LOTTE"}
+                <span className="text-white font-black text-lg sm:text-2xl tracking-tight leading-none uppercase">
+                  bách hóa
                 </span>
-                <span className="text-red-700 font-bold text-xs sm:text-sm border-l-2 border-red-700 pl-1.5 sm:pl-2 leading-none">
-                  {brandSecond || "Mart"}
+                <span className="text-[#FFD400] font-black text-lg sm:text-2xl tracking-tight leading-none uppercase">
+                  XANH
                 </span>
               </div>
               <span className="text-white/70 text-[10px] sm:text-xs ml-1 hidden sm:inline">{t("common.vietnam")}</span>
@@ -190,7 +188,7 @@ const Header: React.FC = () => {
             {/* Hamburger Categories Menu Button for Mobile */}
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className="flex md:hidden items-center justify-center bg-[#9B0E17] hover:bg-[#850C13] border-none text-white p-2 rounded-xl cursor-pointer font-bold text-sm select-none gap-2 whitespace-nowrap active:scale-95 transition-transform"
+              className="flex md:hidden items-center justify-center bg-[#006E3A] hover:bg-[#00522B] border-none text-white p-2 rounded-xl cursor-pointer font-bold text-sm select-none gap-2 whitespace-nowrap active:scale-95 transition-transform"
             >
               <span className="material-symbols-outlined text-[20px] leading-none">menu</span>
             </button>
@@ -200,7 +198,7 @@ const Header: React.FC = () => {
         {/* Categories Button for Desktop */}
         <button
           onClick={() => setMenuOpen(!menuOpen)}
-          className="hidden md:flex items-center bg-[#9B0E17] hover:bg-[#850C13] border-none text-white px-4 py-2.5 rounded-xl cursor-pointer font-bold text-sm select-none gap-2 whitespace-nowrap"
+          className="hidden md:flex items-center bg-[#006E3A] hover:bg-[#00522B] border-none text-white px-4 py-2.5 rounded-xl cursor-pointer font-bold text-sm select-none gap-2 whitespace-nowrap"
         >
           ☰ {t("nav.categories")}
         </button>
@@ -213,11 +211,11 @@ const Header: React.FC = () => {
               onChange={(e) => setSearch(e.target.value)}
               onFocus={() => { if (search.trim()) setShowSuggestions(true); }}
               placeholder={t("nav.searchPlaceholder")}
-              className="w-full py-2.5 pl-4 pr-12 rounded-xl border-none text-sm font-semibold outline-none bg-white text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-[#9B0E17]/20 transition-all shadow-inner"
+              className="w-full py-2.5 pl-4 pr-12 rounded-xl border-none text-sm font-semibold outline-none bg-white text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-[#008848]/20 transition-all shadow-inner"
             />
             <button
               type="submit"
-              className="absolute right-1 top-1 bottom-1 bg-[#C1121F] hover:bg-[#A50F18] border-none text-white rounded-lg px-3 cursor-pointer text-sm transition-colors flex items-center justify-center"
+              className="absolute right-1 top-1 bottom-1 bg-[#FFD400] hover:bg-[#E5BE00] border-none text-emerald-900 rounded-lg px-3 cursor-pointer text-sm font-extrabold transition-colors flex items-center justify-center"
             >
               🔍
             </button>
@@ -257,7 +255,7 @@ const Header: React.FC = () => {
                           {item.name.toLowerCase().includes(search.toLowerCase()) ? (
                             <>
                               {item.name.substring(0, item.name.toLowerCase().indexOf(search.toLowerCase()))}
-                              <strong style={{ color: "#C1121F" }}>
+                              <strong style={{ color: "#008848" }}>
                                 {item.name.substring(item.name.toLowerCase().indexOf(search.toLowerCase()), item.name.toLowerCase().indexOf(search.toLowerCase()) + search.length)}
                               </strong>
                               {item.name.substring(item.name.toLowerCase().indexOf(search.toLowerCase()) + search.length)}
@@ -281,7 +279,7 @@ const Header: React.FC = () => {
                   ))}
                   <div 
                     onClick={handleSearch}
-                    className="p-3 text-center bg-slate-50 hover:bg-slate-100 text-rose-600 text-xs font-bold cursor-pointer border-t border-slate-100 transition-colors"
+                    className="p-3 text-center bg-slate-50 hover:bg-slate-100 text-emerald-700 text-xs font-bold cursor-pointer border-t border-slate-100 transition-colors"
                   >
                     {t('common.viewAllResults', { query: search })}
                   </div>
@@ -302,7 +300,7 @@ const Header: React.FC = () => {
       </div>
 
       {/* ═══ Nav (Desktop Only) ═══ */}
-      <nav className="hidden md:block" style={{ background: "#A50F18", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+      <nav className="hidden md:block" style={{ background: "#00723C", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
         <div
           className="flex gap-0 max-w-[1400px] mx-auto px-6 overflow-x-auto"
         >
@@ -317,11 +315,11 @@ const Header: React.FC = () => {
                 to={item.path}
                 className="transition-colors block py-2.5 px-4 text-sm whitespace-nowrap"
                 style={{
-                  color: isActive ? "#FFD60A" : "rgba(255,255,255,0.9)",
+                  color: isActive ? "#FFD400" : "rgba(255,255,255,0.9)",
                   textDecoration: "none",
                   fontWeight: isActive ? 800 : 600,
-                  borderBottom: isActive ? "3px solid #FFD60A" : "3px solid transparent",
-                  background: isActive ? "rgba(255,214,10,0.15)" : "transparent",
+                  borderBottom: isActive ? "3px solid #FFD400" : "3px solid transparent",
+                  background: isActive ? "rgba(255,212,0,0.15)" : "transparent",
                 }}
               >
                 {item.label}
@@ -335,7 +333,7 @@ const Header: React.FC = () => {
       {menuOpen && (
         <div
           className="md:hidden p-4 flex flex-col gap-1 border-t border-white/10"
-          style={{ background: "#A50F18" }}
+          style={{ background: "#00723C" }}
         >
           {navItems.map((item) => {
             const isActive = currentPath === item.path || (item.path === "/home" && currentPath === "/");
@@ -346,7 +344,7 @@ const Header: React.FC = () => {
                 onClick={() => setMenuOpen(false)}
                 className="py-2.5 px-4 rounded-xl hover:bg-white/10 transition-colors text-sm font-bold block"
                 style={{
-                  color: isActive ? "#FFD60A" : "white",
+                  color: isActive ? "#FFD400" : "white",
                   textDecoration: "none",
                 }}
               >

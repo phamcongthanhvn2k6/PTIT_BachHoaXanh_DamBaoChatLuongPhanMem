@@ -11,11 +11,9 @@ function Footer() {
     dataService.getAdminSettings().then(setSettings).catch(() => {});
   }, []);
 
-  const phone = settings?.support_phone || "1800 599 907";
-  const email = settings?.support_email || "cskh@lottemart.vn";
-  const brand = settings?.brand_name || "LOTTE Mart";
-  const headerText = settings?.header_logo_text || settings?.brand_name || "LOTTE Mart";
-  const [brandFirst, brandSecond] = headerText.split(" ");
+  const phone = settings?.support_phone || "1800 1067";
+  const email = settings?.support_email || "cskh@bachhoaxanh.com";
+  const brand = settings?.brand_name || "Bách hóa XANH";
   const brandLogoUrl = settings?.brand_logo_url || '';
 
   return (
@@ -41,7 +39,7 @@ function Footer() {
               )}
               <div
                 style={{
-                  background: "white",
+                  background: "#008848",
                   borderRadius: 8,
                   padding: "6px 14px",
                   display: "inline-flex",
@@ -50,8 +48,8 @@ function Footer() {
                   boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
                 }}
               >
-                <span style={{ color: "#C1121F", fontWeight: 900, fontSize: 22, letterSpacing: -1 }}>{brandFirst || "LOTTE"}</span>
-                <span style={{ color: "#C1121F", fontWeight: 700, fontSize: 14, borderLeft: "2px solid #C1121F", paddingLeft: 6 }}>{brandSecond || "Mart"}</span>
+                <span style={{ color: "white", fontWeight: 900, fontSize: 22, letterSpacing: -1, textTransform: "uppercase" }}>bách hóa</span>
+                <span style={{ color: "#FFD400", fontWeight: 950, fontSize: 22, letterSpacing: -1, textTransform: "uppercase" }}>XANH</span>
               </div>
             </div>
             <p style={{ fontSize: 13, lineHeight: 1.8, color: "#999", marginBottom: 20 }}>
@@ -108,7 +106,7 @@ function Footer() {
                   fontWeight: 800,
                   marginBottom: 16,
                   paddingBottom: 10,
-                  borderBottom: "2px solid #C1121F",
+                  borderBottom: "2px solid #008848",
                 }}
               >
                 {col.title}

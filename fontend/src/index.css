@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --color-lotteRed: #E60012;
+  --color-lotteRed: #008848;
   --color-lotteYellow: #FFD400;
 }
 *{
