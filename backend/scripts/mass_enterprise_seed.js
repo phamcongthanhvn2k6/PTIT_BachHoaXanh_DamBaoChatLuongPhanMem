@@ -19,10 +19,15 @@ import { AuditLog } from '../models/Misc.js';
 const makeId = (num) => new mongoose.Types.ObjectId(String(num).padStart(24, '0'));
 
 // Branch IDs mapping
-const BRANCH_Q7_ID = makeId(1); // Lotte Mart Quận 7
-const BRANCH_GV_ID = makeId(2); // Lotte Mart Gò Vấp
-const BRANCH_BD_ID = makeId(3); // Lotte Mart Ba Đình
-const BRANCH_DN_ID = makeId(4); // Lotte Mart Đà Nẵng
+const BRANCH_Q7_ID = makeId(1); // Bách hóa XANH Nguyễn Thị Thập
+const BRANCH_GV_ID = makeId(2); // Bách hóa XANH Thống Nhất
+const BRANCH_BD_ID = makeId(3); // Bách hóa XANH Giang Văn Minh
+const BRANCH_DN_ID = makeId(4); // Bách hóa XANH Trưng Nữ Vương
+const BRANCH_TD1_ID = makeId(5); // Bách hóa XANH Võ Văn Ngân
+const BRANCH_TD2_ID = makeId(6); // Bách hóa XANH Lê Văn Việt
+const BRANCH_TD3_ID = makeId(7); // Bách hóa XANH Kha Vạn Cân
+const BRANCH_Q12_ID = makeId(8); // Bách hóa XANH Nguyễn Ảnh Thủ
+const BRANCH_Q10_ID = makeId(9); // Bách hóa XANH CMT8
 
 // Categories Configuration
 const categoriesConfig = [
@@ -155,22 +160,47 @@ const run = async () => {
     console.log('Ensuring target branches...');
     await Branch.findOneAndUpdate(
       { _id: BRANCH_Q7_ID },
-      { name: 'Bách hóa XANH Nguyễn Thị Thập', address: '136 Nguyễn Thị Thập, Phường Bình Thuận, Quận 7', city: 'Hồ Chí Minh', is_active: true },
+      { name: 'Bách hóa XANH Nguyễn Thị Thập', address: '136 Nguyễn Thị Thập, Phường Bình Thuận, Quận 7', city: 'Hồ Chí Minh', phone: '19001908', operating_hours: '08:00 - 22:00', coordinates: { lat: 10.7412, lng: 106.7032 }, is_active: true },
       { upsert: true }
     );
     await Branch.findOneAndUpdate(
       { _id: BRANCH_GV_ID },
-      { name: 'Bách hóa XANH Thống Nhất', address: '542 Thống Nhất, Phường 15, Quận Gò Vấp', city: 'Hồ Chí Minh', is_active: true },
+      { name: 'Bách hóa XANH Thống Nhất', address: '542 Thống Nhất, Phường 15, Quận Gò Vấp', city: 'Hồ Chí Minh', phone: '19001909', operating_hours: '08:00 - 22:00', coordinates: { lat: 10.8407, lng: 106.6784 }, is_active: true },
       { upsert: true }
     );
     await Branch.findOneAndUpdate(
       { _id: BRANCH_BD_ID },
-      { name: 'Bách hóa XANH Giang Văn Minh', address: '42 Giang Văn Minh, Phường Kim Mã, Quận Ba Đình', city: 'Hà Nội', is_active: true },
+      { name: 'Bách hóa XANH Giang Văn Minh', address: '42 Giang Văn Minh, Phường Kim Mã, Quận Ba Đình', city: 'Hà Nội', phone: '19001910', operating_hours: '08:00 - 22:00', coordinates: { lat: 21.0315, lng: 105.8234 }, is_active: true },
       { upsert: true }
     );
     await Branch.findOneAndUpdate(
       { _id: BRANCH_DN_ID },
-      { name: 'Bách hóa XANH Trưng Nữ Vương', address: '80 Trưng Nữ Vương, Phường Bình Hiên, Quận Hải Châu', city: 'Đà Nẵng', is_active: true },
+      { name: 'Bách hóa XANH Trưng Nữ Vương', address: '80 Trưng Nữ Vương, Phường Bình Hiên, Quận Hải Châu', city: 'Đà Nẵng', phone: '19001911', operating_hours: '08:00 - 22:00', coordinates: { lat: 16.0594, lng: 108.2198 }, is_active: true },
+      { upsert: true }
+    );
+    await Branch.findOneAndUpdate(
+      { _id: BRANCH_TD1_ID },
+      { name: 'Bách hóa XANH Võ Văn Ngân', address: '150 Võ Văn Ngân, Phường Bình Thọ, Thành phố Thủ Đức', city: 'Hồ Chí Minh', phone: '19001912', operating_hours: '08:00 - 22:00', coordinates: { lat: 10.8491, lng: 106.7725 }, is_active: true },
+      { upsert: true }
+    );
+    await Branch.findOneAndUpdate(
+      { _id: BRANCH_TD2_ID },
+      { name: 'Bách hóa XANH Lê Văn Việt', address: '220 Lê Văn Việt, Phường Tăng Nhơn Phú B, Thành phố Thủ Đức', city: 'Hồ Chí Minh', phone: '19001913', operating_hours: '08:00 - 22:00', coordinates: { lat: 10.8385, lng: 106.7865 }, is_active: true },
+      { upsert: true }
+    );
+    await Branch.findOneAndUpdate(
+      { _id: BRANCH_TD3_ID },
+      { name: 'Bách hóa XANH Kha Vạn Cân', address: '850 Kha Vạn Cân, Phường Linh Chiểu, Thành phố Thủ Đức', city: 'Hồ Chí Minh', phone: '19001914', operating_hours: '08:00 - 22:00', coordinates: { lat: 10.8524, lng: 106.7621 }, is_active: true },
+      { upsert: true }
+    );
+    await Branch.findOneAndUpdate(
+      { _id: BRANCH_Q12_ID },
+      { name: 'Bách hóa XANH Nguyễn Ảnh Thủ', address: '12/5 Nguyễn Ảnh Thủ, Phường Hiệp Thành, Quận 12', city: 'Hồ Chí Minh', phone: '19001915', operating_hours: '08:00 - 22:00', coordinates: { lat: 10.8795, lng: 106.6348 }, is_active: true },
+      { upsert: true }
+    );
+    await Branch.findOneAndUpdate(
+      { _id: BRANCH_Q10_ID },
+      { name: 'Bách hóa XANH CMT8', address: '400 Cách Mạng Tháng Tám, Phường 11, Quận 10', city: 'Hồ Chí Minh', phone: '19001916', operating_hours: '08:00 - 22:00', coordinates: { lat: 10.7831, lng: 106.6713 }, is_active: true },
       { upsert: true }
     );
     console.log('Branches ensured.');
@@ -287,7 +317,12 @@ const run = async () => {
       [BRANCH_Q7_ID.toString()]: [],
       [BRANCH_GV_ID.toString()]: [],
       [BRANCH_BD_ID.toString()]: [],
-      [BRANCH_DN_ID.toString()]: []
+      [BRANCH_DN_ID.toString()]: [],
+      [BRANCH_TD1_ID.toString()]: [],
+      [BRANCH_TD2_ID.toString()]: [],
+      [BRANCH_TD3_ID.toString()]: [],
+      [BRANCH_Q12_ID.toString()]: [],
+      [BRANCH_Q10_ID.toString()]: []
     };
 
     let bpIdIndex = 10000;
@@ -389,6 +424,116 @@ const run = async () => {
       branchProductsToInsert.push(bpDN);
       bpByBranch[BRANCH_DN_ID.toString()].push({
         ...bpDN,
+        product_name: prod.name,
+        sku: prod.sku
+      });
+
+      // 5. Võ Văn Ngân
+      bpIdIndex++;
+      const bpTD1Id = makeId(bpIdIndex);
+      const bpTD1 = {
+        _id: bpTD1Id,
+        product_id: prod._id,
+        branch_id: BRANCH_TD1_ID,
+        price: gvPrice,
+        original_price: gvPrice,
+        discount_percent: bpGV.discount_percent,
+        stock: gvStock,
+        min_stock: 20,
+        is_available: true,
+        promotion_tag: bpGV.promotion_tag
+      };
+      branchProductsToInsert.push(bpTD1);
+      bpByBranch[BRANCH_TD1_ID.toString()].push({
+        ...bpTD1,
+        product_name: prod.name,
+        sku: prod.sku
+      });
+
+      // 6. Lê Văn Việt
+      bpIdIndex++;
+      const bpTD2Id = makeId(bpIdIndex);
+      const bpTD2 = {
+        _id: bpTD2Id,
+        product_id: prod._id,
+        branch_id: BRANCH_TD2_ID,
+        price: gvPrice,
+        original_price: gvPrice,
+        discount_percent: bpGV.discount_percent,
+        stock: gvStock,
+        min_stock: 20,
+        is_available: true,
+        promotion_tag: bpGV.promotion_tag
+      };
+      branchProductsToInsert.push(bpTD2);
+      bpByBranch[BRANCH_TD2_ID.toString()].push({
+        ...bpTD2,
+        product_name: prod.name,
+        sku: prod.sku
+      });
+
+      // 7. Kha Vạn Cân
+      bpIdIndex++;
+      const bpTD3Id = makeId(bpIdIndex);
+      const bpTD3 = {
+        _id: bpTD3Id,
+        product_id: prod._id,
+        branch_id: BRANCH_TD3_ID,
+        price: gvPrice,
+        original_price: gvPrice,
+        discount_percent: bpGV.discount_percent,
+        stock: gvStock,
+        min_stock: 20,
+        is_available: true,
+        promotion_tag: bpGV.promotion_tag
+      };
+      branchProductsToInsert.push(bpTD3);
+      bpByBranch[BRANCH_TD3_ID.toString()].push({
+        ...bpTD3,
+        product_name: prod.name,
+        sku: prod.sku
+      });
+
+      // 8. Nguyễn Ảnh Thủ
+      bpIdIndex++;
+      const bpQ12Id = makeId(bpIdIndex);
+      const bpQ12 = {
+        _id: bpQ12Id,
+        product_id: prod._id,
+        branch_id: BRANCH_Q12_ID,
+        price: gvPrice,
+        original_price: gvPrice,
+        discount_percent: bpGV.discount_percent,
+        stock: gvStock,
+        min_stock: 20,
+        is_available: true,
+        promotion_tag: bpGV.promotion_tag
+      };
+      branchProductsToInsert.push(bpQ12);
+      bpByBranch[BRANCH_Q12_ID.toString()].push({
+        ...bpQ12,
+        product_name: prod.name,
+        sku: prod.sku
+      });
+
+      // 9. CMT8
+      bpIdIndex++;
+      const bpQ10Id = makeId(bpIdIndex);
+      const bpQ10 = {
+        _id: bpQ10Id,
+        product_id: prod._id,
+        branch_id: BRANCH_Q10_ID,
+        price: gvPrice,
+        original_price: gvPrice,
+        discount_percent: bpGV.discount_percent,
+        stock: gvStock,
+        min_stock: 20,
+        is_available: true,
+        promotion_tag: bpGV.promotion_tag
+      };
+      branchProductsToInsert.push(bpQ10);
+      bpByBranch[BRANCH_Q10_ID.toString()].push({
+        ...bpQ10,
         product_name: prod.name,
         sku: prod.sku
       });

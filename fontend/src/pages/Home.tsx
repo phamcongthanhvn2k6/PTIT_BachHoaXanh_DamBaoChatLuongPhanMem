@@ -529,23 +529,28 @@ const Home: React.FC = () => {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-16 mb-20">
         
-        {/* Section 1: Hero / Top Banners Grid Layout - Full Width */}
-        <section className="w-full">
+        {/* Section 1: Hero / Top Banners Carousel - Full Width */}
+        <section className="w-full relative group">
           {banners && banners.length > 0 ? (
-            (() => {
-              if (banners.length === 1) {
-                const banner = banners[0];
+            <div className="relative overflow-hidden rounded-[32px] shadow-premium h-[380px] md:h-[460px] w-full bg-slate-100 dark:bg-slate-800">
+              {banners.map((banner, index) => {
+                const isActive = index === currentBannerIndex;
                 const bannerUrl = resolveImageUrl(banner?.image_url || banner?.image) || fallbackProductImage;
                 return (
-                  <div className="relative overflow-hidden rounded-[32px] shadow-premium h-[380px] md:h-[440px] w-full group">
+                  <div
+                    key={banner.id || index}
+                    className={`absolute inset-0 transition-all duration-1000 ease-in-out ${
+                      isActive ? 'opacity-100 scale-100 z-10' : 'opacity-0 scale-105 z-0 pointer-events-none'
+                    }`}
+                  >
                     <img
                       src={bannerUrl}
                       alt={banner.title}
-                      className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
+                      className="w-full h-full object-cover transition-transform duration-[10000ms] hover:scale-110"
                       onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackProductImage; }}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent flex flex-col justify-center px-8 sm:px-12 md:px-16">
-                      <div className="hero-glass p-8 rounded-3xl max-w-xl" style={{ color: banner.text_color || '#ffffff' }}>
+                    <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent flex flex-col justify-center px-8 sm:px-12 md:px-16">
+                      <div className="hero-glass p-6 sm:p-8 rounded-3xl max-w-xl" style={{ color: banner.text_color || '#ffffff' }}>
                         <span className="inline-block bg-emerald-500 text-white px-3 py-1.5 rounded-full font-black uppercase tracking-widest text-[9px] mb-4 shadow-lg shadow-emerald-500/30">
                           {t('common.topPromo', 'Khuyến mại đặc biệt')}
                         </span>
@@ -558,112 +563,44 @@ const Home: React.FC = () => {
                     </div>
                   </div>
                 );
-              }
+              })}
 
-              const mainBanner = banners[0];
-              const sideBanner = banners[1];
-              const sideBanner2 = banners[2] || null;
+              {/* Navigation Controls */}
+              {banners.length > 1 && (
+                <>
+                  <button
+                    onClick={() => setCurrentBannerIndex((prev) => (prev === 0 ? banners.length - 1 : prev - 1))}
+                    className="absolute left-6 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-2xl bg-black/45 hover:bg-emerald-500 text-white flex items-center justify-center backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all duration-300 transform -translate-x-2 group-hover:translate-x-0"
+                    aria-label="Previous slide"
+                  >
+                    <span className="material-symbols-outlined !text-2xl">chevron_left</span>
+                  </button>
+                  <button
+                    onClick={() => setCurrentBannerIndex((prev) => (prev === banners.length - 1 ? 0 : prev + 1))}
+                    className="absolute right-6 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-2xl bg-black/45 hover:bg-emerald-500 text-white flex items-center justify-center backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0"
+                    aria-label="Next slide"
+                  >
+                    <span className="material-symbols-outlined !text-2xl">chevron_right</span>
+                  </button>
+                </>
+              )}
 
-              const mainUrl = resolveImageUrl(mainBanner?.image_url || mainBanner?.image) || fallbackProductImage;
-              const sideUrl = resolveImageUrl(sideBanner?.image_url || sideBanner?.image) || fallbackProductImage;
-
-              return (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
-                  {/* Main Banner (Left) */}
-                  <div className="lg:col-span-2 relative overflow-hidden rounded-[32px] shadow-premium h-[360px] md:h-[440px] group">
-                    <img
-                      src={mainUrl}
-                      alt={mainBanner.title}
-                      className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackProductImage; }}
+              {/* Indicator dots */}
+              {banners.length > 1 && (
+                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-20 flex gap-2.5 bg-black/30 px-4 py-2 rounded-full backdrop-blur-sm">
+                  {banners.map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentBannerIndex(index)}
+                      className={`h-2 rounded-full transition-all duration-300 ${
+                        index === currentBannerIndex ? 'bg-emerald-400 w-6' : 'bg-white/50 hover:bg-white w-2'
+                      }`}
+                      aria-label={`Go to slide ${index + 1}`}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent flex flex-col justify-center px-8 sm:px-12">
-                      <div className="hero-glass p-6 sm:p-8 rounded-3xl max-w-lg" style={{ color: mainBanner.text_color || '#ffffff' }}>
-                        <span className="inline-block bg-emerald-500 text-white px-3 py-1 rounded-full font-black uppercase tracking-widest text-[9px] mb-3 shadow-md">
-                          NỔI BẬT
-                        </span>
-                        <h2 className="text-xl sm:text-3xl font-black mb-2 leading-tight" dangerouslySetInnerHTML={{ __html: mainBanner.title || "" }} />
-                        <p className="text-xs mb-4 opacity-90 leading-relaxed line-clamp-2">{mainBanner.description}</p>
-                        <Link to={mainBanner.link || '/promotions'} className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-xl font-black transition-all shadow-md inline-flex items-center gap-1.5 text-xs w-fit">
-                          {t('common.viewNow', 'Xem ngay')} <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Column Banners */}
-                  <div className="lg:col-span-1 flex flex-col gap-6 h-[360px] md:h-[440px]">
-                    {sideBanner2 ? (
-                      <>
-                        {/* Top Side Banner */}
-                        <div className="flex-1 relative overflow-hidden rounded-[24px] shadow-premium group">
-                          <img
-                            src={sideUrl}
-                            alt={sideBanner.title}
-                            className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
-                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackProductImage; }}
-                          />
-                          <div className="absolute inset-0 bg-black/60 flex flex-col justify-end p-6">
-                            <div style={{ color: sideBanner.text_color || '#ffffff' }}>
-                              <h3 className="text-base font-black mb-1 line-clamp-1" dangerouslySetInnerHTML={{ __html: sideBanner.title || "" }} />
-                              <p className="text-[11px] opacity-80 mb-3 line-clamp-1">{sideBanner.description}</p>
-                              <Link to={sideBanner.link || '/promotions'} className="text-emerald-400 font-bold text-xs hover:underline inline-flex items-center gap-1">
-                                Xem ngay <span className="material-symbols-outlined text-[12px]">arrow_forward</span>
-                              </Link>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Bottom Side Banner */}
-                        {(() => {
-                          const sideUrl2 = resolveImageUrl(sideBanner2?.image_url || sideBanner2?.image) || fallbackProductImage;
-                          return (
-                            <div className="flex-1 relative overflow-hidden rounded-[24px] shadow-premium group">
-                              <img
-                                src={sideUrl2}
-                                alt={sideBanner2.title}
-                                className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
-                                onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackProductImage; }}
-                              />
-                              <div className="absolute inset-0 bg-black/60 flex flex-col justify-end p-6">
-                                <div style={{ color: sideBanner2.text_color || '#ffffff' }}>
-                                  <h3 className="text-base font-black mb-1 line-clamp-1" dangerouslySetInnerHTML={{ __html: sideBanner2.title || "" }} />
-                                  <p className="text-[11px] opacity-80 mb-3 line-clamp-1">{sideBanner2.description}</p>
-                                  <Link to={sideBanner2.link || '/promotions'} className="text-emerald-400 font-bold text-xs hover:underline inline-flex items-center gap-1">
-                                    Xem ngay <span className="material-symbols-outlined text-[12px]">arrow_forward</span>
-                                  </Link>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </>
-                    ) : (
-                      <div className="w-full h-full relative overflow-hidden rounded-[24px] shadow-premium group">
-                        <img
-                          src={sideUrl}
-                          alt={sideBanner.title}
-                          className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
-                          onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackProductImage; }}
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent flex flex-col justify-end p-6">
-                          <div style={{ color: sideBanner.text_color || '#ffffff' }}>
-                            <span className="inline-block bg-rose-500 text-white px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider text-[8px] mb-2">
-                              HOT
-                            </span>
-                            <h3 className="text-lg font-black mb-2 line-clamp-2" dangerouslySetInnerHTML={{ __html: sideBanner.title || "" }} />
-                            <p className="text-xs opacity-90 mb-4 line-clamp-2">{sideBanner.description}</p>
-                            <Link to={sideBanner.link || '/promotions'} className="bg-white/10 hover:bg-white/20 text-white border border-white/20 px-4 py-2 rounded-xl font-bold transition-all inline-flex items-center gap-1 text-xs">
-                              {t('common.viewNow', 'Xem ngay')} <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
-                            </Link>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  ))}
                 </div>
-              );
-            })()
+              )}
+            </div>
           ) : (
             <div className="relative group overflow-hidden rounded-[32px] bg-slate-100 dark:bg-slate-800 h-[360px] md:h-[440px] w-full flex items-center justify-center">
               {loading ? <div className="animate-pulse w-full h-full bg-slate-200 dark:bg-slate-700" /> : <span className="text-slate-400 font-bold">{t('product.noProducts')}</span>}
@@ -671,36 +608,60 @@ const Home: React.FC = () => {
           )}
         </section>
 
-        {/* Section 2: Trust / Service Highlights */}
-        <section className="bg-gradient-to-r from-emerald-50/50 to-teal-50/30 dark:from-slate-900 dark:to-slate-800/80 border border-emerald-100/50 dark:border-slate-800 rounded-[32px] p-6 md:p-10 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 relative z-10">
-            <div className="flex items-center gap-5 p-2 group">
-              <span className="material-symbols-outlined !text-3xl text-emerald-600 p-4 bg-white dark:bg-slate-800 rounded-2xl shrink-0 shadow-md group-hover:scale-110 transition-transform shadow-emerald-100 dark:shadow-none">local_shipping</span>
+        {/* Section 2: Trust / Service Highlights Redesigned */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
+          {/* Card 1: Free Shipping */}
+          <div className="group relative overflow-hidden rounded-[28px] p-6 bg-gradient-to-br from-emerald-50/60 to-emerald-100/30 dark:from-emerald-950/20 dark:to-slate-900 border border-emerald-100/60 dark:border-emerald-900/30 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 shadow-sm">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl transform translate-x-4 -translate-y-4 group-hover:scale-150 transition-transform duration-500" />
+            <div className="flex items-center gap-4 relative z-10">
+              <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 shadow-md shadow-emerald-500/5 dark:shadow-none flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                <span className="material-symbols-outlined !text-[32px]">local_shipping</span>
+              </div>
               <div>
-                <h4 className="font-black text-slate-900 dark:text-white text-base">{getTxt('freeShipTitle')}</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 font-semibold leading-relaxed">{getTxt('freeShipDesc')}</p>
+                <h4 className="font-black text-slate-900 dark:text-white text-sm sm:text-base leading-tight">{getTxt('freeShipTitle')}</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 font-semibold leading-snug">{getTxt('freeShipDesc')}</p>
               </div>
             </div>
-            <div className="flex items-center gap-5 p-2 group">
-              <span className="material-symbols-outlined !text-3xl text-blue-600 p-4 bg-white dark:bg-slate-800 rounded-2xl shrink-0 shadow-md group-hover:scale-110 transition-transform shadow-blue-100 dark:shadow-none">bolt</span>
+          </div>
+
+          {/* Card 2: Express Delivery */}
+          <div className="group relative overflow-hidden rounded-[28px] p-6 bg-gradient-to-br from-blue-50/60 to-blue-100/30 dark:from-blue-950/20 dark:to-slate-900 border border-blue-100/60 dark:border-blue-900/30 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 shadow-sm">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl transform translate-x-4 -translate-y-4 group-hover:scale-150 transition-transform duration-500" />
+            <div className="flex items-center gap-4 relative z-10">
+              <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 shadow-md shadow-blue-500/5 dark:shadow-none flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                <span className="material-symbols-outlined !text-[32px]">bolt</span>
+              </div>
               <div>
-                <h4 className="font-black text-slate-900 dark:text-white text-base">{getTxt('expressTitle')}</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 font-semibold leading-relaxed">{getTxt('expressDesc')}</p>
+                <h4 className="font-black text-slate-900 dark:text-white text-sm sm:text-base leading-tight">{getTxt('expressTitle')}</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 font-semibold leading-snug">{getTxt('expressDesc')}</p>
               </div>
             </div>
-            <div className="flex items-center gap-5 p-2 group">
-              <span className="material-symbols-outlined !text-3xl text-rose-600 p-4 bg-white dark:bg-slate-800 rounded-2xl shrink-0 shadow-md group-hover:scale-110 transition-transform shadow-rose-100 dark:shadow-none">eco</span>
+          </div>
+
+          {/* Card 3: Fresh Assured */}
+          <div className="group relative overflow-hidden rounded-[28px] p-6 bg-gradient-to-br from-rose-50/60 to-rose-100/30 dark:from-rose-950/20 dark:to-slate-900 border border-rose-100/60 dark:border-rose-900/30 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 shadow-sm">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/10 rounded-full blur-2xl transform translate-x-4 -translate-y-4 group-hover:scale-150 transition-transform duration-500" />
+            <div className="flex items-center gap-4 relative z-10">
+              <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 shadow-md shadow-rose-500/5 dark:shadow-none flex items-center justify-center text-rose-600 dark:text-rose-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                <span className="material-symbols-outlined !text-[32px]">eco</span>
+              </div>
               <div>
-                <h4 className="font-black text-slate-900 dark:text-white text-base">{getTxt('freshTitle')}</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 font-semibold leading-relaxed">{getTxt('freshDesc')}</p>
+                <h4 className="font-black text-slate-900 dark:text-white text-sm sm:text-base leading-tight">{getTxt('freshTitle')}</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 font-semibold leading-snug">{getTxt('freshDesc')}</p>
               </div>
             </div>
-            <div className="flex items-center gap-5 p-2 group">
-              <span className="material-symbols-outlined !text-3xl text-amber-500 p-4 bg-white dark:bg-slate-800 rounded-2xl shrink-0 shadow-md group-hover:scale-110 transition-transform shadow-amber-100 dark:shadow-none">support_agent</span>
+          </div>
+
+          {/* Card 4: 24/7 Support */}
+          <div className="group relative overflow-hidden rounded-[28px] p-6 bg-gradient-to-br from-amber-50/60 to-amber-100/30 dark:from-amber-950/20 dark:to-slate-900 border border-amber-100/60 dark:border-amber-900/30 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 shadow-sm">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl transform translate-x-4 -translate-y-4 group-hover:scale-150 transition-transform duration-500" />
+            <div className="flex items-center gap-4 relative z-10">
+              <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 shadow-md shadow-amber-500/5 dark:shadow-none flex items-center justify-center text-amber-600 dark:text-amber-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                <span className="material-symbols-outlined !text-[32px]">support_agent</span>
+              </div>
               <div>
-                <h4 className="font-black text-slate-900 dark:text-white text-base">{getTxt('supportTitle')}</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 font-semibold leading-relaxed">{getTxt('supportDesc')}</p>
+                <h4 className="font-black text-slate-900 dark:text-white text-sm sm:text-base leading-tight">{getTxt('supportTitle')}</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 font-semibold leading-snug">{getTxt('supportDesc')}</p>
               </div>
             </div>
           </div>

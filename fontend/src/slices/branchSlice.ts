@@ -64,12 +64,15 @@ export const branchSlice = createSlice({
           state.currentBranch = action.payload[0];
           localStorage.setItem('lotte_current_branch', JSON.stringify(action.payload[0]));
         }
-        // If saved branch no longer exists, reset to first
+        // If saved branch exists, update with fresh server data. If it no longer exists, reset to first.
         if (state.currentBranch) {
           const exists = action.payload.find(
             (b) => String(b.id || (b as any)._id) === String(state.currentBranch!.id || (state.currentBranch as any)?._id)
           );
-          if (!exists && action.payload.length > 0) {
+          if (exists) {
+            state.currentBranch = exists;
+            localStorage.setItem('lotte_current_branch', JSON.stringify(exists));
+          } else if (action.payload.length > 0) {
             state.currentBranch = action.payload[0];
             localStorage.setItem('lotte_current_branch', JSON.stringify(action.payload[0]));
           }
