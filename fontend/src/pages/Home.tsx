@@ -529,71 +529,143 @@ const Home: React.FC = () => {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-16 mb-20">
         
-        {/* Section 1: Hero / Top Banners Carousel - Full Width */}
+        {/* Section 1: Hero / Top Banners Grid Layout - Full Width */}
         <section className="w-full">
           {banners && banners.length > 0 ? (
-            <div className="relative group overflow-hidden rounded-[32px] shadow-premium h-[440px] md:h-[500px] w-full">
-              {/* Carousel Track */}
-              <div 
-                className="flex w-full h-full transition-transform duration-700 ease-out"
-                style={{ transform: `translateX(-${currentBannerIndex * 100}%)` }}
-              >
-                {banners.map((banner: any, index: number) => {
-                  const bannerUrl = resolveImageUrl(banner?.image_url || banner?.image) || fallbackProductImage;
-                  return (
-                    <div key={banner.id || banner._id || index} className="w-full h-full shrink-0 relative">
-                      <img
-                        src={bannerUrl}
-                        alt={banner.title || "Banner"}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).src = fallbackProductImage;
-                        }}
-                      />
-                      <div className="absolute inset-0 flex flex-col justify-center px-6 sm:px-12 md:px-16 bg-gradient-to-r from-black/75 via-black/30 to-transparent z-10">
-                        <div style={{ color: banner.text_color || '#ffffff' }} className="hero-glass p-8 rounded-3xl max-w-xl transition-all duration-500 hover:bg-black/55">
-                          <div className="inline-block bg-emerald-500 text-white px-4 py-1.5 rounded-full font-black uppercase tracking-widest text-[10px] mb-4 shadow-lg shadow-emerald-500/30">
-                            {t('common.topPromo')}
-                          </div>
-                          <h2 className="text-2xl md:text-4xl font-black mb-3 leading-tight tracking-tight drop-shadow-md" dangerouslySetInnerHTML={{ __html: banner.title || "" }} />
-                          <p className="text-xs md:text-sm mb-6 opacity-90 drop-shadow-sm font-medium leading-relaxed line-clamp-2">{banner.description}</p>
-                          <Link to={banner.link || '/promotions'} className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl font-black transition-all transform hover:scale-[1.03] shadow-lg shadow-emerald-500/30 inline-flex items-center gap-2 text-xs">
-                            {t('common.viewNow')} <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-                          </Link>
-                        </div>
+            (() => {
+              if (banners.length === 1) {
+                const banner = banners[0];
+                const bannerUrl = resolveImageUrl(banner?.image_url || banner?.image) || fallbackProductImage;
+                return (
+                  <div className="relative overflow-hidden rounded-[32px] shadow-premium h-[380px] md:h-[440px] w-full group">
+                    <img
+                      src={bannerUrl}
+                      alt={banner.title}
+                      className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackProductImage; }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent flex flex-col justify-center px-8 sm:px-12 md:px-16">
+                      <div className="hero-glass p-8 rounded-3xl max-w-xl" style={{ color: banner.text_color || '#ffffff' }}>
+                        <span className="inline-block bg-emerald-500 text-white px-3 py-1.5 rounded-full font-black uppercase tracking-widest text-[9px] mb-4 shadow-lg shadow-emerald-500/30">
+                          {t('common.topPromo', 'Khuyến mại đặc biệt')}
+                        </span>
+                        <h2 className="text-2xl md:text-4xl font-black mb-3 leading-tight" dangerouslySetInnerHTML={{ __html: banner.title || "" }} />
+                        <p className="text-xs md:text-sm mb-6 opacity-90 leading-relaxed line-clamp-2">{banner.description}</p>
+                        <Link to={banner.link || '/promotions'} className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-black transition-all shadow-lg shadow-emerald-500/30 inline-flex items-center gap-2 text-xs w-fit">
+                          {t('common.viewNow', 'Xem ngay')} <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                        </Link>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              }
 
-              {/* Prev / Next controls */}
-              <button 
-                onClick={() => setCurrentBannerIndex((prev) => (prev === 0 ? banners.length - 1 : prev - 1))}
-                className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border border-white/10"
-              >
-                <span className="material-symbols-outlined">chevron_left</span>
-              </button>
-              <button 
-                onClick={() => setCurrentBannerIndex((prev) => (prev === banners.length - 1 ? 0 : prev + 1))}
-                className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border border-white/10"
-              >
-                <span className="material-symbols-outlined">chevron_right</span>
-              </button>
+              const mainBanner = banners[0];
+              const sideBanner = banners[1];
+              const sideBanner2 = banners[2] || null;
 
-              {/* Dots indicator */}
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
-                {banners.map((_: any, index: number) => (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentBannerIndex(index)}
-                    className={`h-2.5 rounded-full transition-all duration-300 ${currentBannerIndex === index ? 'w-6 bg-emerald-500' : 'w-2.5 bg-white/50 hover:bg-white'}`}
-                  />
-                ))}
-              </div>
-            </div>
+              const mainUrl = resolveImageUrl(mainBanner?.image_url || mainBanner?.image) || fallbackProductImage;
+              const sideUrl = resolveImageUrl(sideBanner?.image_url || sideBanner?.image) || fallbackProductImage;
+
+              return (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
+                  {/* Main Banner (Left) */}
+                  <div className="lg:col-span-2 relative overflow-hidden rounded-[32px] shadow-premium h-[360px] md:h-[440px] group">
+                    <img
+                      src={mainUrl}
+                      alt={mainBanner.title}
+                      className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackProductImage; }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-transparent flex flex-col justify-center px-8 sm:px-12">
+                      <div className="hero-glass p-6 sm:p-8 rounded-3xl max-w-lg" style={{ color: mainBanner.text_color || '#ffffff' }}>
+                        <span className="inline-block bg-emerald-500 text-white px-3 py-1 rounded-full font-black uppercase tracking-widest text-[9px] mb-3 shadow-md">
+                          NỔI BẬT
+                        </span>
+                        <h2 className="text-xl sm:text-3xl font-black mb-2 leading-tight" dangerouslySetInnerHTML={{ __html: mainBanner.title || "" }} />
+                        <p className="text-xs mb-4 opacity-90 leading-relaxed line-clamp-2">{mainBanner.description}</p>
+                        <Link to={mainBanner.link || '/promotions'} className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-xl font-black transition-all shadow-md inline-flex items-center gap-1.5 text-xs w-fit">
+                          {t('common.viewNow', 'Xem ngay')} <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column Banners */}
+                  <div className="lg:col-span-1 flex flex-col gap-6 h-[360px] md:h-[440px]">
+                    {sideBanner2 ? (
+                      <>
+                        {/* Top Side Banner */}
+                        <div className="flex-1 relative overflow-hidden rounded-[24px] shadow-premium group">
+                          <img
+                            src={sideUrl}
+                            alt={sideBanner.title}
+                            className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackProductImage; }}
+                          />
+                          <div className="absolute inset-0 bg-black/60 flex flex-col justify-end p-6">
+                            <div style={{ color: sideBanner.text_color || '#ffffff' }}>
+                              <h3 className="text-base font-black mb-1 line-clamp-1" dangerouslySetInnerHTML={{ __html: sideBanner.title || "" }} />
+                              <p className="text-[11px] opacity-80 mb-3 line-clamp-1">{sideBanner.description}</p>
+                              <Link to={sideBanner.link || '/promotions'} className="text-emerald-400 font-bold text-xs hover:underline inline-flex items-center gap-1">
+                                Xem ngay <span className="material-symbols-outlined text-[12px]">arrow_forward</span>
+                              </Link>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Bottom Side Banner */}
+                        {(() => {
+                          const sideUrl2 = resolveImageUrl(sideBanner2?.image_url || sideBanner2?.image) || fallbackProductImage;
+                          return (
+                            <div className="flex-1 relative overflow-hidden rounded-[24px] shadow-premium group">
+                              <img
+                                src={sideUrl2}
+                                alt={sideBanner2.title}
+                                className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackProductImage; }}
+                              />
+                              <div className="absolute inset-0 bg-black/60 flex flex-col justify-end p-6">
+                                <div style={{ color: sideBanner2.text_color || '#ffffff' }}>
+                                  <h3 className="text-base font-black mb-1 line-clamp-1" dangerouslySetInnerHTML={{ __html: sideBanner2.title || "" }} />
+                                  <p className="text-[11px] opacity-80 mb-3 line-clamp-1">{sideBanner2.description}</p>
+                                  <Link to={sideBanner2.link || '/promotions'} className="text-emerald-400 font-bold text-xs hover:underline inline-flex items-center gap-1">
+                                    Xem ngay <span className="material-symbols-outlined text-[12px]">arrow_forward</span>
+                                  </Link>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </>
+                    ) : (
+                      <div className="w-full h-full relative overflow-hidden rounded-[24px] shadow-premium group">
+                        <img
+                          src={sideUrl}
+                          alt={sideBanner.title}
+                          className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackProductImage; }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent flex flex-col justify-end p-6">
+                          <div style={{ color: sideBanner.text_color || '#ffffff' }}>
+                            <span className="inline-block bg-rose-500 text-white px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider text-[8px] mb-2">
+                              HOT
+                            </span>
+                            <h3 className="text-lg font-black mb-2 line-clamp-2" dangerouslySetInnerHTML={{ __html: sideBanner.title || "" }} />
+                            <p className="text-xs opacity-90 mb-4 line-clamp-2">{sideBanner.description}</p>
+                            <Link to={sideBanner.link || '/promotions'} className="bg-white/10 hover:bg-white/20 text-white border border-white/20 px-4 py-2 rounded-xl font-bold transition-all inline-flex items-center gap-1 text-xs">
+                              {t('common.viewNow', 'Xem ngay')} <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()
           ) : (
-            <div className="relative group overflow-hidden rounded-[32px] bg-slate-100 dark:bg-slate-800 h-[440px] md:h-[500px] w-full flex items-center justify-center">
+            <div className="relative group overflow-hidden rounded-[32px] bg-slate-100 dark:bg-slate-800 h-[360px] md:h-[440px] w-full flex items-center justify-center">
               {loading ? <div className="animate-pulse w-full h-full bg-slate-200 dark:bg-slate-700" /> : <span className="text-slate-400 font-bold">{t('product.noProducts')}</span>}
             </div>
           )}
@@ -654,7 +726,7 @@ const Home: React.FC = () => {
                   <div className="w-14 h-14 rounded-2xl bg-white/80 dark:bg-slate-800/80 shadow-sm flex items-center justify-center mb-4 transition-all duration-500 group-hover:scale-110 group-hover:rotate-6 text-current">
                     <CategoryIcon category={(cat as any).categoryData || cat} className="w-8 h-8 flex items-center justify-center text-current" iconClass="material-symbols-outlined !text-3xl" size={32} />
                   </div>
-                  <span className="font-black text-[13px] text-center line-clamp-1 text-slate-800 dark:text-slate-200">{displayName}</span>
+                  <span className="font-black text-[12px] sm:text-[13px] text-center line-clamp-2 h-10 flex items-center justify-center text-slate-800 dark:text-slate-200 leading-snug">{displayName}</span>
                 </Link>
               );
             })}
