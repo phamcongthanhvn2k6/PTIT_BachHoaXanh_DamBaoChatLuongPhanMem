@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppDispatch, useAppSelector } from '../../store';
 import { setCurrentBranch, loadBranches } from '../../slices/branchSlice';
@@ -31,7 +32,7 @@ const createMarkerIcon = (color: string) => L.divIcon({
 });
 
 const DefaultIcon = createMarkerIcon('#666666'); // Dark gray for unselected
-const SelectedIcon = createMarkerIcon('#C1121F'); // Brand red for selected
+const SelectedIcon = createMarkerIcon('#008848'); // Brand green for selected
 L.Marker.prototype.options.icon = DefaultIcon;
 
 // Component to handle map centering
@@ -55,6 +56,16 @@ const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => 
   return R * c;
 };
 
+// Helper to remove Vietnamese tones for accent-insensitive search
+const removeVietnameseTones = (str: string): string => {
+  if (!str) return '';
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D');
+};
+
 const DEFAULT_CENTER: [number, number] = [10.762622, 106.660172]; // Ho Chi Minh City
 
 const BranchSelector: React.FC = () => {
@@ -67,6 +78,7 @@ const BranchSelector: React.FC = () => {
   const [showConfirm, setShowConfirm] = useState(false);
   const [pendingBranch, setPendingBranch] = useState<Branch | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   
   const [userLoc, setUserLoc] = useState<[number, number] | null>(null);
   const [locError, setLocError] = useState<string | null>(null);
@@ -75,6 +87,14 @@ const BranchSelector: React.FC = () => {
 
   const ref = useRef<HTMLDivElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (status === 'idle') {
@@ -86,7 +106,7 @@ const BranchSelector: React.FC = () => {
   useEffect(() => {
     if (open && currentBranch?.coordinates) {
       setMapCenter([currentBranch.coordinates.lat, currentBranch.coordinates.lng]);
-      setMapZoom(14);
+      setMapZoom(15);
     }
   }, [open, currentBranch]);
 
@@ -110,6 +130,11 @@ const BranchSelector: React.FC = () => {
   const handleSelectBranch = (branch: Branch) => {
     const currentId = String(currentBranch?.id || (currentBranch as any)?._id || '');
     const newId = String(branch.id || (branch as any)?._id || '');
+
+    if (branch.coordinates) {
+      setMapCenter([branch.coordinates.lat, branch.coordinates.lng]);
+      setMapZoom(16);
+    }
 
     if (currentId === newId) {
       return;
@@ -172,8 +197,12 @@ const BranchSelector: React.FC = () => {
         }
         return { ...b, distance };
       })
-      .filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                  (b.address && b.address.toLowerCase().includes(searchQuery.toLowerCase())))
+      .filter(b => {
+        const query = removeVietnameseTones(searchQuery.toLowerCase());
+        const nameNorm = removeVietnameseTones(b.name.toLowerCase());
+        const addrNorm = b.address ? removeVietnameseTones(b.address.toLowerCase()) : '';
+        return nameNorm.includes(query) || addrNorm.includes(query);
+      })
       .sort((a, b) => {
         if (a.distance !== null && b.distance !== null) return a.distance - b.distance;
         if (a.distance !== null) return -1;
@@ -212,7 +241,7 @@ const BranchSelector: React.FC = () => {
       </div>
 
       {/* Main Map + List Modal */}
-      {open && (
+      {open && createPortal(
         <div
           style={{
             position: 'fixed',
@@ -235,7 +264,7 @@ const BranchSelector: React.FC = () => {
               background: 'white',
               borderRadius: 16,
               width: '90vw',
-              maxWidth: 900,
+              maxWidth: isMobile ? 600 : 1000,
               height: '85vh',
               maxHeight: 700,
               display: 'flex',
@@ -255,7 +284,7 @@ const BranchSelector: React.FC = () => {
               background: '#fff',
             }}>
               <div>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#C1121F' }}>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#008848' }}>
                   {t('branch.selectBranch')}
                 </h2>
                 <div style={{ fontSize: 13, color: '#666', marginTop: 4 }}>
@@ -275,21 +304,22 @@ const BranchSelector: React.FC = () => {
             </div>
 
             {/* Modal Body: Map and List */}
-            <div style={{ display: 'flex', flex: 1, overflow: 'hidden', flexDirection: window.innerWidth < 768 ? 'column' : 'row' }}>
+            <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row-reverse', flex: 1, overflow: 'hidden' }}>
               
               {/* Map Panel */}
               <div style={{ 
-                flex: window.innerWidth < 768 ? '0 0 40%' : '2', 
+                flex: isMobile ? 'none' : 1,
+                width: isMobile ? '100%' : 'auto',
+                height: isMobile ? '60%' : '100%', 
                 position: 'relative',
-                borderRight: window.innerWidth < 768 ? 'none' : '1px solid #eee',
-                borderBottom: window.innerWidth < 768 ? '1px solid #eee' : 'none',
-                background: '#f8f9fa'
+                background: '#f8f9fa',
+                borderBottom: isMobile ? '1px solid #eee' : 'none'
               }}>
                 <MapContainer 
                   center={mapCenter} 
                   zoom={mapZoom} 
                   style={{ width: '100%', height: '100%' }}
-                  zoomControl={false}
+                  zoomControl={true}
                 >
                   <TileLayer
                     attribution='&copy; OpenStreetMap'
@@ -318,7 +348,7 @@ const BranchSelector: React.FC = () => {
                         >
                           <Popup>
                             <div style={{ padding: '4px 0', minWidth: 150 }}>
-                              <strong style={{ display: 'block', fontSize: 14, color: '#C1121F', marginBottom: 4 }}>
+                              <strong style={{ display: 'block', fontSize: 14, color: '#008848', marginBottom: 4 }}>
                                 {b.name}
                               </strong>
                               <div style={{ fontSize: 12, color: '#555', marginBottom: 8, lineHeight: 1.3 }}>
@@ -327,7 +357,7 @@ const BranchSelector: React.FC = () => {
                               <button
                                 onClick={() => handleSelectBranch(b)}
                                 style={{
-                                  background: isSelected ? '#4CAF50' : '#C1121F',
+                                  background: isSelected ? '#4CAF50' : '#008848',
                                   color: 'white', border: 'none', padding: '6px 12px',
                                   borderRadius: 6, cursor: 'pointer', width: '100%', fontWeight: 600
                                 }}
@@ -339,60 +369,97 @@ const BranchSelector: React.FC = () => {
                         </Marker>
                         {b.coverage_radius_km && (
                           <Circle center={[b.coordinates.lat, b.coordinates.lng]} radius={b.coverage_radius_km * 1000}
-                            pathOptions={{ color: isSelected ? '#C1121F' : '#94a3b8', fillOpacity: isSelected ? 0.08 : 0.04, weight: isSelected ? 2 : 1 }} />
+                            pathOptions={{ color: isSelected ? '#008848' : '#94a3b8', fillOpacity: isSelected ? 0.08 : 0.04, weight: isSelected ? 2 : 1 }} />
                         )}
                         {isSelected && userLoc && (
                           <Polyline positions={[userLoc, [b.coordinates.lat, b.coordinates.lng]]}
-                            pathOptions={{ color: '#C1121F', weight: 3, dashArray: '8 8', opacity: 0.7 }} />
+                            pathOptions={{ color: '#008848', weight: 3, dashArray: '8 8', opacity: 0.7 }} />
                         )}
                       </React.Fragment>
                     );
                   })}
                 </MapContainer>
-                
-                {/* Find Near Me Button Overlay */}
-                <button
-                  onClick={requestLocation}
-                  style={{
-                    position: 'absolute', top: 16, right: 16, zIndex: 1000,
-                    background: 'white', border: '1px solid #ddd', padding: '8px 12px',
-                    borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.1)', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600,
-                    color: '#333'
-                  }}
-                >
-                  🧭 Tìm gần tôi
-                </button>
               </div>
 
               {/* List Panel */}
               <div style={{ 
-                flex: window.innerWidth < 768 ? '1' : '1', 
+                width: isMobile ? '100%' : '360px',
+                height: isMobile ? '40%' : '100%', 
                 display: 'flex', flexDirection: 'column', 
-                background: 'white', minWidth: 320
+                background: 'white',
+                borderRight: isMobile ? 'none' : '1px solid #eee',
+                overflow: 'hidden'
               }}>
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0' }}>
-                  <input
-                    type="text"
-                    placeholder="Tìm theo tên hoặc địa chỉ..."
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
+                <div style={{ 
+                  padding: isMobile ? '10px 20px' : '12px 16px', 
+                  borderBottom: '1px solid #f0f0f0',
+                  display: 'flex',
+                  flexDirection: isMobile ? 'row' : 'column',
+                  alignItems: isMobile ? 'center' : 'stretch',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  background: 'white',
+                  flexShrink: 0
+                }}>
+                  <div style={{ display: 'flex', flex: 1, flexDirection: 'column', gap: 4 }}>
+                    <input
+                      type="text"
+                      placeholder="Tìm theo tên hoặc địa chỉ..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 16px',
+                        borderRadius: 20,
+                        border: '1px solid #ddd',
+                        fontSize: 13,
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+                    {locError && (
+                      <span style={{ fontSize: 11, color: '#d32f2f', marginTop: 2 }}>⚠️ {locError}</span>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={requestLocation}
                     style={{
-                      width: '100%', padding: '10px 14px', borderRadius: 8,
-                      border: '1px solid #ddd', fontSize: 14, outline: 'none',
-                      boxSizing: 'border-box'
+                      background: 'white',
+                      border: '1px solid #008848',
+                      padding: '8px 14px',
+                      borderRadius: 20,
+                      boxShadow: '0 2px 6px rgba(0,136,72,0.1)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: '#008848',
+                      width: isMobile ? 'auto' : '100%',
                     }}
-                  />
-                  {locError && (
-                    <div style={{ fontSize: 12, color: '#d32f2f', marginTop: 8 }}>⚠️ {locError}</div>
-                  )}
+                  >
+                    🧭 Tìm gần tôi
+                  </button>
                 </div>
 
-                <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px' }}>
+                <div style={{ 
+                  flex: 1, 
+                  overflowX: isMobile ? 'auto' : 'hidden',
+                  overflowY: isMobile ? 'hidden' : 'auto',
+                  display: 'flex', 
+                  flexDirection: isMobile ? 'row' : 'column',
+                  gap: 12, 
+                  padding: isMobile ? '12px 20px' : '16px',
+                  alignItems: 'stretch',
+                  background: '#f9fbf9'
+                }}>
                   {status === 'loading' ? (
-                    <div style={{ padding: 30, textAlign: 'center', color: '#999' }}>Đang tải...</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', color: '#999' }}>Đang tải...</div>
                   ) : processedBranches.length === 0 ? (
-                    <div style={{ padding: 30, textAlign: 'center', color: '#999', fontSize: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', color: '#999', fontSize: 14 }}>
                       Không tìm thấy siêu thị phù hợp
                     </div>
                   ) : (
@@ -407,46 +474,82 @@ const BranchSelector: React.FC = () => {
                           onClick={() => {
                             if (branch.coordinates) {
                               setMapCenter([branch.coordinates.lat, branch.coordinates.lng]);
-                              setMapZoom(15);
+                              setMapZoom(16);
                             }
                             handleSelectBranch(branch);
                           }}
                           style={{
-                            display: 'flex', gap: 12, padding: '14px',
-                            background: isActive ? '#FFF0F0' : 'white',
-                            border: isActive ? '1px solid #ffcdd2' : '1px solid transparent',
-                            borderRadius: 12, cursor: 'pointer',
-                            marginBottom: 8, transition: 'all 0.2s',
+                            display: 'flex',
+                            gap: 12,
+                            padding: '12px 16px',
+                            background: isActive ? '#E8F5E9' : 'white',
+                            border: isActive ? '2px solid #008848' : '1px solid #e0e0e0',
+                            borderRadius: 12,
+                            cursor: 'pointer',
+                            width: isMobile ? 300 : '100%',
+                            flexShrink: 0,
+                            boxSizing: 'border-box',
+                            boxShadow: isActive ? '0 4px 12px rgba(0,136,72,0.15)' : '0 2px 6px rgba(0,0,0,0.02)',
+                            transition: 'all 0.2s ease',
+                            flexDirection: 'row',
+                            alignItems: 'flex-start',
                           }}
                         >
                           <div style={{
-                            width: 40, height: 40, borderRadius: 10,
-                            background: isActive ? '#C1121F' : '#f5f5f5',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            flexShrink: 0, fontSize: 18, color: isActive ? 'white' : '#999',
+                            width: 36,
+                            height: 36,
+                            borderRadius: 8,
+                            background: isActive ? '#008848' : '#f5f5f5',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            fontSize: 16,
+                            color: isActive ? 'white' : '#666',
                           }}>
                             🏪
                           </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 14, fontWeight: isActive ? 800 : 600, color: isActive ? '#C1121F' : '#333', marginBottom: 4 }}>
-                              {branch.name}
-                            </div>
-                            {branch.address && (
-                              <div style={{ fontSize: 12, color: '#666', lineHeight: 1.4, marginBottom: 4 }}>
-                                {branch.address}
+                          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+                            <div>
+                              <div style={{ 
+                                fontSize: 13, 
+                                fontWeight: isActive ? 800 : 600, 
+                                color: isActive ? '#008848' : '#333', 
+                                marginBottom: 4,
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                              }}>
+                                {branch.name}
                               </div>
-                            )}
-                            <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 11, color: '#888' }}>
+                              {branch.address && (
+                                <div style={{ 
+                                  fontSize: 11, 
+                                  color: '#666', 
+                                  lineHeight: 1.3, 
+                                  marginBottom: 6,
+                                  display: '-webkit-box',
+                                  WebkitLineClamp: 2,
+                                  WebkitBoxOrient: 'vertical',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  height: 28
+                                }}>
+                                  {branch.address}
+                                </div>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px', alignItems: 'center', fontSize: 10, color: '#888', marginTop: 'auto' }}>
                               {branch.operating_hours && (
-                                <span>🕐 {branch.operating_hours}</span>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>🕐 {branch.operating_hours}</span>
                               )}
                               {branch.distance !== null ? (
-                                <span style={{ color: '#0288d1', fontWeight: 600 }}>
-                                  📍 Cách {branch.distance.toFixed(1)} km
+                                <span style={{ color: '#008848', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 2 }}>
+                                  📍 {branch.distance.toFixed(1)} km
                                 </span>
                               ) : !branch.coordinates && (
                                 <span style={{ color: '#d32f2f', fontWeight: 600 }}>
-                                  📍 Không có vị trí
+                                  📍 Không vị trí
                                 </span>
                               )}
                             </div>
@@ -460,11 +563,12 @@ const BranchSelector: React.FC = () => {
 
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Confirmation Modal (Cart Clear) */}
-      {showConfirm && (
+      {showConfirm && createPortal(
         <div
           style={{
             position: 'fixed', inset: 0, zIndex: 10000, display: 'flex',
@@ -511,15 +615,16 @@ const BranchSelector: React.FC = () => {
                 onClick={confirmBranchChange}
                 style={{
                   flex: 1, padding: '12px 0', borderRadius: 12, border: 'none',
-                  background: '#C1121F', color: 'white', fontWeight: 700,
-                  fontSize: 14, cursor: 'pointer', boxShadow: '0 4px 16px rgba(193,18,31,0.3)',
+                  background: '#008848', color: 'white', fontWeight: 700,
+                  fontSize: 14, cursor: 'pointer', boxShadow: '0 4px 16px rgba(0,136,72,0.3)',
                 }}
               >
                 {t('cart.confirm')}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
