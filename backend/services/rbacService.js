@@ -190,18 +190,18 @@ export async function ensureRbacSeed() {
     }
   }
 
-  // Ensure default admin user admin@lottemart.vn exists and is active
+  // Ensure default admin user admin@bachhoaxanh.com exists and is active
   try {
     const mongoose = (await import('mongoose')).default;
     const User = mongoose.model('User');
-    const adminEmail = 'admin@lottemart.vn';
+    const adminEmail = 'admin@bachhoaxanh.com';
     const adminUser = await User.findOne({ email: adminEmail });
     if (!adminUser) {
       const bcrypt = await import('bcryptjs');
       const hash = await bcrypt.default.hash('Admin@123', 10);
       await User.create({
         username: 'admin',
-        full_name: 'Admin Lotte',
+        full_name: 'Admin Bách hóa XANH',
         email: adminEmail,
         password_hash: hash,
         role_id: 1,

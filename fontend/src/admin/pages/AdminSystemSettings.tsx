@@ -382,7 +382,7 @@ const AdminSystemSettings: React.FC = () => {
                   <div className="grid grid-cols-2 gap-6">
                     <div className="col-span-2 md:col-span-1 space-y-1.5">
                       <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.systemName')}</label>
-                      <input className={inputCls} type="text" placeholder="VD: Lotte Mart Online" value={settings.system_name || ''} onChange={e => handleSettingChange('system_name', e.target.value)} />
+                      <input className={inputCls} type="text" placeholder="VD: Bách hóa XANH Online" value={settings.system_name || ''} onChange={e => handleSettingChange('system_name', e.target.value)} />
                     </div>
                     <div className="col-span-2 md:col-span-1 space-y-1.5">
                       <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.brandName')}</label>
@@ -460,7 +460,7 @@ const AdminSystemSettings: React.FC = () => {
                     <span className="w-2.5 h-2.5 rounded-full bg-amber-400 block"></span>
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 block"></span>
                   </div>
-                  <span className="text-white/80 text-xs font-bold tracking-wide">Lotte Mart Core</span>
+                  <span className="text-white/80 text-xs font-bold tracking-wide">Bách hóa XANH Core</span>
                 </div>
                 <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full tracking-wide flex items-center gap-1 ${
                   health?.status === 'OK' ? 'text-emerald-400 bg-emerald-500/15' : 'text-rose-400 bg-rose-500/15'
@@ -573,7 +573,7 @@ const AdminSystemSettings: React.FC = () => {
                     {modalType === 'enable' ? 'Xác nhận kích hoạt Chế độ Bảo trì' : 'Xác nhận tắt Chế độ Bảo trì'}
                   </h3>
                   <p className="text-xs text-slate-400 mt-1 uppercase font-bold tracking-wider">
-                    {modalType === 'enable' ? 'Lotte Mart Safety Alert' : 'System Restore Operation'}
+                    {modalType === 'enable' ? 'Bách hóa XANH Safety Alert' : 'System Restore Operation'}
                   </p>
                 </div>
               </div>

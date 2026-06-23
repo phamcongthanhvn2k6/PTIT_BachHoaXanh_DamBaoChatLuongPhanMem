@@ -309,7 +309,7 @@ const Cart: React.FC = () => {
              const lineTotal = safeUnitPrice * safeQuantity;
              const productName = productCore?.name || bp?.name || (item as any).product_name || 'Sản phẩm';
              const productImage = productCore?.images?.[0] || bp?.images?.[0] || (item as any).product_image || '';
-             const productBrand = productCore?.brand || bp?.brand || 'Lotte';
+             const productBrand = productCore?.brand || bp?.brand || 'Bách hóa XANH';
              const promoItem = promoData?.items?.find((i: any) => String(i.branch_product_id) === String(item.branch_product_id));
              
                return (

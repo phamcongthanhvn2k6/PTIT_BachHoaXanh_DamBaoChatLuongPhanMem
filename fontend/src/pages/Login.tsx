@@ -2,24 +2,48 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store';
-import { login, loginWithGoogle, sendOTP, verifyOTP, clearAuthMessages, hydrateOAuthSession, forgotPassword, resetPassword } from '../slices/authSlice';
+import { login, register, loginWithGoogle, sendOTP, verifyOTP, clearAuthMessages, hydrateOAuthSession, forgotPassword, resetPassword, authVerify } from '../slices/authSlice';
 import { toast } from '../components/Toast/toastEvent';
 import { setupGoogleSignIn } from '../utils/googleIdentity';
 import { authService } from '../services/authService';
 
-const Login: React.FC = () => {
+const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+const phoneRegex = /^(?:\+84|0)(3[2-9]|5[6|8|9]|7[0|6-9]|8[1-9]|9[0-9])[0-9]{7}$/;
+const usernameRegex = /^[\p{L} \.'\-]{2,80}$/u;
+const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&()[\]{}^~#\-+=<>/\\;:'",.])[A-Za-z\d@$!%*?&()[\]{}^~#\-+=<>/\\;:'",.]{8,}$/;
+
+interface LoginProps {
+  mode?: 'login' | 'register';
+}
+
+const Login: React.FC<LoginProps> = ({ mode = 'login' }) => {
   const { t } = useTranslation();
   const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
   const isGoogleConfigured = googleClientId.length > 0;
+  
+  const [activeTab, setActiveTab] = useState<'login' | 'register'>(mode);
+  
+  // Login states
   const [loginMode, setLoginMode] = useState<'password' | 'otp'>('password');
   const [showPassword, setShowPassword] = useState(false);
   const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
+  
+  // Register states
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState(0); // 0-4 levels
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  
+  // Common states
   const [socialLoading, setSocialLoading] = useState<'google' | 'facebook' | null>(null);
   const [resendCountdown, setResendCountdown] = useState(0);
-  const [errors, setErrors] = useState<{identifier?:string, password?:string, form?:string}>({});
+  const [errors, setErrors] = useState<any>({});
 
   // Forgot password state
   const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
@@ -42,6 +66,20 @@ const Login: React.FC = () => {
   const authState = useAppSelector((state) => state.auth);
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Sync mode prop with active tab
+  useEffect(() => {
+    setActiveTab(mode);
+    setErrors({});
+    dispatch(clearAuthMessages());
+  }, [mode, dispatch]);
+
+  const handleTabChange = (tab: 'login' | 'register') => {
+    setActiveTab(tab);
+    setErrors({});
+    dispatch(clearAuthMessages());
+    navigate(tab === 'login' ? '/login' : '/register');
+  };
 
   const getErrorText = (error: unknown, fallback: string) => {
     if (typeof error === 'string') return error;
@@ -155,7 +193,7 @@ const Login: React.FC = () => {
       }
     });
 
-  }, [isGoogleConfigured, dispatch]);
+  }, [isGoogleConfigured, dispatch, activeTab]);
 
   useEffect(() => {
     if (resendCountdown <= 0) return;
@@ -188,33 +226,67 @@ const Login: React.FC = () => {
 
   useEffect(() => {
     if (authState.error) {
-      setErrors((prev) => ({ ...prev, form: authState.error || undefined }));
+      setErrors((prev: any) => ({ ...prev, form: authState.error || undefined }));
     }
   }, [authState.error]);
 
-  // Real-time validation
+  // Real-time validation for login
   useEffect(() => {
-    if (Object.keys(errors).length > 0 && !errors.form) {
-      validate();
+    if (activeTab === 'login' && Object.keys(errors).length > 0 && !errors.form) {
+      validateLogin();
     }
-  }, [identifier, password]);
+  }, [identifier, loginPassword, activeTab]);
 
-  function validate() {
-    const e:any = {};
+  // Real-time validation for registration
+  useEffect(() => {
+    if (activeTab === 'register' && Object.keys(errors).length > 0 && !errors.form) {
+      validateRegister();
+    }
+  }, [username, email, phone, registerPassword, confirmPassword, agreeTerms, activeTab]);
+
+  function validateLogin() {
+    const e: any = {};
     if (loginMode === 'password') {
       if (!identifier) e.identifier = 'Vui lòng nhập email hoặc số điện thoại.';
-      if (!password) e.password = 'Vui lòng nhập mật khẩu.';
+      if (!loginPassword) e.password = 'Vui lòng nhập mật khẩu.';
     }
     setErrors(e);
     return Object.keys(e).length === 0;
   }
 
-  async function onSubmit(ev: React.FormEvent) {
+  function validateRegister() {
+    const e: any = {};
+    if (!usernameRegex.test(username)) e.username = 'Họ tên không hợp lệ (2-80 ký tự)';
+    if (!emailRegex.test(email)) e.email = 'Vui lòng nhập email hợp lệ';
+    if (phone && !phoneRegex.test(phone)) e.phone = 'Số điện thoại không hợp lệ';
+    if (!passwordRegex.test(registerPassword)) e.password = 'Mật khẩu ít nhất 8 ký tự, gồm HOA, thường, số, ký tự đặc biệt';
+    if (registerPassword !== confirmPassword) e.confirmPassword = 'Xác nhận mật khẩu không khớp';
+    if (!agreeTerms) e.terms = 'Bạn cần đồng ý với điều khoản dịch vụ';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  const calculatePasswordStrength = (pwd: string) => {
+    let strength = 0;
+    if (pwd.length >= 8) strength++;
+    if (/[A-Z]/.test(pwd)) strength++;
+    if (/[0-9]/.test(pwd)) strength++;
+    if (/[^A-Za-z0-9]/.test(pwd)) strength++;
+    setPasswordStrength(strength);
+  };
+
+  const handleRegisterPasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newPwd = e.target.value;
+    setRegisterPassword(newPwd);
+    calculatePasswordStrength(newPwd);
+  };
+
+  async function onLoginSubmit(ev: React.FormEvent) {
     ev.preventDefault();
-    if (!validate()) return;
+    if (!validateLogin()) return;
     dispatch(clearAuthMessages());
     try {
-      await dispatch(login({ emailOrPhone: identifier, password })).unwrap();
+      await dispatch(login({ emailOrPhone: identifier, password: loginPassword })).unwrap();
       handlePostLoginRedirect();
     } catch (err: any) {
       const errorMsg = getErrorText(err, 'Đăng nhập thất bại');
@@ -228,6 +300,21 @@ const Login: React.FC = () => {
     }
   }
 
+  async function onRegisterSubmit(ev: React.FormEvent) {
+    ev.preventDefault();
+    if (!validateRegister()) return;
+    dispatch(clearAuthMessages());
+    try {
+      await dispatch(register({ username, email, phone, password: registerPassword })).unwrap();
+      toast.success('Đăng ký thành công!');
+      setOtpEmail(email);
+      setShowEmailOtpModal(true);
+      setEmailOtpInfoMessage('Mã OTP xác thực tài khoản đã được gửi tới email đăng ký.');
+    } catch (err: any) {
+      setErrors({ form: getErrorText(err, 'Đăng ký thất bại') });
+    }
+  }
+
   const handleFacebookLogin = async () => {
     dispatch(clearAuthMessages());
     setSocialLoading('facebook');
@@ -237,8 +324,6 @@ const Login: React.FC = () => {
     } catch (err: any) {
       setErrors({ form: getErrorText(err, 'Đăng nhập Facebook thất bại') });
       setSocialLoading(null);
-    } finally {
-      // no-op: redirect flow handles loading state
     }
   };
 
@@ -302,8 +387,10 @@ const Login: React.FC = () => {
     setEmailOtpInfoMessage(null);
     try {
       await authService.verifyEmailOtp({ email: otpEmail, otp: emailOtpCode.trim() });
+      await dispatch(authVerify() as any);
       setShowEmailOtpModal(false);
-      toast.success('Xác thực email thành công. Vui lòng đăng nhập lại.');
+      toast.success('Xác thực email thành công.');
+      handlePostLoginRedirect();
     } catch (err: any) {
       const message = getErrorText(err?.response?.data || err, 'OTP không hợp lệ hoặc đã hết hạn');
       setEmailOtpInfoMessage(message);
@@ -315,6 +402,10 @@ const Login: React.FC = () => {
 
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
+  };
+
+  const toggleConfirmPasswordVisibility = () => {
+    setShowConfirmPassword(!showConfirmPassword);
   };
 
   const handleForgotRequest = async (e: React.FormEvent) => {
@@ -358,319 +449,507 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 antialiased">
-      {/* Left Side: Illustrative Banner (Desktop Only) */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-primary/10">
-        <div
-          className="absolute inset-0 bg-cover bg-center mix-blend-overlay opacity-60"
-          style={{
-            backgroundImage:
-              'url("https://lh3.googleusercontent.com/aida-public/AB6AXuC0vaFcvRm0NyqmZh5tQaEcOGY7W6X08oj_iaRWnbSIibquhhza_mYSoJTNCVrqL0O2S5xlDSsZvDBSpMSIO-L8z-tIEA_0qSpFgLAsoV0LVXL4ovN_1golU_F2JrI7plsdhXRYtneBLDFNUbemDES_cqr3fCfKsA6k_XNRDin7PebVpp3Op3zd5IiGMkhWRUphSmjderaX0Rg2-4fzUhpkAZrwXJygWYKW1o5Q2qxPo3OoGVzFspMzbdpfa8WK_520bnrKZFGhuTc")',
-          }}
-        />
-        <div className="relative z-10 flex flex-col justify-center px-20 text-slate-900 dark:text-slate-100">
-          <div className="mb-8 flex items-center gap-3">
-            <div className="p-3 bg-primary rounded-xl text-white">
-              <span className="material-symbols-outlined text-3xl">shopping_cart</span>
-            </div>
-            <h1 className="text-3xl font-extrabold tracking-tight">Lotte Mart</h1>
+    <div 
+      className="flex min-h-screen w-full relative items-center justify-center p-4 sm:p-6 md:p-10 font-display text-slate-900 dark:text-slate-100 antialiased bg-cover bg-center"
+      style={{
+        backgroundImage:
+          'url("https://lh3.googleusercontent.com/aida-public/AB6AXuC0vaFcvRm0NyqmZh5tQaEcOGY7W6X08oj_iaRWnbSIibquhhza_mYSoJTNCVrqL0O2S5xlDSsZvDBSpMSIO-L8z-tIEA_0qSpFgLAsoV0LVXL4ovN_1golU_F2JrI7plsdhXRYtneBLDFNUbemDES_cqr3fCfKsA6k_XNRDin7PebVpp3Op3zd5IiGMkhWRUphSmjderaX0Rg2-4fzUhpkAZrwXJygWYKW1o5Q2qxPo3OoGVzFspMzbdpfa8WK_520bnrKZFGhuTc")',
+      }}
+    >
+      {/* Blurred Fullscreen Overlay */}
+      <div className="absolute inset-0 bg-slate-900/50 dark:bg-black/70 backdrop-blur-md z-0" />
+
+      {/* Center Glassmorphism Form Card */}
+      <div className="relative z-10 w-full max-w-lg bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-white/20 dark:border-slate-800/30 rounded-3xl p-6 sm:p-10 shadow-2xl flex flex-col items-center">
+        
+        {/* Brand Header */}
+        <div className="flex items-center gap-2.5 mb-6">
+          <div className="size-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary/25">
+            <span className="material-symbols-outlined text-2xl">shopping_cart</span>
           </div>
-          <h2 className="text-5xl font-black leading-tight mb-6">
-            Trải nghiệm mua sắm <br />
-            <span className="text-primary">{t('auth.convenientAtHome')}</span>
-          </h2>
-          <p className="text-lg text-slate-700 dark:text-slate-300 max-w-md leading-relaxed">
-            Hàng ngàn sản phẩm tươi ngon, chất lượng từ Lotte Mart đang chờ đón bạn. Đăng nhập ngay để nhận ưu đãi độc quyền.
-          </p>
-          <div className="mt-12 flex gap-4">
-            <div className="flex -space-x-3">
-              <img
-                className="h-10 w-10 rounded-full border-2 border-white"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCXpp7ANLy-cW-fHpKcURla6hBSP_UlYCZbNnxuC0ayWPALta8dFxn9mNxKFVsevtBkcnpXzeRZ5dq7rwTyZ7m0Zb17JgPhNBQJOOCyYXo31BvkkYUGUm3KxooFh_9cHaQOR3MLuZqkRIGKq5a9LgbWA9s9dKnyRWBGP9-T8qGVdnj6DrTloqhFiMVWJVWsKE7use9pQbB1h5pjib6KYBbVpuAZoNGzjAozLuDpZvzy6r64Wam7T5exwFOMp9QrQjwBLXKyu1oQ0dw"
-                alt="User avatar 1"
-              />
-              <img
-                className="h-10 w-10 rounded-full border-2 border-white"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBHVrzc9rlOiZwcGMAz0oIa7AFxK831BW_DL-woMP8v1AnDk1ptdZa6FLA-CCfYH83DNlIldje7JBqHbUBIPJdOWKVHeBar0hOQaJnX3lXi7-I6SHN72vZYvbcNf-julCBvYBJAlyCSWBCzLXQthPCe1iniABUP2UTOKMIYCLxI737dhhJ3E4wIBOneit93hkRQby1En9ARzAR8Ca49k0R-ByLgsC3WBQwhQhm7HLHWi_9Ol3jshbriN5aEy7Y6FHU1sOlSqu8B4G4"
-                alt="User avatar 2"
-              />
-              <img
-                className="h-10 w-10 rounded-full border-2 border-white"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDpozpESZBnPQ1xMaX-NaO28RkjLMd08a2nGVudSdW9eikqj9gDL4D2yhntsxDyZR0uTlbMojLex9sA5JMP-3kQ9B7HYX2KQdWRL3M0hgzFwxjtMDfJFjluYJlM4dJet-WrwEZ8K1x4pCl-t5mXf3mDhAnIUwZnJK1y8RruOYHOw96aSC9FPmt9QEDg_zpZGPzdSiw3UqWRhsM9c9TEgn97oOOBG2euyQLzRmQXWXq6VECMU8Y6kXqz4mSn-6jXBnpWYFQy1eMW_0Q"
-                alt="User avatar 3"
-              />
-            </div>
-            <p className="text-sm font-medium flex items-center text-slate-600 dark:text-slate-400">
-              Hơn 1tr+ khách hàng tin dùng
-            </p>
+          <span className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Bách hóa XANH</span>
+        </div>
+
+        {/* Tab Selection */}
+        <div className="w-full border-b border-slate-100 dark:border-slate-800/50 mb-6 flex justify-center">
+          <div className="flex gap-8">
+            <button
+              type="button"
+              onClick={() => handleTabChange('login')}
+              className={`pb-3 px-2 text-base font-bold border-b-2 transition-all relative ${
+                activeTab === 'login'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              {t('auth.login', 'Đăng nhập')}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange('register')}
+              className={`pb-3 px-2 text-base font-bold border-b-2 transition-all relative ${
+                activeTab === 'register'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              {t('auth.register', 'Đăng ký')}
+            </button>
           </div>
         </div>
 
-        {/* Abstract decorative elements */}
-        <div className="absolute bottom-0 right-0 w-64 h-64 bg-primary/20 rounded-full -mr-20 -mb-20 blur-3xl" />
-        <div className="absolute top-0 left-0 w-48 h-48 bg-primary/10 rounded-full -ml-10 -mt-10 blur-2xl" />
-      </div>
+        {/* Error and Success Messages */}
+        {errors.form && (() => {
+          const formError = errors.form || '';
+          const isGoogleCollision = formError.includes('[PROVIDER_COLLISION_GOOGLE]') || formError.includes('[USE_GOOGLE_LOGIN]');
+          const isFacebookCollision = formError.includes('[PROVIDER_COLLISION_FACEBOOK]') || formError.includes('[USE_FACEBOOK_LOGIN]');
+          const cleanMessage = formError.replace(/\[[\w_]+\]\s*/g, '');
 
-      {/* Right Side: Login Form - CĂN GIỮA THEO CHIỀU NGANG */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 bg-white dark:bg-background-dark">
-        <div className="w-full max-w-120 flex flex-col items-center">
-          {/* Header Mobile Logo */}
-          <div className="lg:hidden flex items-center gap-2 mb-10">
-            <div className="size-10 bg-primary rounded-lg flex items-center justify-center text-white">
-              <span className="material-symbols-outlined">shopping_bag</span>
-            </div>
-            <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Lotte Mart</span>
-          </div>
-
-          <div className="mb-10 text-center">
-            <h3 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">{t('auth.welcomeBack')}</h3>
-            <p className="text-slate-500 dark:text-slate-400">{t('auth.pleaseEnterInfo')}</p>
-          </div>
-
-          <div className="w-full grid grid-cols-2 gap-2 mb-5">
-            <button
-              type="button"
-              onClick={() => {
-                setLoginMode('password');
-                setErrors({});
-                dispatch(clearAuthMessages());
-              }}
-              className={`px-4 py-2 rounded-xl font-semibold border transition ${loginMode === 'password' ? 'bg-primary text-white border-primary' : 'bg-white text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700'}`}
-            >
-              Email/Password
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setLoginMode('otp');
-                setErrors({});
-                dispatch(clearAuthMessages());
-              }}
-              className={`px-4 py-2 rounded-xl font-semibold border transition ${loginMode === 'otp' ? 'bg-primary text-white border-primary' : 'bg-white text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700'}`}
-            >
-              Phone OTP
-            </button>
-          </div>
-
-          {errors.form && (() => {
-            const formError = errors.form || '';
-            const isGoogleCollision = formError.includes('[PROVIDER_COLLISION_GOOGLE]') || formError.includes('[USE_GOOGLE_LOGIN]');
-            const isFacebookCollision = formError.includes('[PROVIDER_COLLISION_FACEBOOK]') || formError.includes('[USE_FACEBOOK_LOGIN]');
-            const cleanMessage = formError.replace(/\[[\w_]+\]\s*/g, '');
-
-            if (isGoogleCollision) {
-              return (
-                <div className="w-full p-4 mb-4 bg-blue-50 border border-blue-200 rounded-xl text-sm">
-                  <div className="flex items-center gap-2 mb-1">
-                    <svg className="h-5 w-5" viewBox="0 0 24 24">
-                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                    </svg>
-                    <span className="font-bold text-blue-800">Tài khoản Google</span>
-                  </div>
-                  <p className="text-blue-700">{cleanMessage}</p>
+          if (isGoogleCollision) {
+            return (
+              <div className="w-full p-4 mb-4 bg-blue-50 border border-blue-200 rounded-xl text-sm">
+                <div className="flex items-center gap-2 mb-1">
+                  <svg className="h-5 w-5" viewBox="0 0 24 24">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                  </svg>
+                  <span className="font-bold text-blue-800">Tài khoản Google</span>
                 </div>
-              );
-            }
-
-            if (isFacebookCollision) {
-              return (
-                <div className="w-full p-4 mb-4 bg-indigo-50 border border-indigo-200 rounded-xl text-sm">
-                  <div className="flex items-center gap-2 mb-1">
-                    <svg className="h-5 w-5" fill="#1877F2" viewBox="0 0 24 24">
-                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                    </svg>
-                    <span className="font-bold text-indigo-800">Tài khoản Facebook</span>
-                  </div>
-                  <p className="text-indigo-700">{cleanMessage}</p>
-                </div>
-              );
-            }
-
-            return <div className="w-full p-3 mb-4 bg-red-100 text-red-600 rounded-lg text-sm font-medium">{cleanMessage}</div>;
-          })()}
-          {authState.successMessage && !errors.form && (
-            <div className="w-full p-3 mb-4 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium">{authState.successMessage}</div>
-          )}
-
-          {loginMode === 'password' ? (
-          <form className="w-full space-y-5" onSubmit={onSubmit}>
-            {/* Email Input */}
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">{t('auth.emailOrPhone')}</label>
-              <div className="relative flex items-center group">
-                <div className="absolute left-0 top-0 h-full w-12 flex items-center justify-center pointer-events-none">
-                  <span className="material-symbols-outlined text-slate-400 text-[20px] leading-none block group-focus-within:text-primary transition-colors">
-                    mail
-                  </span>
-                </div>
-                <input
-                  className={`w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800 border ${errors.identifier ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-slate-900 dark:text-white`}
-                  placeholder={t('auth.emailOrPhone')}
-                  type="text"
-                  value={identifier}
-                  onChange={e => setIdentifier(e.target.value)}
-                  aria-invalid={!!errors.identifier}
-                />
+                <p className="text-blue-700">{cleanMessage}</p>
               </div>
-              {errors.identifier && <div className="text-red-500 text-sm mt-1 font-medium">{errors.identifier}</div>}
+            );
+          }
+
+          if (isFacebookCollision) {
+            return (
+              <div className="w-full p-4 mb-4 bg-indigo-50 border border-indigo-200 rounded-xl text-sm">
+                <div className="flex items-center gap-2 mb-1">
+                  <svg className="h-5 w-5" fill="#1877F2" viewBox="0 0 24 24">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                  </svg>
+                  <span className="font-bold text-indigo-800">Tài khoản Facebook</span>
+                </div>
+                <p className="text-indigo-700">{cleanMessage}</p>
+              </div>
+            );
+          }
+
+          return <div className="w-full p-3 mb-4 bg-red-100 text-red-600 rounded-lg text-sm font-medium">{cleanMessage}</div>;
+        })()}
+        {authState.successMessage && !errors.form && (
+          <div className="w-full p-3 mb-4 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium">{authState.successMessage}</div>
+        )}
+
+        {activeTab === 'login' ? (
+          /* ================= LOGIN FORM ================= */
+          <div className="w-full">
+            <div className="mb-5 text-center">
+              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-1">{t('auth.welcomeBack')}</h3>
+              <p className="text-slate-500 dark:text-slate-400 text-xs">{t('auth.pleaseEnterInfo')}</p>
             </div>
 
-            {/* Password Input */}
-            <div>
-              <div className="flex justify-between mb-2">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">{t('auth.password')}</label>
-                <button type="button" onClick={() => setIsForgotModalOpen(true)} className="text-sm font-semibold text-primary hover:underline">
-                  Quên mật khẩu?
-                </button>
-              </div>
-              <div className="relative flex items-center group">
-                <div className="absolute left-0 top-0 h-full w-12 flex items-center justify-center pointer-events-none">
-                  <span className="material-symbols-outlined text-slate-400 text-[20px] leading-none block group-focus-within:text-primary transition-colors">
-                    lock
-                  </span>
-                </div>
-                <input
-                  className={`w-full pl-12 pr-12 py-4 bg-slate-50 dark:bg-slate-800 border ${errors.password ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-slate-900 dark:text-white`}
-                  placeholder={t('auth.password')}
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  aria-invalid={!!errors.password}
-                />
-                <div className="absolute right-0 top-0 h-full w-12 flex items-center justify-center">
-                  <button
-                    type="button"
-                    onClick={togglePasswordVisibility}
-                    className="text-slate-400 hover:text-slate-600 flex items-center justify-center w-full h-full"
-                  >
-                    <span className="material-symbols-outlined text-[20px] leading-none block">
-                      {showPassword ? 'visibility_off' : 'visibility'}
-                    </span>
-                  </button>
-                </div>
-              </div>
-              {errors.password && <div className="text-red-500 text-sm mt-1 font-medium">{errors.password}</div>}
-            </div>
-
-            {/* Remember Me */}
-            <div className="flex items-center">
-              <input
-                className="h-5 w-5 text-primary focus:ring-primary border-slate-300 rounded transition-all cursor-pointer"
-                id="remember-me"
-                type="checkbox"
-              />
-              <label className="ml-3 text-sm text-slate-600 dark:text-slate-400 cursor-pointer" htmlFor="remember-me">
-                Ghi nhớ tôi
-              </label>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              className="w-full py-4 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl shadow-lg shadow-primary/25 transition-all active:scale-[0.98] disabled:opacity-70"
-              type="submit"
-              disabled={authState.loading}
-            >
-              {authState.loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
-            </button>
-          </form>
-          ) : (
-            <form className="w-full space-y-4" onSubmit={handleVerifyOTP}>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">{t('auth.phoneNumber')}</label>
-                <input
-                  className="w-full px-4 py-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-slate-900 dark:text-white"
-                  placeholder={t('auth.phoneNumber')}
-                  type="text"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
-              </div>
-
+            <div className="w-full grid grid-cols-2 gap-2 mb-5">
               <button
                 type="button"
-                onClick={handleSendOTP}
-                disabled={authState.loading || resendCountdown > 0}
-                className="w-full py-3 border border-primary text-primary font-semibold rounded-xl disabled:opacity-50"
+                onClick={() => {
+                  setLoginMode('password');
+                  setErrors({});
+                  dispatch(clearAuthMessages());
+                }}
+                className={`px-4 py-2 rounded-xl font-semibold border text-xs transition ${loginMode === 'password' ? 'bg-primary text-white border-primary shadow-sm' : 'bg-white text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700'}`}
               >
-                {resendCountdown > 0 ? t('auth.resendOTP', { seconds: resendCountdown }) : t('auth.sendOTP')}
+                Email/Password
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginMode('otp');
+                  setErrors({});
+                  dispatch(clearAuthMessages());
+                }}
+                className={`px-4 py-2 rounded-xl font-semibold border text-xs transition ${loginMode === 'otp' ? 'bg-primary text-white border-primary shadow-sm' : 'bg-white text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700'}`}
+              >
+                Phone OTP
+              </button>
+            </div>
 
+            {loginMode === 'password' ? (
+              <form className="w-full space-y-4" onSubmit={onLoginSubmit}>
+                {/* Email Input */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">{t('auth.emailOrPhone')}</label>
+                  <div className="relative flex items-center group">
+                    <div className="absolute left-0 top-0 h-full w-12 flex items-center justify-center pointer-events-none">
+                      <span className="material-symbols-outlined text-slate-400 text-[20px] leading-none block group-focus-within:text-primary transition-colors">
+                        mail
+                      </span>
+                    </div>
+                    <input
+                      className={`w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border ${errors.identifier ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-slate-900 dark:text-white text-sm`}
+                      placeholder={t('auth.emailOrPhone')}
+                      type="text"
+                      value={identifier}
+                      onChange={e => setIdentifier(e.target.value)}
+                      aria-invalid={!!errors.identifier}
+                    />
+                  </div>
+                  {errors.identifier && <div className="text-red-500 text-xs mt-1 font-medium">{errors.identifier}</div>}
+                </div>
+
+                {/* Password Input */}
+                <div>
+                  <div className="flex justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('auth.password')}</label>
+                    <button type="button" onClick={() => setIsForgotModalOpen(true)} className="text-xs font-semibold text-primary hover:underline">
+                      Quên mật khẩu?
+                    </button>
+                  </div>
+                  <div className="relative flex items-center group">
+                    <div className="absolute left-0 top-0 h-full w-12 flex items-center justify-center pointer-events-none">
+                      <span className="material-symbols-outlined text-slate-400 text-[20px] leading-none block group-focus-within:text-primary transition-colors">
+                        lock
+                      </span>
+                    </div>
+                    <input
+                      className={`w-full pl-11 pr-11 py-3 bg-slate-50 dark:bg-slate-800 border ${errors.password ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-slate-900 dark:text-white text-sm`}
+                      placeholder={t('auth.password')}
+                      type={showPassword ? 'text' : 'password'}
+                      value={loginPassword}
+                      onChange={e => setLoginPassword(e.target.value)}
+                      aria-invalid={!!errors.password}
+                    />
+                    <div className="absolute right-0 top-0 h-full w-12 flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={togglePasswordVisibility}
+                        className="text-slate-400 hover:text-slate-600 flex items-center justify-center w-full h-full"
+                      >
+                        <span className="material-symbols-outlined text-[20px] leading-none block">
+                          {showPassword ? 'visibility_off' : 'visibility'}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                  {errors.password && <div className="text-red-500 text-xs mt-1 font-medium">{errors.password}</div>}
+                </div>
+
+                {/* Remember Me */}
+                <div className="flex items-center">
+                  <input
+                    className="h-4.5 w-4.5 text-primary focus:ring-primary border-slate-300 rounded transition-all cursor-pointer"
+                    id="remember-me"
+                    type="checkbox"
+                  />
+                  <label className="ml-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer" htmlFor="remember-me">
+                    Ghi nhớ tôi
+                  </label>
+                </div>
+
+                {/* Submit Button */}
+                <button
+                  className="w-full py-3.5 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl shadow-lg shadow-primary/25 transition-all active:scale-[0.98] disabled:opacity-70 text-sm mt-1"
+                  type="submit"
+                  disabled={authState.loading}
+                >
+                  {authState.loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+                </button>
+              </form>
+            ) : (
+              <form className="w-full space-y-4" onSubmit={handleVerifyOTP}>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">{t('auth.phoneNumber')}</label>
+                  <input
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-slate-900 dark:text-white text-sm"
+                    placeholder={t('auth.phoneNumber')}
+                    type="text"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSendOTP}
+                  disabled={authState.loading || resendCountdown > 0}
+                  className="w-full py-2.5 border border-primary text-primary font-semibold rounded-xl disabled:opacity-50 text-xs"
+                >
+                  {resendCountdown > 0 ? t('auth.resendOTP', { seconds: resendCountdown }) : t('auth.sendOTP')}
+                </button>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">{t('auth.otpCode')}</label>
+                  <input
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-slate-900 dark:text-white text-sm"
+                    placeholder={t('auth.otpCode')}
+                    type="text"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                  />
+                </div>
+
+                <button
+                  className="w-full py-3.5 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl shadow-lg shadow-primary/25 transition-all active:scale-[0.98] disabled:opacity-70 text-sm mt-1"
+                  type="submit"
+                  disabled={authState.loading}
+                >
+                  {authState.loading ? 'Đang xác thực OTP...' : 'Xác thực OTP'}
+                </button>
+              </form>
+            )}
+          </div>
+        ) : (
+          /* ================= REGISTER FORM ================= */
+          <div className="w-full">
+            <div className="mb-5 text-center">
+              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-1">{t('auth.createAccount', 'Tạo tài khoản mới!')}</h3>
+              <p className="text-slate-500 dark:text-slate-400 text-xs">{t('auth.registerBannerDesc', 'Đăng ký ngay để nhận nhiều ưu đãi.')}</p>
+            </div>
+
+            <form className="w-full space-y-3.5" onSubmit={onRegisterSubmit}>
+              {/* Full name input */}
               <div>
-                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">{t('auth.otpCode')}</label>
-                <input
-                  className="w-full px-4 py-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-slate-900 dark:text-white"
-                  placeholder={t('auth.otpCode')}
-                  type="text"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                />
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">{t('auth.fullName', 'Họ và Tên')}</label>
+                <div className="relative flex items-center group">
+                  <div className="absolute left-0 top-0 h-full w-12 flex items-center justify-center pointer-events-none">
+                    <span className="material-symbols-outlined text-slate-400 text-[20px] group-focus-within:text-primary transition-colors">
+                      person
+                    </span>
+                  </div>
+                  <input
+                    className={`w-full pl-11 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border ${errors.username ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-slate-900 dark:text-white text-sm`}
+                    placeholder={t('auth.fullName', 'Họ và Tên')}
+                    type="text"
+                    value={username}
+                    onChange={e => setUsername(e.target.value)}
+                  />
+                </div>
+                {errors.username && <div className="text-red-500 text-xs mt-1 font-medium">{errors.username}</div>}
+              </div>
+
+              {/* Email input */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Email</label>
+                <div className="relative flex items-center group">
+                  <div className="absolute left-0 top-0 h-full w-12 flex items-center justify-center pointer-events-none">
+                    <span className="material-symbols-outlined text-slate-400 text-[20px] group-focus-within:text-primary transition-colors">
+                      mail
+                    </span>
+                  </div>
+                  <input
+                    className={`w-full pl-11 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border ${errors.email ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-slate-900 dark:text-white text-sm`}
+                    placeholder="example@gmail.com"
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                  />
+                </div>
+                {errors.email && <div className="text-red-500 text-xs mt-1 font-medium">{errors.email}</div>}
+              </div>
+
+              {/* Phone input */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Số điện thoại <span className="text-slate-400 font-normal text-xs">(tùy chọn)</span>
+                </label>
+                <div className="relative flex items-center group">
+                  <div className="absolute left-0 top-0 h-full w-12 flex items-center justify-center pointer-events-none">
+                    <span className="material-symbols-outlined text-slate-400 text-[20px] group-focus-within:text-primary transition-colors">
+                      call
+                    </span>
+                  </div>
+                  <input
+                    className={`w-full pl-11 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border ${errors.phone ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-slate-900 dark:text-white text-sm`}
+                    placeholder={t('auth.phoneNumber', 'Số điện thoại')}
+                    type="text"
+                    value={phone}
+                    onChange={e => setPhone(e.target.value)}
+                  />
+                </div>
+                {errors.phone && <div className="text-red-500 text-xs mt-1 font-medium">{errors.phone}</div>}
+              </div>
+
+              {/* Password and Confirm Password Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">{t('auth.password', 'Mật khẩu')}</label>
+                  <div className="relative flex items-center group">
+                    <input
+                      className={`w-full pl-3 pr-9 py-2.5 bg-slate-50 dark:bg-slate-800 border ${errors.password ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-slate-900 dark:text-white text-sm`}
+                      placeholder="••••••••"
+                      type={showPassword ? 'text' : 'password'}
+                      value={registerPassword}
+                      onChange={handleRegisterPasswordChange}
+                    />
+                    <div className="absolute right-0 top-0 h-full w-9 flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={togglePasswordVisibility}
+                        className="text-slate-400 hover:text-slate-600 flex items-center justify-center w-full h-full"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">
+                          {showPassword ? 'visibility_off' : 'visibility'}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">{t('auth.confirmPassword', 'Nhập lại Mật khẩu')}</label>
+                  <div className="relative flex items-center group">
+                    <input
+                      className={`w-full pl-3 pr-9 py-2.5 bg-slate-50 dark:bg-slate-800 border ${errors.confirmPassword ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'} rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-slate-900 dark:text-white text-sm`}
+                      placeholder="••••••••"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                    />
+                    <div className="absolute right-0 top-0 h-full w-9 flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={toggleConfirmPasswordVisibility}
+                        className="text-slate-400 hover:text-slate-600 flex items-center justify-center w-full h-full"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">
+                          {showConfirmPassword ? 'visibility_off' : 'visibility'}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                  {errors.confirmPassword && <div className="text-red-500 text-xs mt-1 font-medium">{errors.confirmPassword}</div>}
+                </div>
+              </div>
+              {errors.password && <div className="text-red-500 text-xs mt-1 font-medium">{errors.password}</div>}
+
+              {/* Password Strength Meter */}
+              <div className="space-y-2 pt-1">
+                <div className="flex gap-1 h-1.5 w-full">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={`flex-1 rounded-full transition-all duration-300 ${
+                        i < passwordStrength ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <div className="flex justify-between text-[11px] font-semibold text-slate-500">
+                  <span>Độ bảo mật: <span className="text-primary">{[t('auth.weak', 'Yếu'), t('auth.weak', 'Yếu'), t('auth.medium', 'Trung bình'), t('auth.good', 'Tốt'), t('auth.strong', 'Mạnh')][passwordStrength]}</span></span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                  <div className={`flex items-center gap-1 ${registerPassword.length >= 8 ? 'text-primary font-medium' : 'text-slate-400'}`}>
+                    <span className="material-symbols-outlined text-[12px] leading-none">
+                      {registerPassword.length >= 8 ? 'check_circle' : 'circle'}
+                    </span>
+                    <span>Tối thiểu 8 ký tự</span>
+                  </div>
+                  <div className={`flex items-center gap-1 ${/[A-Z]/.test(registerPassword) ? 'text-primary font-medium' : 'text-slate-400'}`}>
+                    <span className="material-symbols-outlined text-[12px] leading-none">
+                      {/[A-Z]/.test(registerPassword) ? 'check_circle' : 'circle'}
+                    </span>
+                    <span>1 chữ hoa</span>
+                  </div>
+                  <div className={`flex items-center gap-1 ${/[0-9]/.test(registerPassword) ? 'text-primary font-medium' : 'text-slate-400'}`}>
+                    <span className="material-symbols-outlined text-[12px] leading-none">
+                      {/[0-9]/.test(registerPassword) ? 'check_circle' : 'circle'}
+                    </span>
+                    <span>1 chữ số</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Terms and conditions */}
+              <div className="pt-1.5">
+                <label className="flex items-start gap-2.5 cursor-pointer group">
+                  <div className="relative flex items-center mt-0.5">
+                    <input
+                      className="peer appearance-none w-4.5 h-4.5 border-2 border-slate-300 rounded checked:bg-primary checked:border-primary transition-all focus:ring-0 focus:outline-none"
+                      type="checkbox"
+                      checked={agreeTerms}
+                      onChange={e => setAgreeTerms(e.target.checked)}
+                    />
+                    <span className="material-symbols-outlined absolute text-white opacity-0 peer-checked:opacity-100 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[14px] pointer-events-none font-bold">
+                      check
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[11px] text-slate-600 dark:text-slate-400 leading-tight">
+                      {t('auth.iAgree', 'Tôi đồng ý với')}{' '}
+                      <a className="text-primary font-bold hover:underline" href="#">
+                        Điều khoản dịch vụ
+                      </a>{' '}
+                      và{' '}
+                      <a className="text-primary font-bold hover:underline" href="#">
+                        Chính sách bảo mật
+                      </a>{' '}
+                      của Bách hóa XANH.
+                    </span>
+                    {errors.terms && <div className="text-red-500 text-xs mt-1 font-medium">{errors.terms}</div>}
+                  </div>
+                </label>
               </div>
 
               <button
-                className="w-full py-4 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl shadow-lg shadow-primary/25 transition-all active:scale-[0.98] disabled:opacity-70"
-                type="submit"
                 disabled={authState.loading}
+                className="w-full py-3 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl shadow-lg shadow-primary/20 transition-all mt-3 active:scale-[0.98] disabled:opacity-70 text-sm"
+                type="submit"
               >
-                {authState.loading ? 'Đang xác thực OTP...' : 'Xác thực OTP'}
+                {authState.loading ? 'Đang tạo tài khoản...' : 'Đăng ký ngay'}
               </button>
             </form>
-          )}
-
-          {/* Divider */}
-          <div className="relative my-8 w-full">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-200 dark:border-slate-700" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white dark:bg-background-dark text-slate-500">{t('auth.orContinueWith')}</span>
-            </div>
           </div>
+        )}
 
-          {/* Social Sign In */}
-          <div className={`grid ${isGoogleConfigured ? 'grid-cols-2' : 'grid-cols-1'} gap-4 w-full`}>
-            {isGoogleConfigured ? (
-              <div className="relative flex items-center justify-center gap-3 h-[48px] px-4 border border-slate-200 dark:border-slate-700 rounded-xl bg-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors overflow-hidden group">
-                <svg className="h-5 w-5" viewBox="0 0 24 24">
-                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                </svg>
-                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{socialLoading === 'google' ? 'Đang mở Google...' : 'Continue with Google'}</span>
-                
-                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, opacity: 0.01, cursor: 'pointer', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <div id="google-login-btn-container" style={{ transform: 'scale(3)', transformOrigin: 'center' }}></div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center py-3 px-4 border border-amber-300 bg-amber-50 text-amber-700 rounded-xl text-sm font-medium">
-                Google Sign-In chưa được cấu hình
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={handleFacebookLogin}
-              disabled={authState.loading || socialLoading !== null}
-              className="flex items-center justify-center gap-3 h-[48px] px-4 border border-slate-200 dark:border-slate-700 rounded-xl bg-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-60"
-            >
-              <svg className="h-5 w-5" fill="#1877F2" viewBox="0 0 24 24">
-                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-              </svg>
-              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{socialLoading === 'facebook' ? 'Đang mở Facebook...' : 'Continue with Facebook'}</span>
-            </button>
+        {/* Divider */}
+        <div className="relative my-5 w-full">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-slate-100 dark:border-slate-800/50" />
           </div>
-
-          {/* Footer Text */}
-          <p className="mt-10 text-center text-sm text-slate-500 dark:text-slate-400">
-            Chưa có tài khoản?{' '}
-            <Link to="/register" className="font-bold text-primary hover:underline">
-              Đăng ký ngay
-            </Link>
-          </p>
+          <div className="relative flex justify-center text-xs">
+            <span className="px-3 bg-white dark:bg-slate-900 text-slate-400">{t('auth.orContinueWith')}</span>
+          </div>
         </div>
+
+        {/* Social Sign In / Up */}
+        <div className={`grid ${isGoogleConfigured ? 'grid-cols-2' : 'grid-cols-1'} gap-3 w-full`}>
+          {isGoogleConfigured ? (
+            <div className="relative flex items-center justify-center gap-2 h-[40px] px-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors overflow-hidden group">
+              <svg className="h-4.5 w-4.5" viewBox="0 0 24 24">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{socialLoading === 'google' ? 'Đang mở Google...' : 'Google'}</span>
+              
+              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, opacity: 0.01, cursor: 'pointer', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div id="google-login-btn-container" style={{ transform: 'scale(3)', transformOrigin: 'center' }}></div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-2 px-3 border border-amber-200 bg-amber-50/50 text-amber-700 rounded-xl text-xs font-medium">
+              Google Sign-In chưa cấu hình
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={handleFacebookLogin}
+            disabled={authState.loading || socialLoading !== null}
+            className="flex items-center justify-center gap-2 h-[40px] px-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-60 text-xs font-semibold"
+          >
+            <svg className="h-4.5 w-4.5" fill="#1877F2" viewBox="0 0 24 24">
+              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+            </svg>
+            <span>{socialLoading === 'facebook' ? 'Đang mở Facebook...' : 'Facebook'}</span>
+          </button>
+        </div>
+
+        {/* Footer Text */}
+        <footer className="mt-8 text-center text-xs text-slate-400">
+          © 2026 Bách hóa XANH. Tất cả các quyền được bảo lưu.
+        </footer>
       </div>
 
       {/* Forgot Password Modal */}
@@ -687,9 +966,9 @@ const Login: React.FC = () => {
               <form onSubmit={handleForgotRequest}>
                 <div className="mb-4">
                   <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 block">Email</label>
-                  <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" placeholder="Nhập email..." required />
+                  <input type="email" value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm" placeholder="Nhập email..." required />
                 </div>
-                <button disabled={isForgotLoading} type="submit" className="w-full bg-primary text-white font-bold py-3 rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-50">
+                <button disabled={isForgotLoading} type="submit" className="w-full bg-primary text-white font-bold py-3 rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-50 text-sm">
                   {isForgotLoading ? 'Đang gửi...' : 'Gửi mã OTP'}
                 </button>
               </form>
@@ -697,13 +976,13 @@ const Login: React.FC = () => {
               <form onSubmit={handleForgotReset}>
                 <div className="mb-4">
                   <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 block">Mã OTP</label>
-                  <input type="text" value={forgotOtp} onChange={e => setForgotOtp(e.target.value)} className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" placeholder="Nhập 6 số OTP" required />
+                  <input type="text" value={forgotOtp} onChange={e => setForgotOtp(e.target.value)} className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm" placeholder="Nhập 6 số OTP" required />
                 </div>
                 <div className="mb-6">
                   <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 block">Mật khẩu mới</label>
-                  <input type="password" value={forgotNewPassword} onChange={e => setForgotNewPassword(e.target.value)} className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none" placeholder="Mật khẩu mới" required />
+                  <input type="password" value={forgotNewPassword} onChange={e => setForgotNewPassword(e.target.value)} className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm" placeholder="Mật khẩu mới" required />
                 </div>
-                <button disabled={isForgotLoading} type="submit" className="w-full bg-primary text-white font-bold py-3 rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-50">
+                <button disabled={isForgotLoading} type="submit" className="w-full bg-primary text-white font-bold py-3 rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-50 text-sm">
                   {isForgotLoading ? 'Đang xử lý...' : 'Đặt lại mật khẩu'}
                 </button>
               </form>
@@ -732,7 +1011,7 @@ const Login: React.FC = () => {
                 type="email"
                 value={otpEmail}
                 readOnly
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-slate-500 outline-none"
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-slate-500 outline-none text-sm"
               />
             </div>
 
@@ -743,14 +1022,14 @@ const Login: React.FC = () => {
                   type="text"
                   value={emailOtpCode}
                   onChange={(e) => setEmailOtpCode(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-lg border border-slate-300 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none"
+                  className="flex-1 px-3 py-2 rounded-lg border border-slate-300 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm"
                   placeholder="Nhập OTP 6 số"
                 />
                 <button
                   type="button"
                   onClick={handleResendEmailOtp}
                   disabled={emailOtpSending || emailOtpCooldown > 0}
-                  className="px-3 py-2 rounded-lg border border-primary text-primary font-bold hover:bg-primary/5 disabled:opacity-60"
+                  className="px-3 py-2 rounded-lg border border-primary text-primary font-bold hover:bg-primary/5 disabled:opacity-60 text-xs"
                 >
                   {emailOtpSending ? 'Đang gửi...' : emailOtpCooldown > 0 ? `Gửi lại (${emailOtpCooldown}s)` : 'Gửi lại OTP'}
                 </button>
@@ -765,7 +1044,7 @@ const Login: React.FC = () => {
               type="button"
               onClick={handleVerifyEmailOtp}
               disabled={emailOtpVerifying}
-              className="w-full py-3 rounded-lg bg-primary text-white font-bold hover:bg-primary/90 disabled:opacity-60"
+              className="w-full py-3 rounded-lg bg-primary text-white font-bold hover:bg-primary/90 disabled:opacity-60 text-sm"
             >
               {emailOtpVerifying ? 'Đang xác thực...' : 'Xác thực email'}
             </button>

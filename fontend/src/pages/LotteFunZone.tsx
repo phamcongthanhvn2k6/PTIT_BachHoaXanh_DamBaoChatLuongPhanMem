@@ -182,10 +182,10 @@ const LotteFunZone: React.FC = () => {
     ];
     const rewards = [
       currentLang === 'vi' ? 'Voucher 50K FreeShip' : currentLang === 'ja' ? '50K 送料無料バウチャー' : '50K Free Shipping Voucher',
-      currentLang === 'vi' ? '1,000 Lotte Points' : currentLang === 'ja' ? '1,000 ロッテポイント' : '1,000 Lotte Points',
+      currentLang === 'vi' ? '1,000 Bách hóa XANH Points' : currentLang === 'ja' ? '1,000 ロッテポイント' : '1,000 Bách hóa XANH Points',
       currentLang === 'vi' ? 'Mã Giảm Giá 10%' : currentLang === 'ja' ? '10% 割引コード' : '10% Discount Code',
-      currentLang === 'vi' ? 'Quà Tặng Lotte Mart' : currentLang === 'ja' ? 'ロッテマートギフト' : 'Lotte Mart Gift Item',
-      currentLang === 'vi' ? '500 Lotte Points' : currentLang === 'ja' ? '500 ロッテポイント' : '500 Lotte Points',
+      currentLang === 'vi' ? 'Quà Tặng Bách hóa XANH' : currentLang === 'ja' ? 'ロッテマートギフト' : 'Bách hóa XANH Gift Item',
+      currentLang === 'vi' ? '500 Bách hóa XANH Points' : currentLang === 'ja' ? '500 ロッテポイント' : '500 Bách hóa XANH Points',
     ];
 
     const wins = Array.from({ length: 4 }).map(() => {
@@ -297,7 +297,7 @@ const LotteFunZone: React.FC = () => {
           <div className="flex justify-center gap-3 mb-3 flex-wrap">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900 border border-red-500/20 text-red-500 text-xs font-bold uppercase tracking-wider shadow-md">
               <span className="material-symbols-outlined text-xs">sports_esports</span>
-              {t('gamification.title', 'Lotte Fun Zone')}
+              {t('gamification.title', 'Bách hóa XANH Fun Zone')}
             </div>
             <a href="/carrot-scene" className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/60 border border-amber-500/20 text-amber-400 text-xs font-bold uppercase tracking-wider shadow-md hover:bg-slate-900 hover:text-amber-300 transition-colors" style={{ textDecoration: 'none' }}>
               <span className="material-symbols-outlined text-xs">3d_rotation</span>
@@ -309,10 +309,10 @@ const LotteFunZone: React.FC = () => {
           </h1>
           <p className="text-slate-400 text-sm md:text-md mt-2 max-w-lg mx-auto">
             {currentLang === 'vi' 
-              ? 'Tích lũy điểm thưởng, săn voucher khủng & nhận quà tặng độc quyền mỗi ngày cùng Lotte Mart!' 
+              ? 'Tích lũy điểm thưởng, săn voucher khủng & nhận quà tặng độc quyền mỗi ngày cùng Bách hóa XANH!' 
               : currentLang === 'ja'
               ? '毎日ロッテマートと一緒に、ロッテポイントを貯めたり、お得なバウチャーや限定ギフトをゲットしよう！'
-              : 'Earn loyalty points, claim mega vouchers & win exclusive gifts daily with Lotte Mart!'}
+              : 'Earn loyalty points, claim mega vouchers & win exclusive gifts daily with Bách hóa XANH!'}
           </p>
         </div>
 
@@ -343,7 +343,7 @@ const LotteFunZone: React.FC = () => {
               <span className="material-symbols-outlined text-2xl">stars</span>
             </div>
             <div>
-              <p className="text-xs text-slate-400 uppercase font-bold tracking-widest">{t('gamification.lottePoints', 'Điểm Lotte hiện có')}</p>
+              <p className="text-xs text-slate-400 uppercase font-bold tracking-widest">{t('gamification.lottePoints', 'Điểm Bách hóa XANH hiện có')}</p>
               <h3 className="text-2xl font-black text-white mt-1">{(user as any)?.lotte_points ?? 0} PTS</h3>
             </div>
           </div>
@@ -443,7 +443,7 @@ const LotteFunZone: React.FC = () => {
                       )}
                     </div>
                     <div className="text-[10px] text-slate-500 mt-6">
-                      Nếu bạn cho rằng đây là sự nhầm lẫn, vui lòng liên hệ Bộ phận hỗ trợ khách hàng Lotte Mart.
+                      Nếu bạn cho rằng đây là sự nhầm lẫn, vui lòng liên hệ Bộ phận hỗ trợ khách hàng Bách hóa XANH.
                     </div>
                   </div>
                 ) : !spinCampaign ? (
@@ -621,7 +621,7 @@ const LotteFunZone: React.FC = () => {
                       )}
                     </div>
                     <div className="text-[10px] text-slate-500 mt-6">
-                      Nếu bạn cho rằng đây là sự nhầm lẫn, vui lòng liên hệ Bộ phận hỗ trợ khách hàng Lotte Mart.
+                      Nếu bạn cho rằng đây là sự nhầm lẫn, vui lòng liên hệ Bộ phận hỗ trợ khách hàng Bách hóa XANH.
                     </div>
                   </div>
                 ) : !checkinCampaign ? (
@@ -761,7 +761,7 @@ const LotteFunZone: React.FC = () => {
                 {t('gamification.terms', 'Thể lệ chương trình')}
               </h3>
               <ul className="space-y-2.5 text-xs text-slate-400 list-disc pl-4 leading-relaxed">
-                <li>{t('gamification.termsDetail1', 'Chương trình dành riêng cho thành viên có ví điểm Lotte Mart.')}</li>
+                <li>{t('gamification.termsDetail1', 'Chương trình dành riêng cho thành viên có ví điểm Bách hóa XANH.')}</li>
                 <li>{t('gamification.termsDetail2', 'Mỗi tài khoản được nhận 1 lượt quay miễn phí mỗi ngày.')}</li>
                 <li>{t('gamification.termsDetail3', 'Quà tặng voucher/mã giảm giá có thời hạn sử dụng được ghi rõ trong chi tiết voucher.')}</li>
                 <li>{t('gamification.termsDetail4', 'Hành vi gian lận hoặc spam sẽ bị vô hiệu hóa tài khoản và thu hồi phần quà.')}</li>

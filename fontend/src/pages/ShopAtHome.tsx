@@ -15,6 +15,16 @@ import { getProductUrl } from '../utils/productUrl';
 
 const BYPASS_FLASH_DEAL_FILTER = false;
 
+const unescapeHtml = (str: string) => {
+  if (!str) return '';
+  return str
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&');
+};
+
 const normalizeFlashDealForRender = (deal: any) => {
   const id = String(
     deal?._id ||
@@ -546,9 +556,10 @@ export const ShopAtHome: React.FC = () => {
                   </span>
                 )}
                 
-                <h2 className="text-3xl sm:text-5xl lg:text-6xl font-black leading-tight mb-4 sm:mb-6 drop-shadow-2xl">
-                  {banner.title}
-                </h2>
+                <h2 
+                  className="text-3xl sm:text-5xl lg:text-6xl font-black leading-tight mb-4 sm:mb-6 drop-shadow-2xl"
+                  dangerouslySetInnerHTML={{ __html: unescapeHtml(banner.title) }}
+                />
                 
                 <p className="text-sm sm:text-lg lg:text-xl xl:text-2xl mb-6 sm:mb-8 font-medium drop-shadow-lg opacity-90 max-w-xl line-clamp-2 md:line-clamp-none">
                   {banner.subtitle || banner.description?.replace(/<[^>]*>?/gm, '')}

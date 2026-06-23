@@ -27,7 +27,7 @@ function addPdfHeader(doc: jsPDF, title: string) {
   doc.text('LOTTE MART', 14, 18);
   doc.setFontSize(9);
   doc.setFont('Helvetica', 'normal');
-  doc.text('Lotte Mart Vietnam — Modern Supermarket Chain', 14, 24);
+  doc.text('Bách hóa XANH Vietnam — Modern Supermarket Chain', 14, 24);
   doc.setDrawColor(220, 53, 69);
   doc.setLineWidth(0.8);
   doc.line(14, 28, 196, 28);
@@ -117,7 +117,7 @@ export function exportImportOrderPDF(order: any) {
   y = checkNewPage(doc, y);
   doc.setFontSize(8);
   doc.setFont('Helvetica', 'normal');
-  doc.text(`Xuat boi he thong Lotte Mart — ${fmtDateTime(new Date())}`, 14, y);
+  doc.text(`Xuat boi he thong Bách hóa XANH — ${fmtDateTime(new Date())}`, 14, y);
 
   const fileName = `Don_nhap_${order.order_code || 'unknown'}_${new Date().toISOString().split('T')[0]}.pdf`;
   doc.save(fileName);
@@ -158,7 +158,7 @@ export async function exportImportOrderWord(order: any) {
       properties: {},
       children: [
         new Paragraph({ children: [new TextRun({ text: 'LOTTE MART', bold: true, size: 36, font: 'Calibri', color: 'DC3545' })] }),
-        new Paragraph({ children: [new TextRun({ text: 'Lotte Mart Vietnam — Modern Supermarket Chain', size: 18, font: 'Calibri', italics: true, color: '666666' })] }),
+        new Paragraph({ children: [new TextRun({ text: 'Bách hóa XANH Vietnam — Modern Supermarket Chain', size: 18, font: 'Calibri', italics: true, color: '666666' })] }),
         new Paragraph({ text: '' }),
         new Paragraph({ text: 'DON NHAP HANG / IMPORT ORDER', heading: HeadingLevel.HEADING_1 }),
         new Paragraph({ text: '' }),
@@ -195,7 +195,7 @@ export async function exportImportOrderWord(order: any) {
         }),
         new Paragraph({ text: '' }),
         new Paragraph({
-          children: [new TextRun({ text: `Xuat boi he thong Lotte Mart — ${fmtDateTime(new Date())}`, size: 16, font: 'Calibri', color: '999999', italics: true })],
+          children: [new TextRun({ text: `Xuat boi he thong Bách hóa XANH — ${fmtDateTime(new Date())}`, size: 16, font: 'Calibri', color: '999999', italics: true })],
         }),
       ],
     }],
@@ -259,7 +259,7 @@ export function exportImportReceiptPDF(receipt: any) {
   y = checkNewPage(doc, y);
   doc.setFontSize(8);
   doc.setFont('Helvetica', 'normal');
-  doc.text(`Xuat boi he thong Lotte Mart — ${fmtDateTime(new Date())}`, 14, y);
+  doc.text(`Xuat boi he thong Bách hóa XANH — ${fmtDateTime(new Date())}`, 14, y);
 
   const fileName = `Phieu_nhan_${receipt.receipt_code || 'unknown'}_${new Date().toISOString().split('T')[0]}.pdf`;
   doc.save(fileName);
@@ -301,7 +301,7 @@ export async function exportImportReceiptWord(receipt: any) {
       properties: {},
       children: [
         new Paragraph({ children: [new TextRun({ text: 'LOTTE MART', bold: true, size: 36, font: 'Calibri', color: 'DC3545' })] }),
-        new Paragraph({ children: [new TextRun({ text: 'Lotte Mart Vietnam — Modern Supermarket Chain', size: 18, font: 'Calibri', italics: true, color: '666666' })] }),
+        new Paragraph({ children: [new TextRun({ text: 'Bách hóa XANH Vietnam — Modern Supermarket Chain', size: 18, font: 'Calibri', italics: true, color: '666666' })] }),
         new Paragraph({ text: '' }),
         new Paragraph({ text: 'PHIEU NHAN HANG / GOODS RECEIPT', heading: HeadingLevel.HEADING_1 }),
         new Paragraph({ text: '' }),
@@ -339,7 +339,7 @@ export async function exportImportReceiptWord(receipt: any) {
         }),
         new Paragraph({ text: '' }),
         new Paragraph({
-          children: [new TextRun({ text: `Xuat boi he thong Lotte Mart — ${fmtDateTime(new Date())}`, size: 16, font: 'Calibri', color: '999999', italics: true })],
+          children: [new TextRun({ text: `Xuat boi he thong Bách hóa XANH — ${fmtDateTime(new Date())}`, size: 16, font: 'Calibri', color: '999999', italics: true })],
         }),
       ],
     }],

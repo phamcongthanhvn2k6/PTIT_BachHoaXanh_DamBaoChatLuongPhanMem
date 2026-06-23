@@ -58,7 +58,7 @@ const run = async () => {
     _id: makeId(u.id),
     username: u.username || u.full_name || u.email?.split('@')[0] || 'user',
     full_name: u.full_name || u.username || '',
-    email: (u.email || `user${u.id}@lottemart.vn`).toLowerCase(),
+    email: (u.email || `user${u.id}@bachhoaxanh.com`).toLowerCase(),
     phone: u.phone || '',
     password_hash: u.password_hash || (u.password ? u.password : null),
     avatar: u.avatar || null,
@@ -81,12 +81,12 @@ const run = async () => {
     settings: u.settings || {},
   }));
   // Ensure default admin exists
-  if (!usersData.some(u => u.email === 'admin@lottemart.vn')) {
+  if (!usersData.some(u => u.email === 'admin@bachhoaxanh.com')) {
     usersData.push({
       _id: makeId(9999),
       username: 'admin',
-      full_name: 'Admin Lotte',
-      email: 'admin@lottemart.vn',
+      full_name: 'Admin Bách hóa XANH',
+      email: 'admin@bachhoaxanh.com',
       password_hash: await bcrypt.hash('Admin@123', 10),
       role_id: 1,
       is_active: true,
@@ -167,7 +167,7 @@ const run = async () => {
   console.log(`Seeded ${products.length} products`);
 
   // Seed Branches
-  const branches = await Branch.insertMany((mock.branches || [{ id: 1, name: 'Lotte Mart Hà Nội', address: '229 Tây Sơn, Đống Đa', city: 'Hà Nội', is_active: true }]).map(b => ({
+  const branches = await Branch.insertMany((mock.branches || [{ id: 1, name: 'Bách hóa XANH Giang Văn Minh', address: '42 Giang Văn Minh, Phường Kim Mã, Quận Ba Đình', city: 'Hà Nội', is_active: true }]).map(b => ({
     _id: makeId(b.id),
     name: b.name, address: b.address || '', city: b.city || '', phone: b.phone || '',
     manager: b.manager || '', is_active: b.is_active !== false,
@@ -261,15 +261,15 @@ const run = async () => {
   // Seed EventPosts
   const seedEvents = [
     {
-      title: "Tuần lễ Nông sản Sạch - Lotte Mart District 7",
-      slug: "tuan-le-nong-san-sach-lotte-mart-district-7",
+      title: "Tuần lễ Nước giải khát mát lạnh - Bách hóa XANH Nguyễn Thị Thập",
+      slug: "tuan-le-nuoc-giai-khat-mat-lanh-bhx-nguyen-thi-thap",
       category_id: 2,
       author_name: "Admin Nguyễn",
       thumbnail: "https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=800",
       banner: "https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=1200",
-      excerpt: "Chương trình nông sản sạch, ưu đãi cực lớn lên đến 50% tại chi nhánh Quận 7.",
-      summary: "Chương trình nông sản sạch, ưu đãi cực lớn lên đến 50% tại chi nhánh Quận 7.",
-      description: "Đến với tuần lễ nông sản sạch của Lotte Mart, khách hàng sẽ có cơ hội sở hữu những sản phẩm rau củ quả hữu cơ, tươi ngon đạt chứng nhận chuẩn VietGAP, GlobalGAP với mức giá ưu đãi chưa từng có.",
+      excerpt: "Chương trình nước giải khát mát lạnh, ưu đãi cực lớn lên đến 50% tại chi nhánh Nguyễn Thị Thập.",
+      summary: "Chương trình nước giải khát mát lạnh, ưu đãi cực lớn lên đến 50% tại chi nhánh Nguyễn Thị Thập.",
+      description: "Đến với tuần lễ nước giải khát mát lạnh của Bách hóa XANH, khách hàng sẽ có cơ hội sở hữu những sản phẩm nước ép, nước ngọt hữu cơ, tươi ngon với mức giá ưu đãi chưa từng có.",
       views: 12400,
       likes: 85,
       status: "published",
@@ -277,22 +277,22 @@ const run = async () => {
       is_featured: true,
       start_date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
       end_date: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000), // 10 days from now
-      branch: "Lotte Mart District 7",
-      tags: ["Khuyến mãi", "Nông sản sạch", "Quận 7"],
+      branch: "Bách hóa XANH Nguyễn Thị Thập",
+      tags: ["Khuyến mãi", "Nước giải khát", "Nguyễn Thị Thập"],
       content_blocks: [
         { type: "text", text: "Tuần lễ nông sản sạch giới thiệu các sản phẩm tươi ngon..." }
       ]
     },
     {
-      title: "Đêm nhạc Lotte Harmony 2024",
-      slug: "dem-nhac-lotte-harmony-2024",
+      title: "Đêm nhạc Bách hóa XANH Harmony 2024",
+      slug: "dem-nhac-bhx-harmony-2024",
       category_id: 3,
       author_name: "Admin Trần",
       thumbnail: "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?q=80&w=800",
       banner: "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?q=80&w=1200",
-      excerpt: "Đại nhạc hội tri ân khách hàng thân thiết Lotte Mart với dàn sao cực đỉnh.",
-      summary: "Đại nhạc hội tri ân khách hàng thân thiết Lotte Mart với dàn sao cực đỉnh.",
-      description: "Lotte Harmony là sự kiện âm nhạc quy mô lớn được tổ chức hàng năm để tri ân hàng triệu khách hàng đã đồng hành cùng Lotte Mart trong suốt thời gian qua.",
+      excerpt: "Đại nhạc hội tri ân khách hàng thân thiết Bách hóa XANH với dàn sao cực đỉnh.",
+      summary: "Đại nhạc hội tri ân khách hàng thân thiết Bách hóa XANH với dàn sao cực đỉnh.",
+      description: "Bách hóa XANH Harmony là sự kiện âm nhạc quy mô lớn được tổ chức hàng năm để tri ân hàng triệu khách hàng đã đồng hành cùng Bách hóa XANH trong suốt thời gian qua.",
       views: 5200,
       likes: 42,
       status: "published",
@@ -300,22 +300,22 @@ const run = async () => {
       is_featured: false,
       start_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // in 2 days (Scheduled!)
       end_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
-      branch: "Lotte Mart Quận 7",
+      branch: "Bách hóa XANH Nguyễn Thị Thập",
       tags: ["Sự kiện", "Đại nhạc hội", "Tri ân"],
       content_blocks: [
         { type: "text", text: "Chương trình âm nhạc đặc sắc với nhiều ca sĩ nổi tiếng..." }
       ]
     },
     {
-      title: "Khai trương Chi nhánh Lotte Mart Long An",
-      slug: "khai-truong-chi-nhanh-lotte-mart-long-an",
+      title: "Khai trương Chi nhánh Bách hóa XANH Long An",
+      slug: "khai-truong-chi-nhanh-bhx-long-an",
       category_id: 4,
       author_name: "Admin Lê",
       thumbnail: "https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?q=80&w=800",
       banner: "https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a?q=80&w=1200",
       excerpt: "Cột mốc mới tại miền Tây sông nước - hàng ngàn quà tặng khai trương cực hot.",
       summary: "Cột mốc mới tại miền Tây sông nước - hàng ngàn quà tặng khai trương cực hot.",
-      description: "Nhân dịp khai trương Lotte Mart Long An, chúng tôi mang đến hàng ngàn chương trình khuyến mãi mua 1 tặng 1 và quà tặng đặc biệt cho khách hàng đầu tiên mua sắm.",
+      description: "Nhân dịp khai trương Bách hóa XANH Long An, chúng tôi mang đến hàng ngàn chương trình khuyến mãi mua 1 tặng 1 và quà tặng đặc biệt cho khách hàng đầu tiên mua sắm.",
       views: 28900,
       likes: 128,
       status: "published",
@@ -323,10 +323,10 @@ const run = async () => {
       is_featured: true,
       start_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
       end_date: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000), // 25 days ago (Expired!)
-      branch: "Lotte Mart Long An",
+      branch: "Bách hóa XANH Long An",
       tags: ["Khai trương", "Long An", "Quà tặng"],
       content_blocks: [
-        { type: "text", text: "Lotte Mart chính thức mở cửa chi nhánh mới tại thành phố Tân An, Long An..." }
+        { type: "text", text: "Bách hóa XANH chính thức mở cửa chi nhánh mới tại thành phố Tân An, Long An..." }
       ]
     },
     {
@@ -336,7 +336,7 @@ const run = async () => {
       author_name: "Admin Trần",
       thumbnail: "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=800",
       banner: "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?q=80&w=1200",
-      excerpt: "Bùng nổ mua sắm mùa hè với hàng ngàn deal giải nhiệt giảm giá sâu cực sốc.",
+      excerpt: "Bùng nổ mua sắm mùa hè với hàng ngàn deal giải nhiệt giải giá sâu cực sốc.",
       summary: "Bùng nổ mua sắm mùa hè với hàng ngàn deal giải nhiệt giải giá sâu cực sốc.",
       description: "Săn deal giảm nửa giá cho tất cả sản phẩm thời trang hè, đồ gia dụng, thực phẩm mát lạnh giải nhiệt mùa hè.",
       views: 34100,
@@ -349,7 +349,7 @@ const run = async () => {
       branch: "Toàn bộ hệ thống",
       tags: ["Khuyến mãi", "Siêu sale", "Mùa hè"],
       content_blocks: [
-        { type: "text", text: "Cơ hội mua sắm thả ga không lo về giá từ Lotte Mart..." }
+        { type: "text", text: "Cơ hội mua sắm thả ga không lo về giá từ Bách hóa XANH..." }
       ]
     }
   ];
@@ -391,7 +391,7 @@ const run = async () => {
     {
       title: "Siêu Ưu Đãi Mùa Hè",
       subtitle: "Giảm ngay 20% cho toàn bộ ngành hàng tươi sống",
-      description: "Áp dụng cho khách hàng thành viên LOTTE khi mua sắm online trên ứng dụng.",
+      description: "Áp dụng cho khách hàng thành viên Bách hóa XANH khi mua sắm online trên ứng dụng.",
       image_url: "https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=800",
       cta_text: "Xem Ngay",
       cta_link: "/products",
@@ -408,7 +408,7 @@ const run = async () => {
   await PopupAd.insertMany(seedPopupAds).catch((e) => console.log('PopupAds seed err:', e.message));
 
   console.log('\n✅ Seed complete!');
-  console.log('Admin login: admin@lottemart.vn / Admin@123');
+  console.log('Admin login: admin@bachhoaxanh.com / Admin@123');
   process.exit(0);
 };
 

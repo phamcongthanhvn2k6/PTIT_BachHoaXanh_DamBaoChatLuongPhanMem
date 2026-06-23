@@ -156,7 +156,7 @@ const AdminBranchLocations: React.FC = () => {
           </> : /* Create/Edit form */
           <div style={{flex:1,overflowY:'auto',padding:'16px'}}>
             <div style={{fontSize:15,fontWeight:800,color:'#C1121F',marginBottom:14}}>{mode==='create'?'＋ Tạo chi nhánh mới':'✏️ Sửa chi nhánh'}</div>
-            {formField('Tên chi nhánh *','name','VD: Lotte Mart Gò Vấp')}
+            {formField('Tên chi nhánh *','name','VD: Bách hóa XANH Gò Vấp')}
             {formField('Địa chỉ','address','VD: 242 Nguyễn Văn Lượng...')}
             {formField('Thành phố','city','VD: Hồ Chí Minh')}
             {formField('Điện thoại','phone','VD: 028 1234 5678')}

@@ -118,7 +118,7 @@ const AdminProductManagement: React.FC = () => {
     } else if (Array.isArray(clone.specifications)) {
       // already an array
     } else if (typeof clone.specifications === 'object') {
-      // legacy object map: { 'Thương hiệu': 'Lotte', 'Khối lượng': '500g' }
+      // legacy object map: { 'Thương hiệu': 'Bách hóa XANH', 'Khối lượng': '500g' }
       clone.specifications = Object.entries(clone.specifications).map(([label, value]) => ({ label, value }));
     } else {
       clone.specifications = [];

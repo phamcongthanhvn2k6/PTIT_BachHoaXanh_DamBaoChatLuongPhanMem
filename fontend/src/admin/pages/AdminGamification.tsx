@@ -625,7 +625,7 @@ const AdminGamification: React.FC = () => {
         <div>
           <h1 className="text-2xl font-black flex items-center gap-2">
             <span className="material-symbols-outlined text-red-500">sports_esports</span>
-            Lotte Fun Zone Architect
+            Bách hóa XANH Fun Zone Architect
           </h1>
           <p className="text-slate-400 text-xs mt-1">Quản lý vòng quay may mắn, điểm danh hàng ngày, điều khiển tỷ lệ trúng thưởng và hạn mức.</p>
         </div>
@@ -925,7 +925,7 @@ const AdminGamification: React.FC = () => {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="w-full bg-slate-50 dark:bg-slate-800 border dark:border-slate-700 rounded-xl py-2 px-3 text-sm focus:outline-none focus:border-red-500"
-                    placeholder="e.g. Vòng quay may mắn Lotte Hè 2026"
+                    placeholder="e.g. Vòng quay may mắn Bách hóa XANH Hè 2026"
                   />
                 </div>
                 <div>
@@ -1023,7 +1023,7 @@ const AdminGamification: React.FC = () => {
                       value={newReward.reward_name}
                       onChange={(e) => setNewReward({ ...newReward, reward_name: e.target.value })}
                       className="w-full bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-lg py-1.5 px-2 text-xs"
-                      placeholder="e.g. 500 Điểm Lotte"
+                      placeholder="e.g. 500 Điểm Bách hóa XANH"
                     />
                   </div>
                   <div>
@@ -1033,7 +1033,7 @@ const AdminGamification: React.FC = () => {
                       value={newReward.reward_name_en}
                       onChange={(e) => setNewReward({ ...newReward, reward_name_en: e.target.value })}
                       className="w-full bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-lg py-1.5 px-2 text-xs"
-                      placeholder="e.g. 500 Lotte Points"
+                      placeholder="e.g. 500 Bách hóa XANH Points"
                     />
                   </div>
                   <div>
@@ -1043,7 +1043,7 @@ const AdminGamification: React.FC = () => {
                       onChange={(e) => setNewReward({ ...newReward, reward_type: e.target.value as any })}
                       className="w-full bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-lg py-1.5 px-2 text-xs"
                     >
-                      <option value="points">Cộng Điểm Lotte (points)</option>
+                      <option value="points">Cộng Điểm Bách hóa XANH (points)</option>
                       <option value="coupon">Voucher giảm giá (coupon)</option>
                       <option value="free_shipping">Free Shipping coupon</option>
                       <option value="discount_card">Thẻ quà tặng / Chiết khấu</option>
@@ -1169,7 +1169,7 @@ const AdminGamification: React.FC = () => {
                         onChange={(e) => setNewCheckin({ ...newCheckin, reward_type: e.target.value as any })}
                         className="w-full bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-lg py-1.5 px-2 text-xs"
                       >
-                        <option value="points">Cộng Điểm Lotte (points)</option>
+                        <option value="points">Cộng Điểm Bách hóa XANH (points)</option>
                         <option value="coupon">Voucher giảm giá (coupon)</option>
                         <option value="free_shipping">Free Shipping coupon</option>
                       </select>
@@ -1273,7 +1273,7 @@ const AdminGamification: React.FC = () => {
                           onChange={(e) => setNewStreak({ ...newStreak, reward_type: e.target.value as any })}
                           className="w-full bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-lg py-1.5 px-2 text-xs"
                         >
-                          <option value="points">Cộng Điểm Lotte (points)</option>
+                          <option value="points">Cộng Điểm Bách hóa XANH (points)</option>
                           <option value="coupon">Voucher giảm giá (coupon)</option>
                           <option value="free_shipping">Free Shipping coupon</option>
                         </select>

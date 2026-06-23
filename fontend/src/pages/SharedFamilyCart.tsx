@@ -380,7 +380,7 @@ const SharedFamilyCart: React.FC = () => {
           <div className="absolute inset-0 z-0">
             <img 
               className="w-full h-full object-cover" 
-              alt="Asian family shopping in Lotte Mart" 
+              alt="Asian family shopping in Bách hóa XANH" 
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuD8l-g_ri6-NiuChzKzu5KhjMVkc0ISm470pKOA03hfKyX2gyD7QXqo7-z1KYuEYbk6G5CqV8_ILhtIl6TpJp3z7J07ummpa35bXzX6WnNFTdYeVA6Gx9VrsaIXcZb2QgKXb0qmcmw5-T5Q_M0WK2pa9HX6LFhhGfyTII3PZGBtAK0ZSMSAPzFH33qMNYBRVFo7bm93tdkcbtbHp4fWbfm_vpPJt0kzqj-INT6Vmaa1N2nrTlEx9bU_0CutdyAmKqI0HIVqgZrpel4"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/35 to-transparent"></div>
@@ -796,7 +796,7 @@ const SharedFamilyCart: React.FC = () => {
             <div className="bg-slate-50 dark:bg-slate-900/10 p-6 rounded-2xl border border-slate-100 dark:border-slate-850 space-y-4">
               <div>
                 <h3 className="font-bold text-lg text-slate-850 dark:text-white" style={{ fontFamily: 'Nunito, sans-serif' }}>Thêm sản phẩm nhanh</h3>
-                <p className="text-xs text-slate-400 mt-0.5">Tìm kiếm nhanh sản phẩm tại Lotte Mart để cho vào giỏ hàng chung</p>
+                <p className="text-xs text-slate-400 mt-0.5">Tìm kiếm nhanh sản phẩm tại Bách hóa XANH để cho vào giỏ hàng chung</p>
               </div>
               <div className="relative">
                 <input 
@@ -986,7 +986,7 @@ const SharedFamilyCart: React.FC = () => {
                 </button>
 
                 <button 
-                  onClick={() => toast.info('Tính năng thanh toán nhóm Lotte Mart đã được chuẩn bị!')}
+                  onClick={() => toast.info('Tính năng thanh toán nhóm Bách hóa XANH đã được chuẩn bị!')}
                   className="w-full py-3.5 text-white rounded-full font-bold flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-98 transition shadow-lg shadow-rose-600/10"
                   style={{ background: 'linear-gradient(135deg, #970012 0%, #c1121f 100%)' }}
                 >

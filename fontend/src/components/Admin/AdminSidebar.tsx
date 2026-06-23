@@ -28,7 +28,7 @@ const menuItems: MenuItem[] = [
   { to: '/admin/orders', icon: 'receipt_long', labelKey: 'sidebar.orders', fallbackLabel: 'Đơn hàng', permission: 'orders.read' },
   { to: '/admin/customers', icon: 'group', labelKey: 'sidebar.customers', fallbackLabel: 'Khách hàng', permission: 'customers.read' },
   { to: '/admin/coupons', icon: 'local_activity', labelKey: 'sidebar.coupons', fallbackLabel: 'Trung tâm Marketing', permission: 'coupons.read' },
-  { to: '/admin/gamification', icon: 'sports_esports', labelKey: 'sidebar.gamification', fallbackLabel: 'Lotte Fun Zone', permission: 'settings.read' },
+  { to: '/admin/gamification', icon: 'sports_esports', labelKey: 'sidebar.gamification', fallbackLabel: 'Bách hóa XANH Fun Zone', permission: 'settings.read' },
   { to: '/admin/settings', icon: 'settings', labelKey: 'sidebar.settings', fallbackLabel: 'Cấu hình hệ thống', permission: 'settings.read' },
 
   // Enterprise Inventory
@@ -88,7 +88,7 @@ const AdminSidebar: React.FC = () => {
         )}
         <div className="min-w-0">
           <h1 className="text-md font-black text-white tracking-tight uppercase truncate">
-            {settings?.brand_name || 'Lotte Mart'}
+            {settings?.brand_name || 'Bách hóa XANH'}
           </h1>
           <p className="text-[9px] text-slate-500 font-bold tracking-widest uppercase mt-0.5 truncate">
             {settings?.system_name || 'Master Admin Portal'}

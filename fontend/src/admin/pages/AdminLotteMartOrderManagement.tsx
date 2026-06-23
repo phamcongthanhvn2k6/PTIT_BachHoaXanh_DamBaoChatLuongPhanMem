@@ -6,7 +6,7 @@ import { useAppSelector } from '../../store';
 import { useTranslation } from "react-i18next";
 import UserAvatar from "../../components/UserAvatar/UserAvatar";
 
-const AdminLotteMartOrderManagement: React.FC = () => {
+const AdminBachHoaXanhOrderManagement: React.FC = () => {
   const { t } = useTranslation();
 
   // Helper to resolve customer name with robust fallbacks
@@ -348,7 +348,7 @@ const AdminLotteMartOrderManagement: React.FC = () => {
             <h3>Tổng cộng: ${(selectedOrder.total_amount || 0).toLocaleString('vi-VN')} ₫</h3>
           </div>
           <div class="footer">
-            <p>Cảm ơn quý khách đã mua sắm tại Lotte Mart!</p>
+            <p>Cảm ơn quý khách đã mua sắm tại Bách hóa XANH!</p>
           </div>
         </body>
       </html>
@@ -924,7 +924,7 @@ const AdminLotteMartOrderManagement: React.FC = () => {
                     <input
                       type="text"
                       className="w-full bg-white border border-slate-200 rounded-xl text-sm py-2 px-3 focus:ring-2 focus:ring-primary/20"
-                      placeholder="VD: Lotte Mart Q7..."
+                      placeholder="VD: Bách hóa XANH Q7..."
                       value={dispatchBranch}
                       onChange={(e) => setDispatchBranch(e.target.value)}
                     />
@@ -1078,4 +1078,4 @@ const AdminLotteMartOrderManagement: React.FC = () => {
   );
 };
 
-export default AdminLotteMartOrderManagement;
+export default AdminBachHoaXanhOrderManagement;
