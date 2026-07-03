@@ -104,7 +104,7 @@ const AdminLogin: React.FC = () => {
         {/* Logo & Branding */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center mb-4">
-            <span className="text-primary font-black text-4xl tracking-tighter uppercase">Lotte Mart</span>
+            <span className="text-primary font-black text-4xl tracking-tighter uppercase">Bách hóa XANH</span>
           </div>
           <h1 className="text-on-surface font-headline text-2xl font-bold tracking-tight mb-2">
             {tLocal('title')}
@@ -234,7 +234,7 @@ const AdminLogin: React.FC = () => {
             />
           </div>
           <p className="text-[10px] text-secondary/60 font-medium tracking-widest uppercase">
-            © 2024 Lotte Mart Vietnam • Internal Security Protocol v4.2
+            © 2024 Bách hóa XANH Vietnam • Internal Security Protocol v4.2
           </p>
         </footer>
       </main>

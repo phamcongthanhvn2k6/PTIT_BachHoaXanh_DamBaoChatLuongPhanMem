@@ -132,7 +132,7 @@ const AdminQuestions: React.FC = () => {
             ai_status: 'answered',
             answer: {
               ...prev.answer,
-              admin_name: t('qa.aiResponse', 'Trợ lý AI Lotte Mart')
+              admin_name: t('qa.aiResponse', 'Trợ lý AI Bách hóa XANH')
             }
           }));
         }

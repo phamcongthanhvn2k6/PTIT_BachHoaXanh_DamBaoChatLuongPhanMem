@@ -115,13 +115,13 @@ const FeaturedEvents: React.FC = () => {
         <div className="text-center md:text-left space-y-3">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-50 dark:bg-red-950/30 text-red-650 dark:text-red-400 rounded-full text-xs font-bold uppercase tracking-wider">
             <span className="w-1.5 h-1.5 bg-red-650 dark:bg-red-400 rounded-full animate-ping"></span>
-            Lotte Mart Hub
+            Bách hóa XANH Hub
           </div>
           <h1 className="text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             {t('featuredEvents.title', 'Tin Tức & Sự Kiện')}
           </h1>
           <p className="text-slate-500 dark:text-slate-400 max-w-2xl text-lg">
-            {t('featuredEvents.description', 'Cập nhật các chương trình ưu đãi, khuyến mãi và tin tức mới nhất từ hệ thống siêu thị Lotte Mart.')}
+            {t('featuredEvents.description', 'Cập nhật các chương trình ưu đãi, khuyến mãi và tin tức mới nhất từ hệ thống siêu thị Bách hóa XANH.')}
           </p>
         </div>
 
@@ -251,7 +251,7 @@ const FeaturedEvents: React.FC = () => {
                     <div className="space-y-2">
                       {/* Meta */}
                       <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500 text-[11px] font-semibold uppercase tracking-wider">
-                        <span>{post.author_name || 'Lotte Mart'}</span>
+                        <span>{post.author_name || 'Bách hóa XANH'}</span>
                         <span className="w-1 h-1 bg-slate-300 dark:bg-slate-650 rounded-full"></span>
                         <span>{formatPeriod(post.start_date, post.end_date) || formatDate(post.published_at)}</span>
                       </div>
@@ -320,7 +320,7 @@ const FeaturedEvents: React.FC = () => {
                   <div className="p-6 flex flex-col flex-grow justify-between space-y-4">
                     <div className="space-y-2">
                       <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500 text-[11px] font-semibold uppercase tracking-wider">
-                        <span>{post.author_name || 'Lotte Mart'}</span>
+                        <span>{post.author_name || 'Bách hóa XANH'}</span>
                         <span className="w-1 h-1 bg-slate-300 dark:bg-slate-650 rounded-full"></span>
                         <span>{formatPeriod(post.start_date, post.end_date) || formatDate(post.published_at)}</span>
                       </div>

@@ -41,7 +41,7 @@ const LOCAL_DICT: Record<string, Record<string, string>> = {
     systemWide: "Toàn hệ thống",
     atYourBranch: "Tại chi nhánh của bạn",
     noFlashDeals: "Không có khuyến mãi giờ vàng tại chi nhánh này hôm nay",
-    switchBranchTip: "Hãy thử chuyển đổi sang chi nhánh khác hoặc xem khuyến mãi toàn hệ thống để không bỏ lỡ các ưu đãi cực khủng từ Lotte Mart.",
+    switchBranchTip: "Hãy thử chuyển đổi sang chi nhánh khác hoặc xem khuyến mãi toàn hệ thống để không bỏ lỡ các ưu đãi cực khủng từ Bách hóa XANH.",
     copyError: "Lỗi sao chép mã. Vui lòng thử lại.",
     minOrderLabel: "Đơn tối thiểu:",
     codeLabel: "Mã:"
@@ -136,10 +136,16 @@ const Home: React.FC = () => {
   const [flashDealRefreshTick, setFlashDealRefreshTick] = useState(0);
   const [showAllBranchDeals, setShowAllBranchDeals] = useState(false);
 
-  // Fallback states for broken banner images
-  const [mainBannerError, setMainBannerError] = useState(false);
-  const [sideBanner1Error, setSideBanner1Error] = useState(false);
-  const [sideBanner2Error, setSideBanner2Error] = useState(false);
+  // Banner Carousel states
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+
+  useEffect(() => {
+    if (!banners || banners.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentBannerIndex((prevIndex) => (prevIndex === banners.length - 1 ? 0 : prevIndex + 1));
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [banners]);
 
   const { currentBranchId, availableProducts, filterBanners } = useBranchData();
 
@@ -178,7 +184,7 @@ const Home: React.FC = () => {
       ...cat,
       bg: CATEGORY_STYLES[index % CATEGORY_STYLES.length],
     }));
-  }, [categories]);
+  }, [categories, CATEGORY_STYLES]);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
@@ -285,7 +291,21 @@ const Home: React.FC = () => {
         return {
           ...deal,
           title: deal?.title || productAny?.name || t('product.flashDeal'),
-          image_url: deal?.image_url || productAny?.image || productAny?.images?.[0] || productAny?.thumbnail || '',
+          image_url: (() => {
+            const productImages = productAny?.images || [];
+            const hasRealImage = productImages.some((img: string) => {
+              const lower = img.toLowerCase();
+              return !lower.includes('unsplash.com') && !lower.includes('/assets/products/') && !lower.includes('assets/products/');
+            });
+            if (hasRealImage) {
+              const realImg = productImages.find((img: string) => {
+                const lower = img.toLowerCase();
+                return !lower.includes('unsplash.com') && !lower.includes('/assets/products/') && !lower.includes('assets/products/');
+              });
+              if (realImg) return realImg;
+            }
+            return deal?.image_url || productAny?.image || productAny?.thumbnail || '';
+          })(),
           product_id: resolvedProductId,
           deal_price: dealPrice,
           effective_price: dealPrice,
@@ -335,13 +355,7 @@ const Home: React.FC = () => {
     return () => clearInterval(timer);
   }, [filteredFlashDealItems]);
 
-  const mainBanner = banners[0];
-  const sideBanner1 = banners[1];
-  const sideBanner2 = banners[2];
 
-  const mainBannerUrl = mainBannerError ? fallbackProductImage : resolveImageUrl(mainBanner?.image_url || mainBanner?.image);
-  const sideBanner1Url = sideBanner1Error ? fallbackProductImage : resolveImageUrl(sideBanner1?.image_url || sideBanner1?.image);
-  const sideBanner2Url = sideBanner2Error ? fallbackProductImage : resolveImageUrl(sideBanner2?.image_url || sideBanner2?.image);
 
   const handleAddToCart = async (item: any, event: React.MouseEvent) => {
     event.preventDefault();
@@ -436,7 +450,6 @@ const Home: React.FC = () => {
           const safePrice = Number(item?.effective_price !== undefined ? item.effective_price : item?.price || 0);
           const safeOriginal = Number(item?.original_price || 0);
           const isOutOfStock = Number(item?.stock || 0) <= 0;
-          // Robust image resolution: check image, then images array, then thumbnail
           const rawImg = item?.image || (Array.isArray(item?.images) && item.images.length > 0 ? item.images[0] : null) || item?.thumbnail || '';
           const imageSrc = resolveImageUrl(rawImg) || fallbackProductImage;
 
@@ -444,29 +457,29 @@ const Home: React.FC = () => {
             <Link
               key={`${String(item?.id || item?._id || index)}-${index}`}
               to={getProductUrl(item)}
-              className="product-card bg-white dark:bg-slate-800/90 rounded-2xl sm:rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden group relative cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col h-full"
+              className="product-card bg-white dark:bg-slate-800/90 rounded-[24px] shadow-sm border border-slate-100 dark:border-slate-800/80 overflow-hidden group relative cursor-pointer hover:shadow-xl hover:border-emerald-500/20 hover:-translate-y-1.5 transition-all duration-300 flex flex-col h-full"
             >
-              <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
+              <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5">
                 {item?.is_best_seller && (
-                  <span className="bg-rose-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest italic shadow-lg shadow-rose-500/30">
+                  <span className="bg-rose-500 text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider italic shadow-md shadow-rose-500/20">
                     {t('common.hotDeal')}
                   </span>
                 )}
                 {item?.is_new && (
-                  <span className="bg-amber-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest italic shadow-lg shadow-amber-500/30">
+                  <span className="bg-emerald-500 text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider italic shadow-md shadow-emerald-500/20">
                     {t('common.new')}
                   </span>
                 )}
                 {isOutOfStock && (
-                  <span className="bg-slate-700 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
+                  <span className="bg-slate-700 text-white text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">
                     {t('common.outOfStock')}
                   </span>
                 )}
               </div>
 
-              <div className="relative aspect-square overflow-hidden bg-slate-50 dark:bg-slate-900">
+              <div className="relative aspect-square overflow-hidden bg-slate-50 dark:bg-slate-900/60">
                 <img
-                  className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${isOutOfStock ? 'opacity-55' : ''}`}
+                  className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ${isOutOfStock ? 'opacity-50' : ''}`}
                   src={imageSrc}
                   alt={item?.name || t('cart.product')}
                   onError={(e) => {
@@ -478,17 +491,17 @@ const Home: React.FC = () => {
                   <button
                     type="button"
                     onClick={(event) => handleAddToCart(item, event)}
-                    className="absolute bottom-4 right-4 bg-primary text-white w-12 h-12 rounded-2xl shadow-xl shadow-primary/30 flex items-center justify-center transform translate-y-12 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110"
+                    className="absolute bottom-3 right-3 bg-emerald-500 text-white w-10 h-10 rounded-xl shadow-lg shadow-emerald-500/20 flex items-center justify-center transform translate-y-10 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110"
                     aria-label="Add to cart"
                   >
-                    <span className="material-symbols-outlined !text-2xl">shopping_cart</span>
+                    <span className="material-symbols-outlined !text-xl">shopping_cart</span>
                   </button>
                 )}
               </div>
 
-              <div className="p-3 sm:p-5 flex flex-col flex-grow">
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                  <p className="text-primary font-bold text-[9px] sm:text-[10px] uppercase tracking-wider truncate">{item?.brand || 'Lotte Selection'}</p>
+              <div className="p-4 flex flex-col flex-grow">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <p className="text-emerald-600 dark:text-emerald-400 font-black text-[9px] uppercase tracking-wider truncate">{item?.brand || 'Bách hóa XANH'}</p>
                   <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700 shrink-0" />
                   <div className="flex items-center text-amber-400 shrink-0">
                     <span className="material-symbols-outlined !text-[12px] !fill-1">star</span>
@@ -496,11 +509,11 @@ const Home: React.FC = () => {
                   </div>
                 </div>
 
-                <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 line-clamp-2 mb-2 sm:mb-3 min-h-[2rem] sm:min-h-[2.5rem] leading-snug sm:leading-relaxed group-hover:text-primary transition-colors">{item?.name}</h3>
+                <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-slate-100 line-clamp-2 mb-2 min-h-[2rem] leading-snug group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{item?.name}</h3>
 
-                <div className="flex flex-col mt-auto pt-1 sm:pt-2">
-                  <div className="flex items-baseline gap-1 sm:gap-2 flex-wrap">
-                    <span className="text-base sm:text-xl font-black text-primary">
+                <div className="flex flex-col mt-auto pt-2">
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400">
                       {safePrice.toLocaleString('vi-VN')}₫
                     </span>
                     {safeOriginal > safePrice && (
@@ -520,124 +533,175 @@ const Home: React.FC = () => {
     <>
       <style>{`
         .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; vertical-align: middle; }
-        .shadow-premium { box-shadow: 0 20px 40px -10px rgba(0,0,0,0.06), 0 10px 20px -5px rgba(0,0,0,0.03); }
+        .shadow-premium { box-shadow: 0 25px 50px -12px rgba(0,0,0,0.05), 0 10px 20px -8px rgba(0,0,0,0.02); }
+        .shadow-glow-emerald { box-shadow: 0 0 20px rgba(16, 185, 129, 0.15); }
+        .shadow-glow-rose { box-shadow: 0 0 25px rgba(225, 29, 72, 0.2); }
         .coupon-card { background-image: radial-gradient(circle at 0px 8px, transparent 8px, white 8px), radial-gradient(circle at 100% 8px, transparent 8px, white 8px); background-position: left, right; background-size: 51% 100%; background-repeat: no-repeat; }
         .dark .coupon-card { background-image: radial-gradient(circle at 0px 8px, transparent 8px, rgb(30, 41, 59) 8px), radial-gradient(circle at 100% 8px, transparent 8px, rgb(30, 41, 59) 8px); }
+        .hero-glass { backdrop-filter: blur(12px); background-color: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.1); }
       `}</style>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-16 mb-20">
         
-        {/* Section 1: Hero / Top Banners */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {mainBanner ? (
-            <div className="lg:col-span-2 relative group overflow-hidden rounded-3xl shadow-premium h-[420px] md:h-[480px]">
-              <img
-                src={mainBannerUrl}
-                alt={mainBanner.title || "Main banner"}
-                onError={() => setMainBannerError(true)}
-                className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-102"
-              />
-              <div className="absolute inset-0 flex flex-col justify-center px-8 md:px-16 bg-gradient-to-r from-black/60 via-black/45 to-transparent z-10">
-                <div style={{ color: mainBanner.text_color || '#ffffff' }}>
-                  <div className="inline-block bg-primary px-3 py-1.5 rounded-full font-black uppercase tracking-widest text-[9px] mb-4 shadow-lg shadow-primary/20">
-                    {t('common.topPromo')}
+        {/* Section 1: Hero / Top Banners Carousel - Full Width */}
+        <section className="w-full relative group">
+          {banners && banners.length > 0 ? (
+            <div className="relative overflow-hidden rounded-[32px] shadow-premium h-[380px] md:h-[460px] w-full bg-slate-100 dark:bg-slate-800">
+              {banners.map((banner, index) => {
+                const isActive = index === currentBannerIndex;
+                const bannerUrl = resolveImageUrl(banner?.image_url || banner?.image) || fallbackProductImage;
+                return (
+                  <div
+                    key={banner.id || index}
+                    className={`absolute inset-0 transition-all duration-1000 ease-in-out ${
+                      isActive ? 'opacity-100 scale-100 z-10' : 'opacity-0 scale-105 z-0 pointer-events-none'
+                    }`}
+                  >
+                    <img
+                      src={bannerUrl}
+                      alt={banner.title}
+                      className="w-full h-full object-cover transition-transform duration-[10000ms] hover:scale-110"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackProductImage; }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent flex flex-col justify-center px-8 sm:px-12 md:px-16">
+                      <div className="hero-glass p-6 sm:p-8 rounded-3xl max-w-xl" style={{ color: banner.text_color || '#ffffff' }}>
+                        <span className="inline-block bg-emerald-500 text-white px-3 py-1.5 rounded-full font-black uppercase tracking-widest text-[9px] mb-4 shadow-lg shadow-emerald-500/30">
+                          {t('common.topPromo', 'Khuyến mại đặc biệt')}
+                        </span>
+                        <h2 className="text-2xl md:text-4xl font-black mb-3 leading-tight" dangerouslySetInnerHTML={{ __html: banner.title || "" }} />
+                        <p className="text-xs md:text-sm mb-6 opacity-90 leading-relaxed line-clamp-2">{banner.description}</p>
+                        <Link to={banner.link || '/promotions'} className="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2.5 rounded-xl font-black transition-all shadow-lg shadow-emerald-500/30 inline-flex items-center gap-2 text-xs w-fit">
+                          {t('common.viewNow', 'Xem ngay')} <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                        </Link>
+                      </div>
+                    </div>
                   </div>
-                  <h2 className="text-3xl md:text-5xl font-black mb-4 leading-tight tracking-tight drop-shadow-md" dangerouslySetInnerHTML={{ __html: mainBanner.title }} />
-                  <p className="text-sm md:text-base mb-6 max-w-md opacity-90 drop-shadow-sm font-medium leading-relaxed">{mainBanner.description}</p>
-                  <Link to={mainBanner.link || '/promotions'} className="bg-primary hover:bg-rose-700 text-white px-8 py-3.5 rounded-2xl font-black transition-all transform hover:scale-103 shadow-lg shadow-primary/30 inline-flex items-center gap-2 text-sm">
-                    {t('common.viewNow')} <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-                  </Link>
+                );
+              })}
+
+              {/* Navigation Controls */}
+              {banners.length > 1 && (
+                <>
+                  <button
+                    onClick={() => setCurrentBannerIndex((prev) => (prev === 0 ? banners.length - 1 : prev - 1))}
+                    className="absolute left-6 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-2xl bg-black/45 hover:bg-emerald-500 text-white flex items-center justify-center backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all duration-300 transform -translate-x-2 group-hover:translate-x-0"
+                    aria-label="Previous slide"
+                  >
+                    <span className="material-symbols-outlined !text-2xl">chevron_left</span>
+                  </button>
+                  <button
+                    onClick={() => setCurrentBannerIndex((prev) => (prev === banners.length - 1 ? 0 : prev + 1))}
+                    className="absolute right-6 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-2xl bg-black/45 hover:bg-emerald-500 text-white flex items-center justify-center backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0"
+                    aria-label="Next slide"
+                  >
+                    <span className="material-symbols-outlined !text-2xl">chevron_right</span>
+                  </button>
+                </>
+              )}
+
+              {/* Indicator dots */}
+              {banners.length > 1 && (
+                <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-20 flex gap-2.5 bg-black/30 px-4 py-2 rounded-full backdrop-blur-sm">
+                  {banners.map((_, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setCurrentBannerIndex(index)}
+                      className={`h-2 rounded-full transition-all duration-300 ${
+                        index === currentBannerIndex ? 'bg-emerald-400 w-6' : 'bg-white/50 hover:bg-white w-2'
+                      }`}
+                      aria-label={`Go to slide ${index + 1}`}
+                    />
+                  ))}
                 </div>
-              </div>
+              )}
             </div>
           ) : (
-            <div className="lg:col-span-2 relative group overflow-hidden rounded-3xl bg-slate-100 dark:bg-slate-800 h-[420px] md:h-[480px] flex items-center justify-center">
+            <div className="relative group overflow-hidden rounded-[32px] bg-slate-100 dark:bg-slate-800 h-[360px] md:h-[440px] w-full flex items-center justify-center">
               {loading ? <div className="animate-pulse w-full h-full bg-slate-200 dark:bg-slate-700" /> : <span className="text-slate-400 font-bold">{t('product.noProducts')}</span>}
             </div>
           )}
-
-          <div className="flex flex-col gap-5 justify-between h-[420px] md:h-[480px]">
-            {[sideBanner1, sideBanner2].map((banner: any, index) => {
-              const bannerUrl = index === 0 ? sideBanner1Url : sideBanner2Url;
-              const setError = index === 0 ? setSideBanner1Error : setSideBanner2Error;
-
-              return banner ? (
-                <Link key={String(banner.id || index)} to={banner.link || '/promotions'} className="relative h-[200px] md:h-[230px] rounded-3xl overflow-hidden shadow-premium group cursor-pointer block">
-                  <img
-                    src={bannerUrl}
-                    alt={banner.title || "Side banner"}
-                    onError={() => setError(true)}
-                    className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                  />
-                  <div className="absolute inset-0 p-6 flex flex-col justify-end bg-gradient-to-t from-black/75 via-black/30 to-transparent z-10">
-                    <div style={{ color: banner.text_color || '#ffffff' }}>
-                      <span className="font-bold text-[10px] uppercase mb-2 tracking-widest text-primary block">{t('common.collection')}</span>
-                      <h3 className="text-xl md:text-2xl font-black leading-tight drop-shadow" dangerouslySetInnerHTML={{ __html: banner.title }} />
-                    </div>
-                  </div>
-                </Link>
-              ) : (
-                <div key={`empty-banner-${index}`} className="h-[200px] md:h-[230px] rounded-3xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 font-bold shadow-premium">
-                  {loading ? <div className="animate-pulse w-full h-full bg-slate-200 dark:bg-slate-700" /> : t('product.noProducts')}
-                </div>
-              );
-            })}
-          </div>
         </section>
 
-        {/* Section 2: Trust / Service Highlights */}
-        <section className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="flex items-start gap-4 p-2">
-              <span className="material-symbols-outlined !text-3xl text-emerald-500 p-2.5 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl shrink-0">local_shipping</span>
+        {/* Section 2: Trust / Service Highlights Redesigned */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
+          {/* Card 1: Free Shipping */}
+          <div className="group relative overflow-hidden rounded-[28px] p-6 bg-gradient-to-br from-emerald-50/60 to-emerald-100/30 dark:from-emerald-950/20 dark:to-slate-900 border border-emerald-100/60 dark:border-emerald-900/30 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 shadow-sm">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl transform translate-x-4 -translate-y-4 group-hover:scale-150 transition-transform duration-500" />
+            <div className="flex items-center gap-4 relative z-10">
+              <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 shadow-md shadow-emerald-500/5 dark:shadow-none flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                <span className="material-symbols-outlined !text-[32px]">local_shipping</span>
+              </div>
               <div>
-                <h4 className="font-extrabold text-slate-950 dark:text-white text-base">{getTxt('freeShipTitle')}</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">{getTxt('freeShipDesc')}</p>
+                <h4 className="font-black text-slate-900 dark:text-white text-sm sm:text-base leading-tight">{getTxt('freeShipTitle')}</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 font-semibold leading-snug">{getTxt('freeShipDesc')}</p>
               </div>
             </div>
-            <div className="flex items-start gap-4 p-2">
-              <span className="material-symbols-outlined !text-3xl text-blue-500 p-2.5 bg-blue-50 dark:bg-blue-950/40 rounded-2xl shrink-0">bolt</span>
+          </div>
+
+          {/* Card 2: Express Delivery */}
+          <div className="group relative overflow-hidden rounded-[28px] p-6 bg-gradient-to-br from-blue-50/60 to-blue-100/30 dark:from-blue-950/20 dark:to-slate-900 border border-blue-100/60 dark:border-blue-900/30 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 shadow-sm">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl transform translate-x-4 -translate-y-4 group-hover:scale-150 transition-transform duration-500" />
+            <div className="flex items-center gap-4 relative z-10">
+              <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 shadow-md shadow-blue-500/5 dark:shadow-none flex items-center justify-center text-blue-600 dark:text-blue-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                <span className="material-symbols-outlined !text-[32px]">bolt</span>
+              </div>
               <div>
-                <h4 className="font-extrabold text-slate-950 dark:text-white text-base">{getTxt('expressTitle')}</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">{getTxt('expressDesc')}</p>
+                <h4 className="font-black text-slate-900 dark:text-white text-sm sm:text-base leading-tight">{getTxt('expressTitle')}</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 font-semibold leading-snug">{getTxt('expressDesc')}</p>
               </div>
             </div>
-            <div className="flex items-start gap-4 p-2">
-              <span className="material-symbols-outlined !text-3xl text-rose-500 p-2.5 bg-rose-50 dark:bg-rose-950/40 rounded-2xl shrink-0">eco</span>
+          </div>
+
+          {/* Card 3: Fresh Assured */}
+          <div className="group relative overflow-hidden rounded-[28px] p-6 bg-gradient-to-br from-rose-50/60 to-rose-100/30 dark:from-rose-950/20 dark:to-slate-900 border border-rose-100/60 dark:border-rose-900/30 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 shadow-sm">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/10 rounded-full blur-2xl transform translate-x-4 -translate-y-4 group-hover:scale-150 transition-transform duration-500" />
+            <div className="flex items-center gap-4 relative z-10">
+              <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 shadow-md shadow-rose-500/5 dark:shadow-none flex items-center justify-center text-rose-600 dark:text-rose-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                <span className="material-symbols-outlined !text-[32px]">eco</span>
+              </div>
               <div>
-                <h4 className="font-extrabold text-slate-950 dark:text-white text-base">{getTxt('freshTitle')}</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">{getTxt('freshDesc')}</p>
+                <h4 className="font-black text-slate-900 dark:text-white text-sm sm:text-base leading-tight">{getTxt('freshTitle')}</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 font-semibold leading-snug">{getTxt('freshDesc')}</p>
               </div>
             </div>
-            <div className="flex items-start gap-4 p-2">
-              <span className="material-symbols-outlined !text-3xl text-amber-500 p-2.5 bg-amber-50 dark:bg-amber-950/40 rounded-2xl shrink-0">support_agent</span>
+          </div>
+
+          {/* Card 4: 24/7 Support */}
+          <div className="group relative overflow-hidden rounded-[28px] p-6 bg-gradient-to-br from-amber-50/60 to-amber-100/30 dark:from-amber-950/20 dark:to-slate-900 border border-amber-100/60 dark:border-amber-900/30 hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 shadow-sm">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl transform translate-x-4 -translate-y-4 group-hover:scale-150 transition-transform duration-500" />
+            <div className="flex items-center gap-4 relative z-10">
+              <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 shadow-md shadow-amber-500/5 dark:shadow-none flex items-center justify-center text-amber-600 dark:text-amber-400 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                <span className="material-symbols-outlined !text-[32px]">support_agent</span>
+              </div>
               <div>
-                <h4 className="font-extrabold text-slate-950 dark:text-white text-base">{getTxt('supportTitle')}</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">{getTxt('supportDesc')}</p>
+                <h4 className="font-black text-slate-900 dark:text-white text-sm sm:text-base leading-tight">{getTxt('supportTitle')}</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5 font-semibold leading-snug">{getTxt('supportDesc')}</p>
               </div>
             </div>
           </div>
         </section>
 
         {/* Section 3: Featured Categories */}
-        <section className="space-y-6">
+        <section className="space-y-8">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary !text-2xl">grid_view</span>
-              {getTxt('featuredCategories')}
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
+              <span className="w-2 h-6 bg-emerald-500 rounded-full inline-block" />
+              <span>{getTxt('featuredCategories')}</span>
             </h2>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6">
             {homeCategories.map(cat => {
               const displayName = lang === 'en' ? cat.nameEn : lang === 'ja' ? cat.nameJa : cat.name;
               return (
                 <Link 
                   key={cat.id} 
                   to={`/products?category=${encodeURIComponent(cat.query)}`} 
-                  className={`flex flex-col items-center justify-center p-5 rounded-3xl border transition-all duration-300 hover:-translate-y-1 hover:shadow-md ${cat.bg}`}
+                  className={`flex flex-col items-center justify-center p-6 rounded-[28px] border transition-all duration-300 hover:-translate-y-2 hover:shadow-lg group ${cat.bg}`}
                 >
-                  <CategoryIcon category={(cat as any).categoryData || cat} className="w-10 h-10 mb-2.5 flex items-center justify-center text-current" iconClass="material-symbols-outlined !text-3xl" size={40} />
-                  <span className="font-extrabold text-[13px] text-center line-clamp-1">{displayName}</span>
+                  <div className="w-14 h-14 rounded-2xl bg-white/80 dark:bg-slate-800/80 shadow-sm flex items-center justify-center mb-4 transition-all duration-500 group-hover:scale-110 group-hover:rotate-6 text-current">
+                    <CategoryIcon category={(cat as any).categoryData || cat} className="w-8 h-8 flex items-center justify-center text-current" iconClass="material-symbols-outlined !text-3xl" size={32} />
+                  </div>
+                  <span className="font-black text-[12px] sm:text-[13px] text-center line-clamp-2 h-10 flex items-center justify-center text-slate-800 dark:text-slate-200 leading-snug">{displayName}</span>
                 </Link>
               );
             })}
@@ -646,46 +710,51 @@ const Home: React.FC = () => {
 
         {/* Section 4: Hot Deals / Flash Sale */}
         {flashDeals.length > 0 && (
-          <section className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <h2 className="text-2xl font-black text-rose-600 uppercase italic tracking-tight flex items-center gap-1.5">
-                  <span className="material-symbols-outlined !text-3xl animate-pulse">local_fire_department</span>
-                  {getTxt('flashSaleTitle')}
-                </h2>
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                </span>
+          <section className="space-y-8 bg-slate-950 dark:bg-slate-900 border border-slate-800 p-6 sm:p-10 rounded-[36px] shadow-glow-rose relative overflow-hidden">
+            <div className="absolute top-0 left-1/4 w-80 h-80 bg-rose-600/10 rounded-full blur-[100px] pointer-events-none" />
+            <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-orange-600/5 rounded-full blur-[100px] pointer-events-none" />
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+              <div className="flex items-center gap-4">
+                <div className="bg-rose-500/15 p-3 rounded-2xl border border-rose-500/20">
+                  <span className="material-symbols-outlined !text-3xl text-rose-500 animate-pulse">local_fire_department</span>
+                </div>
+                <div>
+                  <h2 className="text-2xl sm:text-3xl font-black text-white uppercase italic tracking-tight">
+                    {getTxt('flashSaleTitle')}
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-1 font-semibold">Ưu đãi cực sốc trong khung giờ giới hạn</p>
+                </div>
               </div>
+
               <div className="flex flex-wrap items-center gap-4">
-                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                <div className="flex bg-slate-900 dark:bg-slate-800 p-1.5 rounded-2xl border border-slate-800">
                   <button
                     onClick={() => setShowAllBranchDeals(false)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
                       !showAllBranchDeals
-                        ? 'bg-rose-600 text-white shadow'
-                        : 'text-slate-600 dark:text-slate-300 hover:text-rose-600'
+                        ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
+                        : 'text-slate-400 hover:text-white'
                     }`}
                   >
                     {getTxt('atYourBranch')}
                   </button>
                   <button
                     onClick={() => setShowAllBranchDeals(true)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+                    className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${
                       showAllBranchDeals
-                        ? 'bg-rose-600 text-white shadow'
-                        : 'text-slate-600 dark:text-slate-300 hover:text-rose-600'
+                        ? 'bg-rose-600 text-white shadow-md shadow-rose-600/30'
+                        : 'text-slate-400 hover:text-white'
                     }`}
                   >
                     {getTxt('systemWide')} ({flashDealItems.length})
                   </button>
                 </div>
                 {countdown && (
-                  <div className="flex items-center gap-1 bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 px-3 py-2 rounded-xl text-rose-600 font-extrabold text-xs">
-                    <span className="material-symbols-outlined text-[16px]">schedule</span>
+                  <div className="flex items-center gap-2 bg-rose-500/10 border border-rose-500/20 px-4 py-2 rounded-2xl text-rose-400 font-extrabold text-xs">
+                    <span className="material-symbols-outlined text-[16px] animate-spin-slow">schedule</span>
                     <span>{t('product.endsIn')}:</span>
-                    <span className="font-mono text-sm bg-rose-600 text-white px-2 py-0.5 rounded-md ml-1 shadow-sm">
+                    <span className="font-mono text-sm bg-rose-600 text-white px-2.5 py-0.5 rounded-lg ml-1 shadow-md">
                       {String(countdown.hours).padStart(2, '0')}:{String(countdown.minutes).padStart(2, '0')}:{String(countdown.seconds).padStart(2, '0')}
                     </span>
                   </div>
@@ -694,7 +763,7 @@ const Home: React.FC = () => {
             </div>
 
             {filteredFlashDealItems.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 md:gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6 relative z-10">
                 {filteredFlashDealItems.map((deal: any, index: number) => {
                   const sold = Math.max(0, (deal.total_quantity || 0) - (deal.remaining_quantity || 0));
                   const pct = deal.total_quantity > 0 ? Math.min(100, (sold / deal.total_quantity) * 100) : 0;
@@ -702,45 +771,45 @@ const Home: React.FC = () => {
                   const dealImage = resolveImageUrl(deal.image_url) || fallbackProductImage;
 
                   return (
-                    <Link key={`${String(deal.id || index)}-${index}`} to={getProductUrl(deal)} className="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-rose-100 dark:border-rose-950/40 overflow-hidden relative group flex flex-col hover:shadow-lg hover:-translate-y-1 transition-all duration-355">
+                    <Link key={`${String(deal.id || index)}-${index}`} to={getProductUrl(deal)} className="bg-slate-900 border border-slate-800 rounded-[28px] overflow-hidden relative group flex flex-col hover:border-rose-500/30 hover:shadow-glow-rose transition-all duration-300">
                       <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5">
-                        <span className="bg-rose-600 text-white font-black text-[10px] px-2.5 py-1 rounded-full shadow-md shadow-rose-600/30 w-fit">
+                        <span className="bg-gradient-to-r from-rose-500 to-red-600 text-white font-black text-[10px] px-3 py-1 rounded-full shadow-md shadow-rose-600/30 w-fit">
                           -{deal.discount_percent || deal.discount_value || 0}%
                         </span>
                         {deal.branch_name ? (
                           <span className={`text-[9px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 w-fit ${
-                            isDifferentBranch ? 'bg-amber-500 text-white shadow-sm border border-amber-400' : 'bg-slate-900/80 backdrop-blur-sm text-white'
+                            isDifferentBranch ? 'bg-amber-500 text-white shadow-sm' : 'bg-black/60 backdrop-blur-md text-white'
                           }`}>
                             <span className="material-symbols-outlined !text-[11px]">store</span>
                             {deal.branch_name}
                           </span>
                         ) : (
-                          <span className="bg-slate-900/80 backdrop-blur-sm text-white text-[9px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 w-fit">
+                          <span className="bg-black/60 backdrop-blur-md text-white text-[9px] font-black px-2.5 py-1 rounded-full flex items-center gap-1 w-fit">
                             <span className="material-symbols-outlined !text-[11px]">store</span>
                             {getTxt('systemWide')}
                           </span>
                         )}
                       </div>
-                      <div className="aspect-square bg-slate-50 dark:bg-slate-900 overflow-hidden relative">
+                      <div className="aspect-square bg-slate-950 overflow-hidden relative">
                         <img src={dealImage} alt={deal.title || t('product.flashDeal')} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackProductImage; }} />
                       </div>
-                      <div className="p-3 sm:p-4 flex flex-col flex-grow">
-                        <h3 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-white line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem] mb-1.5 sm:mb-2 leading-snug sm:leading-relaxed">{deal.title || t('product.flashDeal')}</h3>
-                        <div className="flex items-baseline gap-1 sm:gap-2 mb-2 sm:mb-3 flex-wrap">
-                          <span className="text-rose-600 font-black text-sm sm:text-lg">{Number(deal.deal_price || 0).toLocaleString('vi-VN')}₫</span>
-                          <span className="text-slate-400 text-[10px] sm:text-xs line-through">{Number(deal.original_price || 0).toLocaleString('vi-VN')}₫</span>
+                      <div className="p-4 sm:p-5 flex flex-col flex-grow">
+                        <h3 className="font-bold text-xs sm:text-sm text-slate-100 line-clamp-2 min-h-[2rem] sm:min-h-[2.5rem] mb-2 leading-snug group-hover:text-rose-400 transition-colors">{deal.title || t('product.flashDeal')}</h3>
+                        <div className="flex items-baseline gap-1.5 mb-3 flex-wrap">
+                          <span className="text-rose-500 font-black text-base sm:text-xl">{Number(deal.deal_price || 0).toLocaleString('vi-VN')}₫</span>
+                          <span className="text-slate-500 text-[10px] sm:text-xs line-through">{Number(deal.original_price || 0).toLocaleString('vi-VN')}₫</span>
                         </div>
-                        <div className="mb-3">
+                        <div className="mb-4">
                           <HotDealCountdown endDate={deal.end_date} />
                         </div>
                         {deal.total_quantity > 0 && (
                           <div className="mt-auto pt-2">
-                            <div className="relative w-full bg-rose-100 dark:bg-slate-700/50 h-5 rounded-full overflow-hidden flex items-center justify-center">
+                            <div className="relative w-full bg-slate-800 h-5 rounded-full overflow-hidden flex items-center justify-center">
                               <div
                                 className="absolute left-0 top-0 h-full bg-gradient-to-r from-orange-500 to-rose-600 rounded-full transition-all duration-700 ease-out"
                                 style={{ width: `${pct}%` }}
                               />
-                              <span className="relative z-10 text-[9px] font-black text-rose-950 dark:text-white flex items-center gap-1">
+                              <span className="relative z-10 text-[9px] font-black text-white flex items-center gap-1">
                                 <span className="material-symbols-outlined !text-[12px] animate-pulse">local_fire_department</span>
                                 {t('product.soldCount') || 'Đã bán'} {sold} / {deal.total_quantity}
                               </span>
@@ -755,7 +824,7 @@ const Home: React.FC = () => {
                               e.stopPropagation();
                               handleSwitchToAvailableBranch(deal.matchedBranch);
                             }}
-                            className="mt-3 w-full py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] rounded-xl transition-colors shadow-sm flex items-center justify-center gap-1.5"
+                            className="mt-3.5 w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-black text-[11px] rounded-xl transition-colors shadow-sm flex items-center justify-center gap-1.5"
                           >
                             <span className="material-symbols-outlined !text-sm">swap_horiz</span>
                             {getTxt('changeBranch')}
@@ -767,14 +836,14 @@ const Home: React.FC = () => {
                 })}
               </div>
             ) : (
-              <div className="rounded-3xl border border-dashed border-rose-200 bg-rose-50/45 dark:bg-slate-900 dark:border-rose-900/20 p-10 text-center flex flex-col items-center justify-center">
-                <span className="material-symbols-outlined text-rose-500 !text-5xl mb-3">store_away</span>
-                <p className="text-base font-bold text-rose-900 dark:text-rose-400 mb-2">{getTxt('noFlashDeals')}</p>
-                <p className="text-xs text-rose-700 dark:text-rose-500/80 max-w-md mb-6">{getTxt('switchBranchTip')}</p>
+              <div className="rounded-[28px] border border-dashed border-rose-900/30 bg-slate-900/40 p-12 text-center flex flex-col items-center justify-center relative z-10">
+                <span className="material-symbols-outlined text-rose-500 !text-5xl mb-4">store_away</span>
+                <p className="text-base font-black text-white mb-2">{getTxt('noFlashDeals')}</p>
+                <p className="text-xs text-slate-400 max-w-md mb-6 leading-relaxed">{getTxt('switchBranchTip')}</p>
                 <button
                   type="button"
                   onClick={() => setShowAllBranchDeals(true)}
-                  className="bg-rose-600 hover:bg-rose-700 text-white font-black px-6 py-2.5 rounded-xl transition-all shadow-md shadow-rose-600/30 text-xs"
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-black px-8 py-3 rounded-2xl transition-all shadow-lg shadow-rose-600/30 text-xs"
                 >
                   {getTxt('viewAll')} ({flashDealItems.length})
                 </button>
@@ -784,34 +853,35 @@ const Home: React.FC = () => {
         )}
 
         {/* Section 5: Best Sellers / Trending Products */}
-        <section className="space-y-6">
+        <section className="space-y-8">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary !text-2xl">trending_up</span>
-              {t('product.suggestedForYou')}
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
+              <span className="w-2 h-6 bg-emerald-500 rounded-full inline-block" />
+              <span>{t('product.suggestedForYou')}</span>
             </h2>
-            <Link className="flex items-center gap-1 text-primary font-bold hover:gap-2 transition-all text-sm" to="/products">
-              {getTxt('viewAll')} <span className="material-symbols-outlined !text-base">arrow_forward</span>
+            <Link className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-black hover:gap-2 transition-all text-sm group" to="/products">
+              {getTxt('viewAll')}{" "}
+              <span className="material-symbols-outlined !text-base transition-transform group-hover:translate-x-1">arrow_forward</span>
             </Link>
           </div>
           {renderProductGrid(suggestedProducts, t('product.noProducts'))}
         </section>
 
         {/* Section 6: Active Coupons & Promotions */}
-        <section className="space-y-6">
+        <section className="space-y-8">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary !text-2xl">local_activity</span>
-              {getTxt('promoCoupons')}
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
+              <span className="w-2 h-6 bg-emerald-500 rounded-full inline-block" />
+              <span>{getTxt('promoCoupons')}</span>
             </h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {COUPONS_DATA.map((coupon) => {
               const desc = lang === 'en' ? coupon.descEn : lang === 'ja' ? coupon.descJa : coupon.desc;
               return (
-                <div key={coupon.code} className="coupon-card bg-slate-50 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700 rounded-3xl p-4 sm:p-5 flex items-center justify-between gap-3 sm:gap-4 shadow-sm hover:shadow-md transition-shadow relative">
+                <div key={coupon.code} className="coupon-card bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 rounded-[24px] p-5 flex items-center justify-between gap-4 shadow-sm hover:shadow-md hover:border-emerald-500/20 transition-all relative group">
                   <div className="flex flex-col gap-1 flex-1 min-w-0">
-                    <span className="text-[10px] font-black uppercase text-primary tracking-wider">Lotte Mart</span>
+                    <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 tracking-wider">Bách hóa XANH</span>
                     <h4 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-0.5">{lang === 'en' ? coupon.valueEn : lang === 'ja' ? coupon.valueJa : coupon.value}</h4>
                     <p className="text-xs text-slate-500 dark:text-slate-400 font-bold mt-1 line-clamp-1">{desc}</p>
                     <p className="text-[10px] text-slate-400 mt-2 font-medium">
@@ -824,7 +894,7 @@ const Home: React.FC = () => {
                     <span className="bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-mono font-bold text-xs px-2.5 py-1 rounded-lg select-all border border-slate-300 dark:border-slate-600 shadow-sm">{coupon.code}</span>
                     <button 
                       onClick={() => handleCopyCoupon(coupon.code)}
-                      className="bg-primary hover:bg-rose-700 text-white font-extrabold text-[10px] px-3.5 py-1.5 rounded-xl transition-all shadow-sm shadow-primary/20 uppercase"
+                      className="bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-[10px] px-4 py-2 rounded-xl transition-all shadow-sm shadow-emerald-500/20 uppercase"
                     >
                       {getTxt('copy')}
                     </button>
@@ -837,45 +907,52 @@ const Home: React.FC = () => {
 
         {/* Section 7: AI Smart Shopping Recommendations */}
         <section 
-          className="rounded-3xl p-6 sm:p-8 md:p-12 text-white shadow-premium relative overflow-hidden group bg-gradient-to-br from-[#1e1b4b] via-[#3b0764] to-[#500724]"
+          className="rounded-[36px] p-8 md:p-12 text-white shadow-premium relative overflow-hidden group bg-gradient-to-br from-emerald-950 via-slate-900 to-teal-950 border border-emerald-900/30"
         >
-          {/* Decorative Background Blob */}
-          <div className="absolute top-0 right-0 w-48 sm:w-64 h-48 sm:h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:scale-125 transition-transform duration-1000" />
+          {/* Decorative Background Blobs */}
+          <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:scale-125 transition-transform duration-1000" />
+          <div className="absolute bottom-0 left-0 w-80 h-80 bg-teal-500/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2 pointer-events-none" />
           
-          <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-8 md:gap-12">
+          <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-10 md:gap-16">
             {/* Text content */}
             <div className="max-w-2xl text-center lg:text-left flex-1">
-              <h2 className="text-2xl sm:text-3xl md:text-4xl font-black mb-3 sm:mb-4 flex items-center justify-center lg:justify-start gap-2 sm:gap-3 tracking-tight">
-                <span className="material-symbols-outlined !text-3xl sm:!text-4xl text-[#FFD60A] shrink-0 inline-flex items-center justify-center" style={{ lineHeight: 1 }}>auto_awesome</span>
-                <span>{t('smartShopping.title')}</span>
+              <div className="inline-flex items-center gap-2 bg-emerald-500/15 border border-emerald-500/20 px-3.5 py-1.5 rounded-full font-black uppercase tracking-widest text-[10px] mb-4 text-emerald-400">
+                <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+                <span>Tính năng thông minh</span>
+              </div>
+              <h2 className="text-3xl md:text-4xl font-black mb-4 leading-tight tracking-tight">
+                {t('smartShopping.title')}
               </h2>
-              <p className="text-sm md:text-base text-white/90 font-medium mb-6 sm:mb-8 leading-relaxed max-w-xl mx-auto lg:mx-0">
+              <p className="text-sm md:text-base text-slate-300 font-medium mb-8 leading-relaxed max-w-xl mx-auto lg:mx-0">
                 {t('smartShopping.description')}
               </p>
               <div className="flex flex-col sm:flex-row flex-wrap gap-4 justify-center lg:justify-start">
-                <Link to="/smart-shopping" className="bg-white hover:bg-slate-50 text-indigo-600 px-6 py-3.5 rounded-2xl font-black shadow-lg shadow-black/10 flex items-center justify-center gap-2 text-sm transition-all duration-300 transform hover:-translate-y-0.5">
-                  <span className="material-symbols-outlined !text-xl inline-flex items-center justify-center" style={{ lineHeight: 1 }}>psychology</span>
+                <Link to="/smart-shopping" className="bg-emerald-500 hover:bg-emerald-600 text-white px-7 py-4 rounded-2xl font-black shadow-lg shadow-emerald-500/30 flex items-center justify-center gap-2.5 text-sm transition-all duration-300 transform hover:-translate-y-0.5">
+                  <span className="material-symbols-outlined !text-xl" style={{ lineHeight: 1 }}>psychology</span>
                   {t('smartShopping.explore')}
                 </Link>
-                <Link to="/smart-shopping?tab=recipe" className="bg-white/10 hover:bg-white/20 text-white border border-white/25 px-6 py-3.5 rounded-2xl font-black flex items-center justify-center gap-2 text-sm transition-all duration-300 transform hover:-translate-y-0.5 backdrop-blur-md">
-                  <span className="material-symbols-outlined !text-xl inline-flex items-center justify-center" style={{ lineHeight: 1 }}>restaurant_menu</span>
+                <Link to="/smart-shopping?tab=recipe" className="bg-white/10 hover:bg-white/15 text-white border border-white/10 px-7 py-4 rounded-2xl font-black flex items-center justify-center gap-2.5 text-sm transition-all duration-300 transform hover:-translate-y-0.5 backdrop-blur-md">
+                  <span className="material-symbols-outlined !text-xl" style={{ lineHeight: 1 }}>restaurant_menu</span>
                   {t('smartShopping.buyByRecipe')}
                 </Link>
               </div>
             </div>
+
             {/* AI robot icon - decorative */}
-            <div className="relative shrink-0 hidden lg:flex items-center justify-center w-40 h-40">
+            <div className="relative shrink-0 hidden lg:flex items-center justify-center w-48 h-48">
               {/* Animated rings */}
-              <div className="absolute w-40 h-40 rounded-full border-2 border-dashed border-white/20 animate-[spin_40s_linear_infinite]" />
-              <div className="absolute w-32 h-32 rounded-full border border-white/10 animate-[spin_20s_linear_infinite_reverse]" />
+              <div className="absolute w-48 h-48 rounded-full border border-dashed border-emerald-500/20 animate-[spin_40s_linear_infinite]" />
+              <div className="absolute w-40 h-40 rounded-full border border-emerald-500/10 animate-[spin_20s_linear_infinite_reverse]" />
               
-              {/* Robot icon */}
-              <span className="material-symbols-outlined !text-5xl text-[#FFD60A] drop-shadow-[0_0_15px_rgba(255,214,10,0.4)] z-10">
-                smart_toy
-              </span>
+              {/* Robot container */}
+              <div className="w-24 h-24 rounded-3xl bg-slate-900/80 backdrop-blur-md border border-emerald-500/20 shadow-glow-emerald flex items-center justify-center z-10 transition-transform duration-500 group-hover:scale-105">
+                <span className="material-symbols-outlined !text-5xl text-emerald-400 drop-shadow-[0_0_15px_rgba(16,185,129,0.4)]">
+                  smart_toy
+                </span>
+              </div>
               
-              {/* Floating magic_button decoration */}
-              <div className="absolute -top-1 -right-1 bg-gradient-to-r from-pink-500 to-rose-500 p-2 rounded-xl shadow-lg animate-bounce z-20">
+              {/* Floating micro widget decoration */}
+              <div className="absolute -top-1 -right-1 bg-gradient-to-r from-emerald-500 to-teal-500 p-2.5 rounded-2xl shadow-lg animate-bounce z-20">
                 <span className="material-symbols-outlined !text-lg text-white">
                   magic_button
                 </span>
@@ -886,37 +963,37 @@ const Home: React.FC = () => {
 
         {/* Section 8: Branch Info Highlights */}
         {currentBranch && (
-          <section className="bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-3xl p-6 md:p-8 shadow-sm">
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-              <div className="space-y-3 max-w-3xl">
-                <span className="inline-flex items-center gap-1.5 text-xs font-black text-primary uppercase tracking-widest bg-primary/10 px-3 py-1 rounded-full">
+          <section className="bg-gradient-to-br from-slate-50 to-slate-100/50 dark:from-slate-900 dark:to-slate-900/60 border border-slate-200/60 dark:border-slate-800 rounded-[32px] p-6 md:p-10 shadow-sm">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
+              <div className="space-y-4 max-w-3xl">
+                <span className="inline-flex items-center gap-2 text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest bg-emerald-100/60 dark:bg-emerald-500/10 px-3.5 py-1.5 rounded-full border border-emerald-200/20">
                   <span className="material-symbols-outlined text-sm">store</span>
                   {getTxt('activeBranch')}
                 </span>
-                <h3 className="text-2xl font-black text-slate-950 dark:text-white tracking-tight">{currentBranch.name}</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2.5 pt-2 text-sm text-slate-600 dark:text-slate-400">
-                  <p className="flex items-start gap-2 font-medium">
+                <h3 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">{currentBranch.name}</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3.5 pt-2 text-sm text-slate-600 dark:text-slate-400">
+                  <p className="flex items-start gap-2.5 font-semibold">
                     <span className="material-symbols-outlined text-slate-400 text-lg shrink-0 mt-0.5">pin_drop</span>
                     <span><b>{getTxt('address')}:</b> {currentBranch.address || `${currentBranch.city}`}</span>
                   </p>
-                  <p className="flex items-start gap-2 font-medium">
+                  <p className="flex items-start gap-2.5 font-semibold">
                     <span className="material-symbols-outlined text-slate-400 text-lg shrink-0 mt-0.5">schedule</span>
                     <span><b>{getTxt('hours')}:</b> {currentBranch.operating_hours || currentBranch.opening_hours || '08:00 - 22:00'}</span>
                   </p>
-                  <p className="flex items-start gap-2 font-medium">
+                  <p className="flex items-start gap-2.5 font-semibold">
                     <span className="material-symbols-outlined text-slate-400 text-lg shrink-0 mt-0.5">call</span>
                     <span><b>{getTxt('hotline')}:</b> {currentBranch.phone || '1900 1590'}</span>
                   </p>
                   {currentBranch.code && (
-                    <p className="flex items-start gap-2 font-medium">
+                    <p className="flex items-start gap-2.5 font-semibold">
                       <span className="material-symbols-outlined text-slate-400 text-lg shrink-0 mt-0.5">qr_code_2</span>
-                      <span><b>ERP Warehouse Code:</b> <code className="bg-slate-200 dark:bg-slate-800 text-[11px] px-1.5 py-0.5 rounded font-mono font-bold">{currentBranch.code}</code></span>
+                      <span><b>ERP Warehouse Code:</b> <code className="bg-slate-200 dark:bg-slate-800 text-[11px] px-2 py-0.5 rounded font-mono font-bold">{currentBranch.code}</code></span>
                     </p>
                   )}
                 </div>
               </div>
               <div className="w-full lg:w-auto shrink-0 pt-4 lg:pt-0">
-                <Link to="/products" className="w-full lg:w-auto text-center bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white text-white px-8 py-3.5 rounded-2xl font-black transition-all inline-block shadow text-sm">
+                <Link to="/products" className="w-full lg:w-auto text-center bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white text-white px-8 py-4 rounded-2xl font-black transition-all inline-block shadow-md text-sm">
                   {t('common.viewNow')}
                 </Link>
               </div>
@@ -925,14 +1002,15 @@ const Home: React.FC = () => {
         )}
 
         {/* Section 9: New Products */}
-        <section className="space-y-6">
+        <section className="space-y-8">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary !text-2xl">fiber_new</span>
-              {t('product.newProducts')}
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
+              <span className="w-2 h-6 bg-emerald-500 rounded-full inline-block" />
+              <span>{t('product.newProducts')}</span>
             </h2>
-            <Link className="flex items-center gap-1 text-primary font-bold hover:gap-2 transition-all text-sm" to="/products">
-              {getTxt('viewAll')} <span className="material-symbols-outlined !text-base">arrow_forward</span>
+            <Link className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-black hover:gap-2 transition-all text-sm group" to="/products">
+              {getTxt('viewAll')}{" "}
+              <span className="material-symbols-outlined !text-base transition-transform group-hover:translate-x-1">arrow_forward</span>
             </Link>
           </div>
           {renderProductGrid(newProducts, t('product.noProducts'))}
@@ -945,7 +1023,7 @@ const Home: React.FC = () => {
         <Link
           to="/account/support"
           aria-label={t('support.helpLink')}
-          className="flex items-center gap-2 rounded-full bg-primary text-white px-4 py-3.5 shadow-xl shadow-primary/30 hover:bg-rose-700 hover:scale-105 transition-all duration-300"
+          className="flex items-center gap-2 rounded-full bg-emerald-500 text-white px-5 py-4 shadow-xl shadow-emerald-500/30 hover:bg-emerald-600 hover:scale-105 transition-all duration-300"
         >
           <span className="material-symbols-outlined text-[22px]">support_agent</span>
           <span className="text-sm font-black hidden sm:inline">{t('support.helpLink')}</span>
@@ -953,7 +1031,7 @@ const Home: React.FC = () => {
         <div className="absolute bottom-16 right-0 w-64 rounded-3xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-2xl p-5 opacity-0 translate-y-3 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all duration-300">
           <p className="text-sm font-black text-slate-900 dark:text-white">{t('support.homeCardTitle')}</p>
           <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">{t('support.homeCardDesc')}</p>
-          <Link to="/account/support" className="inline-flex items-center gap-1 text-xs font-bold text-primary mt-4 hover:gap-1.5 transition-all">
+          <Link to="/account/support" className="inline-flex items-center gap-1 text-xs font-bold text-emerald-500 mt-4 hover:gap-1.5 transition-all">
             {t('support.homeCardCta')}
             <span className="material-symbols-outlined text-sm">arrow_forward</span>
           </Link>

@@ -199,7 +199,7 @@ const SmartShopping: React.FC = () => {
           </div>
         </Link>
         <div className="p-4">
-          <p className="text-xs text-slate-400 font-bold mb-1">{item?.brand || 'Lotte'}</p>
+          <p className="text-xs text-slate-400 font-bold mb-1">{item?.brand || 'Bách hóa XANH'}</p>
           <h3 className="text-sm font-bold text-slate-800 dark:text-white line-clamp-2 h-10 mb-2">{item?.name}</h3>
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
@@ -532,7 +532,7 @@ const SmartShopping: React.FC = () => {
                 className="w-16 h-16 object-cover rounded-xl"
               />
               <div>
-                <p className="text-xs text-slate-400 font-bold">{selectedWatchItem.brand || 'Lotte'}</p>
+                <p className="text-xs text-slate-400 font-bold">{selectedWatchItem.brand || 'Bách hóa XANH'}</p>
                 <h4 className="text-sm font-bold text-slate-800 dark:text-white line-clamp-2">{selectedWatchItem.name}</h4>
                 <p className="text-sm font-black text-rose-600 mt-1">Giá hiện tại: {fmt(selectedWatchItem.price)}₫</p>
               </div>

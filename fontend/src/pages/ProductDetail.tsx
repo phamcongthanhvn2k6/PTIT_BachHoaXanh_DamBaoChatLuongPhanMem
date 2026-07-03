@@ -1431,14 +1431,14 @@ const ProductDetail: React.FC = () => {
                     : [];
 
                 // Determine badge color and label for response type
-                let sourceLabel = t('qa.adminResponse', 'Lotte Mart');
+                let sourceLabel = t('qa.adminResponse', 'Bách hóa XANH');
                 let sourceBadgeClass = 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
                 
                 if (q.answer_source === 'ai') {
-                  sourceLabel = t('qa.aiResponse', 'Trợ lý AI Lotte Mart');
+                  sourceLabel = t('qa.aiResponse', 'Trợ lý AI Bách hóa XANH');
                   sourceBadgeClass = 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary';
                 } else if (q.answer_source === 'mixed') {
-                  sourceLabel = t('qa.mixedResponse', 'Lotte Mart & AI');
+                  sourceLabel = t('qa.mixedResponse', 'Bách hóa XANH & AI');
                   sourceBadgeClass = 'bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-300 border border-amber-200/50';
                 }
 

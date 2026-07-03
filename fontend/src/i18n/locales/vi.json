@@ -85,9 +85,10 @@
     "promotions": "Khuyến mãi",
     "featuredEvents": "Sự kiện",
     "entertainment": "Giải trí",
-    "memberBách hóa XANH": "Thành viên Bách hóa XANH",
+    "memberLotte": "Thành viên Bách hóa XANH",
     "categories": "Tất cả danh mục",
-    "searchPlaceholder": "Tìm kiếm sản phẩm, thương hiệu..."
+    "searchPlaceholder": "Tìm kiếm sản phẩm, thương hiệu...",
+    "recipes": "Vào bếp"
   },
   "featuredEvents": {
     "title": "Tin Tức & Sự Kiện",
@@ -547,9 +548,7 @@
       "tabPopupAds": "Popup Ads"
     }
   },
-  "adminSupport": {
-    "closeTicket": "Đóng ticket"
-  },
+
   "product": {
     "products": "Sản phẩm",
     "discoverProducts": "Khám phá sản phẩm mới theo chi nhánh của bạn",
@@ -597,14 +596,14 @@
     "applyFilters": "Áp dụng bộ lọc"
   },
   "footer": {
-    "description": "{{brand}} Việt Nam – Chuỗi siêu thị hiện đại hàng đầu Hàn Quốc tại Việt Nam. Mang đến trải nghiệm mua sắm đẳng cấp với hàng ngàn sản phẩm chất lượng cao.",
+    "description": "{{brand}} Việt Nam – Chuỗi siêu thị hiện đại hàng đầu Việt Nam. Mang đến trải nghiệm mua sắm đẳng cấp với hàng ngàn sản phẩm chất lượng cao.",
     "customerSupport": "Hỗ trợ khách hàng",
     "shoppingGuide": "Hướng dẫn mua hàng",
     "returnPolicy": "Chính sách đổi trả",
     "shippingPolicy": "Chính sách vận chuyển",
     "faq": "Câu hỏi thường gặp",
     "supportCenter": "Trung tâm hỗ trợ",
-    "aboutBách hóa XANH": "Về Bách hóa XANH",
+    "aboutLotte": "Về Bách hóa XANH",
     "introduction": "Giới thiệu",
     "careers": "Tuyển dụng",
     "newsEvents": "Tin tức & Sự kiện",
@@ -671,7 +670,7 @@
     "shopNow": "Mua sắm ngay",
     "exploreProducts": "Khám phá sản phẩm",
     "storyLabel": "Chúng tôi là ai",
-    "storyTitle": "Chuỗi siêu thị hàng đầu Hàn Quốc tại Việt Nam",
+    "storyTitle": "Chuỗi siêu thị hàng đầu Việt Nam",
     "storyDesc1": "Kể từ khi có mặt tại Việt Nam, Bách hóa XANH đã phát triển thành một trong những thương hiệu bán lẻ đáng tin cậy nhất cả nước. Chúng tôi vận hành mạng lưới siêu thị hiện đại trên toàn quốc, cung cấp mọi thứ từ thực phẩm tươi sống, đồ gia dụng đến điện tử và thời trang — tất cả dưới một mái nhà.",
     "storyDesc2": "Cam kết của chúng tôi vượt xa sản phẩm. Chúng tôi xây dựng mối quan hệ bền vững với khách hàng bằng sự nhất quán về chất lượng, tiện lợi và giá trị. Dù bạn mua sắm tại cửa hàng hay trực tuyến, Bách hóa XANH luôn ở đây để cuộc sống hàng ngày của bạn dễ dàng hơn.",
     "missionTitle": "Sứ mệnh của chúng tôi",

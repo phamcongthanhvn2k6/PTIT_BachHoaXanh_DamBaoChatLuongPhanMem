@@ -88,12 +88,12 @@ export const sendMail = async ({ to, subject, text, html }) => {
 export const sendOtpEmail = async ({ email, otp, expiresMinutes = 10 }) => {
   if (!email) throw new Error('Email is required for OTP');
 
-  const subject = 'Ma xac thuc email Lotte Mart';
+  const subject = 'Ma xac thuc email Bach hoa XANH';
   const text = `Ma OTP cua ban la ${otp}. Ma co hieu luc trong ${expiresMinutes} phut.`;
   const html = `
     <div style="font-family:Arial,sans-serif;line-height:1.5;color:#1f2937;max-width:560px;margin:0 auto;">
       <h2 style="color:#dc2626;">Xac thuc email tai khoan</h2>
-      <p>Ban vua yeu cau xac thuc email cho tai khoan Lotte Mart.</p>
+      <p>Ban vua yeu cau xac thuc email cho tai khoan Bach hoa XANH.</p>
       <p>Ma OTP cua ban:</p>
       <div style="font-size:30px;font-weight:700;letter-spacing:6px;background:#fef2f2;border:1px solid #fecaca;padding:14px 18px;border-radius:8px;display:inline-block;">${otp}</div>
       <p style="margin-top:14px;">Ma co hieu luc trong <b>${expiresMinutes} phut</b>.</p>
@@ -142,7 +142,7 @@ export const sendOrderSuccessEmail = async (user, order) => {
   const html = `
     <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;max-width:640px;margin:0 auto;">
       <h2 style="color:#dc2626;">Dat hang thanh cong</h2>
-      <p>Xin chao ${user?.full_name || user?.username || 'Quy khach'}, cam on ban da mua hang tai Lotte Mart.</p>
+      <p>Xin chao ${user?.full_name || user?.username || 'Quy khach'}, cam on ban da mua hang tai Bach hoa XANH.</p>
       <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px;">
         <p><b>Ma don:</b> #${orderCode}</p>
         <p><b>Tong tien:</b> ${formatMoney(order?.total_amount)}đ</p>
@@ -174,7 +174,7 @@ export const sendOrderSuccessEmail = async (user, order) => {
 export const sendNotificationSettingsEmail = async (user, changedSettings) => {
   if (!user?.email) return { skipped: true };
 
-  const subject = `Cập nhật tùy chọn thông báo - Lotte Mart`;
+  const subject = `Cập nhật tùy chọn thông báo - Bách hóa XANH`;
   const changedListHtml = changedSettings.map(k => `<li style="padding:4px 0;">${k.key}: <b style="color:${k.value ? '#15803d' : '#b91c1c'};">${k.value ? 'Bật' : 'Tắt'}</b></li>`).join('');
 
   const html = `
@@ -195,7 +195,7 @@ export const sendNotificationSettingsEmail = async (user, changedSettings) => {
 
 export const sendPriceDropEmail = async ({ email, username, productName, oldPrice, newPrice, link }) => {
   if (!email) return { skipped: true };
-  const subject = `[Lotte Mart] Giam gia san pham ${productName}!`;
+  const subject = `[Bách hóa XANH] Giam gia san pham ${productName}!`;
   const text = `San pham ${productName} ban dang theo doi da giam gia tu ${Number(oldPrice).toLocaleString('vi-VN')}d xuong con ${Number(newPrice).toLocaleString('vi-VN')}d.`;
   const html = `
     <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;max-width:640px;margin:0 auto;">
@@ -207,7 +207,7 @@ export const sendPriceDropEmail = async ({ email, username, productName, oldPric
         <p><b>Gia moi cuc soc:</b> <b style="color:#dc2626;font-size:18px;">${Number(newPrice).toLocaleString('vi-VN')}d</b></p>
       </div>
       <p><a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}${link}" style="background:#dc2626;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;display:inline-block;font-weight:bold;">Mua Ngay</a></p>
-      <p style="margin-top:20px;color:#4b5563;font-size:13px;">Lotte Mart han hanh duoc phuc vu quy khach.</p>
+      <p style="margin-top:20px;color:#4b5563;font-size:13px;">Bach hoa XANH han hanh duoc phuc vu quy khach.</p>
     </div>
   `;
   return sendMail({ to: email, subject, text, html });

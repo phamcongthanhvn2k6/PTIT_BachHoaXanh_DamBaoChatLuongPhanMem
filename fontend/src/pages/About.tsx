@@ -199,7 +199,7 @@ const About: React.FC = () => {
                 <div className="absolute -inset-3 rounded-2xl bg-gradient-to-br from-[#E60012]/10 to-[#FFD400]/10 blur-sm group-hover:blur-md transition-all duration-500" />
                 <img
                   src={aboutStoreImg}
-                  alt="Lotte Mart store"
+                  alt="Bách hóa XANH store"
                   className="relative rounded-2xl shadow-2xl w-full aspect-[4/3] object-cover ring-1 ring-black/5"
                 />
               </div>

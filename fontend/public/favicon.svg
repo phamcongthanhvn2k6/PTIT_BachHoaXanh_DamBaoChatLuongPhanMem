@@ -1,17 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="lotteGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#E60012" />
-      <stop offset="100%" stop-color="#970012" />
+    <linearGradient id="bhxGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#009A49" />
+      <stop offset="100%" stop-color="#006C33" />
     </linearGradient>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-opacity="0.3"/>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000000" flood-opacity="0.25"/>
     </filter>
   </defs>
-  <!-- Main Rounded Container with premium gradient -->
-  <rect width="512" height="512" rx="110" fill="url(#lotteGrad)" />
-  <!-- Stylized "L" with subtle drop shadow -->
-  <path d="M180 130 V382 C180 390 190 395 200 395 H360" stroke="#FFFFFF" stroke-width="55" stroke-linecap="round" stroke-linejoin="round" fill="none" filter="url(#shadow)" />
-  <!-- Yellow Lotte Mart Accent Dot -->
-  <circle cx="360" cy="395" r="32" fill="#FFD400" filter="url(#shadow)" />
+  <rect width="512" height="512" rx="140" fill="url(#bhxGrad)" />
+  <path d="M256 90 C340 90 400 170 380 270 C360 370 256 422 256 422 C256 422 152 370 132 270 C112 170 172 90 256 90 Z" fill="#FFD400" filter="url(#glow)" />
+  <path d="M256 130 C310 130 350 190 340 270 C330 340 256 380 256 380 C256 380 182 340 172 270 C162 190 202 130 256 130 Z" fill="#FFFFFF" />
+  <path d="M256 160 C280 160 310 200 300 270 C290 320 256 350 256 350 C256 350 222 320 212 270 C202 200 232 160 256 160 Z" fill="#009A49" />
 </svg>

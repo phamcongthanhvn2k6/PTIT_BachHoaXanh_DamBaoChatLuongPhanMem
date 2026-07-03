@@ -237,7 +237,7 @@ export const generateRecipe = async ({ dishName, servings = 2, appetite = 'norma
   const cleanAppetite = String(appetite || 'normal').toLowerCase();
   console.info(`[aiService] Generating recipe for: "${dishName}" (servings: ${servings}, appetite: ${cleanAppetite})`);
 
-  const systemPrompt = `Bạn là Chuyên gia Ẩm thực Việt Nam & Đầu bếp trưởng của Lotte Mart.
+  const systemPrompt = `Bạn là Chuyên gia Ẩm thực Việt Nam & Đầu bếp trưởng của Bách hóa XANH.
 Bạn PHẢI tạo công thức nấu ăn chi tiết, chính xác bằng tiếng Việt cho thị trường Việt Nam.
 QUY TẮC BẮT BUỘC:
 - title PHẢI giữ nguyên tên món mà người dùng yêu cầu, viết hoa chữ cái đầu (VD: "Gà Kho", "Phở Bò", "Bún Chả"). KHÔNG được thêm nguyên liệu phụ vào tên trừ khi người dùng yêu cầu.
@@ -322,7 +322,7 @@ export const enrichRecipe = async (incompleteRecipe, servings = 2, appetite = 'n
   const cleanAppetite = String(appetite || 'normal').toLowerCase();
   console.info(`[aiService] Enriching incomplete recipe: "${incompleteRecipe.title || 'Món ăn'}"`);
 
-  const systemPrompt = `Bạn là Chuyên gia Dinh dưỡng & Đầu bếp trưởng của Lotte Mart.
+  const systemPrompt = `Bạn là Chuyên gia Dinh dưỡng & Đầu bếp trưởng của Bách hóa XANH.
 Nhiệm vụ của bạn là bổ sung, hoàn thiện và chuẩn hóa công thức nấu ăn chưa đầy đủ.
 Tập trung tính toán chính xác giá trị dinh dưỡng thực tế lớn hơn 0 cho mỗi phần ăn (per serving).`;
 

@@ -94,19 +94,19 @@ Lưu ý/Cảnh báo: ${product.notes || 'N/A'}
 Trạng thái tồn kho: ${product.stock > 0 ? 'Còn hàng' : 'Hết hàng'} (Số lượng: ${product.stock})
 `;
 
-  const systemPrompt = `Bạn là Trợ lý AI đắc lực của siêu thị Lotte Mart.
+  const systemPrompt = `Bạn là Trợ lý AI đắc lực của siêu thị Bách hóa XANH.
 Nhiệm vụ của bạn là trả lời các câu hỏi của khách hàng về sản phẩm dựa trên thông tin chính thống được cung cấp.
 
 QUY TẮC BẮT BUỘC:
 1. Chỉ trả lời dựa vào các thông tin sản phẩm có trong "Bối cảnh sản phẩm". TUYỆT ĐỐI không bịa đặt, tự vẽ ra tính năng, nguyên liệu, hạn sử dụng hoặc so sánh không có căn cứ.
 2. Trả lời ngắn gọn, lịch sự, đúng trọng tâm câu hỏi.
 3. PHẢI tự phát hiện ngôn ngữ của câu hỏi khách hàng (Tiếng Việt, Tiếng Anh, hoặc Tiếng Nhật) và phản hồi bằng chính ngôn ngữ đó:
-   - Nếu câu hỏi bằng tiếng Việt -> trả lời tiếng Việt (xưng hô lịch sự "Lotte Mart xin chào quý khách...", kết thúc bằng lời cảm ơn).
+   - Nếu câu hỏi bằng tiếng Việt -> trả lời tiếng Việt (xưng hô lịch sự "Bách hóa XANH xin chào quý khách...", kết thúc bằng lời cảm ơn).
    - Nếu câu hỏi bằng tiếng Anh -> trả lời tiếng Anh ("Hello...", "...").
    - Nếu câu hỏi bằng tiếng Nhật -> trả lời tiếng Nhật ("こんにちは...", "...").
 4. Nếu thông tin được cung cấp trong "Bối cảnh sản phẩm" không đủ để trả lời câu hỏi:
    - Đặt "confidence_score" thấp (dưới 0.5) và "needs_review" là true.
-   - Trả lời khách hàng một cách khéo léo rằng thông tin chi tiết hiện chưa có sẵn, khuyên khách hàng kiểm tra bao bì sản phẩm hoặc liên hệ CSKH Lotte Mart để được hỗ trợ trực tiếp.
+   - Trả lời khách hàng một cách khéo léo rằng thông tin chi tiết hiện chưa có sẵn, khuyên khách hàng kiểm tra bao bì sản phẩm hoặc liên hệ CSKH Bách hóa XANH để được hỗ trợ trực tiếp.
 5. Đầu ra phải là định dạng JSON đúng cấu trúc sau:
 {
   "answer": "Nội dung câu trả lời",
@@ -227,7 +227,7 @@ const generateHeuristicAnswer = (product, questionText) => {
   if (query.includes('còn hàng') || query.includes('hết hàng') || query.includes('mua được không') || query.includes('số lượng')) {
     const status = product.stock > 0 ? `hiện tại đang còn hàng (số lượng: ${product.stock})` : 'hiện đang tạm hết hàng';
     return {
-      answer: `Dạ chào quý khách, sản phẩm "${name}" ${status} tại siêu thị Lotte Mart. Quý khách có thể đặt hàng trực tuyến hoặc ghé chi nhánh gần nhất ạ!`,
+      answer: `Dạ chào quý khách, sản phẩm "${name}" ${status} tại siêu thị Bách hóa XANH. Quý khách có thể đặt hàng trực tuyến hoặc ghé chi nhánh gần nhất ạ!`,
       confidence_score: 0.95
     };
   }
@@ -236,7 +236,7 @@ const generateHeuristicAnswer = (product, questionText) => {
   if (query.includes('giá') || query.includes('bao nhiêu tiền') || query.includes('nhiêu tiền') || query.includes('giá cả')) {
     if (product.price) {
       return {
-        answer: `Dạ chào quý khách, sản phẩm "${name}" đang có giá bán là ${product.price.toLocaleString('vi-VN')}đ tại Lotte Mart.`,
+        answer: `Dạ chào quý khách, sản phẩm "${name}" đang có giá bán là ${product.price.toLocaleString('vi-VN')}đ tại Bách hóa XANH.`,
         confidence_score: 0.95
       };
     }
@@ -264,7 +264,7 @@ const generateHeuristicAnswer = (product, questionText) => {
       };
     } else {
       return {
-        answer: `Dạ chào quý khách, theo thông tin từ nhà sản xuất, sản phẩm "${name}" chứa dưỡng chất chuyên sâu. Tuy nhiên, nếu quý khách có làn da cực kỳ nhạy cảm hoặc dễ kích ứng, Lotte Mart khuyên dùng thử trên một vùng da nhỏ trước khi sử dụng toàn thân ạ.`,
+        answer: `Dạ chào quý khách, theo thông tin từ nhà sản xuất, sản phẩm "${name}" chứa dưỡng chất chuyên sâu. Tuy nhiên, nếu quý khách có làn da cực kỳ nhạy cảm hoặc dễ kích ứng, Bách hóa XANH khuyên dùng thử trên một vùng da nhỏ trước khi sử dụng toàn thân ạ.`,
         confidence_score: 0.85
       };
     }

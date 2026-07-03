@@ -134,8 +134,8 @@ export async function runReconciliationAudit() {
 
 export async function sendReconciliationAlert(discrepancies) {
   try {
-    const adminEmail = process.env.EMAIL_USER || 'admin@lottemart.vn';
-    const subject = `[LOTTE ERP ALERT] ${discrepancies.length} Data Reconciliation Discrepancies Found`;
+    const adminEmail = process.env.EMAIL_USER || 'admin@bachhoaxanh.com';
+    const subject = `[BHX ERP ALERT] ${discrepancies.length} Data Reconciliation Discrepancies Found`;
     const rows = discrepancies.map(d => `
       <tr style="border-bottom: 1px solid #e2e8f0;">
         <td style="padding: 8px; font-weight: bold; color: #e53e3e;">${d.domain.toUpperCase()}</td>
@@ -147,7 +147,7 @@ export async function sendReconciliationAlert(discrepancies) {
 
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; color: #2d3748;">
-        <h2 style="color: #e53e3e; border-bottom: 2px solid #e53e3e; padding-bottom: 8px;">⚠️ Cảnh Báo Đối Soát Dữ Liệu Lotte Mart ERP</h2>
+        <h2 style="color: #e53e3e; border-bottom: 2px solid #e53e3e; padding-bottom: 8px;">⚠️ Cảnh Báo Đối Soát Dữ Liệu Bách hóa XANH ERP</h2>
         <p>Hệ thống tự động phát hiện <b>${discrepancies.length} bất thường</b> về dữ liệu trong đợt đối soát lúc <b>${new Date().toLocaleString('vi-VN')}</b>.</p>
         
         <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">

@@ -340,7 +340,7 @@ const Settings: React.FC = () => {
     },
     {
       key: 'notification_system',
-      label: t('settings.notiSystem', 'Nhận thông báo từ Lotte Mart'),
+      label: t('settings.notiSystem', 'Nhận thông báo từ Bách hóa XANH'),
       desc: t('settings.notiSystemDesc', 'Tin tức hệ thống và các thay đổi quan trọng'),
       value: prefs.notification_system ?? false,
     },

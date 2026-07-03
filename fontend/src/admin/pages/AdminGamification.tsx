@@ -625,7 +625,7 @@ const AdminGamification: React.FC = () => {
         <div>
           <h1 className="text-2xl font-black flex items-center gap-2">
             <span className="material-symbols-outlined text-red-500">sports_esports</span>
-            Lotte Fun Zone Architect
+            Bách hóa XANH Fun Zone Architect
           </h1>
           <p className="text-slate-400 text-xs mt-1">Quản lý vòng quay may mắn, điểm danh hàng ngày, điều khiển tỷ lệ trúng thưởng và hạn mức.</p>
         </div>
@@ -823,7 +823,7 @@ const AdminGamification: React.FC = () => {
                 </div>
               </div>
               <button type="button" onClick={handleGrantSpins} disabled={grantLoading || !grantUserId}
-                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1 transition-colors disabled:opacity-40">
+                className="w-full bg-primary hover:bg-primary-container text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1 transition-colors disabled:opacity-40">
                 <span className="material-symbols-outlined text-xs">add_circle</span>
                 {grantLoading ? dict.granting : `${dict.grantBtn} → ${selectedUser?.full_name || grantUserId || '...'}`}
               </button>
@@ -913,7 +913,7 @@ const AdminGamification: React.FC = () => {
           {(isCreating || isEditing) && (
             <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-md border border-slate-200/60 dark:border-slate-800 space-y-5">
               <h2 className="text-lg font-black flex items-center gap-1.5 border-b pb-2 dark:border-slate-800">
-                <span className="material-symbols-outlined text-red-500">edit_note</span>
+                <span className="material-symbols-outlined text-primary">edit_note</span>
                 {isCreating ? 'Tạo cấu hình Game mới' : `Chỉnh sửa: ${selectedCampaign?.name}`}
               </h2>
 
@@ -925,7 +925,7 @@ const AdminGamification: React.FC = () => {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="w-full bg-slate-50 dark:bg-slate-800 border dark:border-slate-700 rounded-xl py-2 px-3 text-sm focus:outline-none focus:border-red-500"
-                    placeholder="e.g. Vòng quay may mắn Lotte Hè 2026"
+                    placeholder="e.g. Vòng quay may mắn Bách hóa XANH Hè 2026"
                   />
                 </div>
                 <div>
@@ -976,7 +976,7 @@ const AdminGamification: React.FC = () => {
                       type="checkbox"
                       checked={isActive}
                       onChange={(e) => setIsActive(e.target.checked)}
-                      className="rounded border-slate-300 text-red-600 focus:ring-red-500 w-4 h-4"
+                      className="rounded border-slate-300 text-primary focus:ring-primary/20 w-4 h-4"
                     />
                     <span className="text-sm font-bold">Kích hoạt chiến dịch</span>
                   </label>
@@ -1023,7 +1023,7 @@ const AdminGamification: React.FC = () => {
                       value={newReward.reward_name}
                       onChange={(e) => setNewReward({ ...newReward, reward_name: e.target.value })}
                       className="w-full bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-lg py-1.5 px-2 text-xs"
-                      placeholder="e.g. 500 Điểm Lotte"
+                      placeholder="e.g. 500 Điểm Bách hóa XANH"
                     />
                   </div>
                   <div>
@@ -1033,7 +1033,7 @@ const AdminGamification: React.FC = () => {
                       value={newReward.reward_name_en}
                       onChange={(e) => setNewReward({ ...newReward, reward_name_en: e.target.value })}
                       className="w-full bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-lg py-1.5 px-2 text-xs"
-                      placeholder="e.g. 500 Lotte Points"
+                      placeholder="e.g. 500 Bách hóa XANH Points"
                     />
                   </div>
                   <div>
@@ -1043,7 +1043,7 @@ const AdminGamification: React.FC = () => {
                       onChange={(e) => setNewReward({ ...newReward, reward_type: e.target.value as any })}
                       className="w-full bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-lg py-1.5 px-2 text-xs"
                     >
-                      <option value="points">Cộng Điểm Lotte (points)</option>
+                      <option value="points">Cộng Điểm Bách hóa XANH (points)</option>
                       <option value="coupon">Voucher giảm giá (coupon)</option>
                       <option value="free_shipping">Free Shipping coupon</option>
                       <option value="discount_card">Thẻ quà tặng / Chiết khấu</option>
@@ -1113,7 +1113,7 @@ const AdminGamification: React.FC = () => {
                           <tr key={idx} className="border-b last:border-0 dark:border-slate-800 text-slate-700 dark:text-slate-200">
                             <td className="p-2.5 font-semibold">{r.reward_name}</td>
                             <td className="p-2.5"><span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-mono text-[10px]">{r.reward_type}</span></td>
-                            <td className="p-2.5 font-bold text-red-500">{String(r.reward_value)}</td>
+                            <td className="p-2.5 font-bold text-primary">{String(r.reward_value)}</td>
                             <td className="p-2.5">{r.reward_probability}</td>
                             <td className="p-2.5">{r.per_user_limit ?? 'Không hạn chế'}</td>
                             <td className="p-2.5 text-center">
@@ -1169,7 +1169,7 @@ const AdminGamification: React.FC = () => {
                         onChange={(e) => setNewCheckin({ ...newCheckin, reward_type: e.target.value as any })}
                         className="w-full bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-lg py-1.5 px-2 text-xs"
                       >
-                        <option value="points">Cộng Điểm Lotte (points)</option>
+                        <option value="points">Cộng Điểm Bách hóa XANH (points)</option>
                         <option value="coupon">Voucher giảm giá (coupon)</option>
                         <option value="free_shipping">Free Shipping coupon</option>
                       </select>
@@ -1225,7 +1225,7 @@ const AdminGamification: React.FC = () => {
                               <td className="p-2.5 font-bold font-mono">{c.date}</td>
                               <td className="p-2.5 font-semibold">{c.reward_name} {c.is_special && '🌟'}</td>
                               <td className="p-2.5">{c.reward_type}</td>
-                              <td className="p-2.5 font-bold text-red-500">{String(c.reward_value)}</td>
+                              <td className="p-2.5 font-bold text-primary">{String(c.reward_value)}</td>
                               <td className="p-2.5 text-center">
                                 <button
                                   type="button"
@@ -1273,7 +1273,7 @@ const AdminGamification: React.FC = () => {
                           onChange={(e) => setNewStreak({ ...newStreak, reward_type: e.target.value as any })}
                           className="w-full bg-white dark:bg-slate-900 border dark:border-slate-700 rounded-lg py-1.5 px-2 text-xs"
                         >
-                          <option value="points">Cộng Điểm Lotte (points)</option>
+                          <option value="points">Cộng Điểm Bách hóa XANH (points)</option>
                           <option value="coupon">Voucher giảm giá (coupon)</option>
                           <option value="free_shipping">Free Shipping coupon</option>
                         </select>
@@ -1318,7 +1318,7 @@ const AdminGamification: React.FC = () => {
                                 <td className="p-2 font-bold">{s.streak_days} ngày</td>
                                 <td className="p-2 font-semibold">{s.reward_name}</td>
                                 <td className="p-2">{s.reward_type}</td>
-                                <td className="p-2 font-bold text-red-500">{String(s.reward_value)}</td>
+                                <td className="p-2 font-bold text-primary">{String(s.reward_value)}</td>
                                 <td className="p-2 text-center">
                                   <button
                                     type="button"
@@ -1350,7 +1350,7 @@ const AdminGamification: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleSaveCampaign}
-                  className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-5 rounded-xl text-sm"
+                  className="bg-primary hover:bg-primary-container text-white font-bold py-2 px-5 rounded-xl text-sm"
                 >
                   Lưu cấu hình
                 </button>

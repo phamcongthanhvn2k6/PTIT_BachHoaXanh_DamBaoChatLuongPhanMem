@@ -300,7 +300,7 @@ const EventDetail: React.FC = () => {
           <div key={idx} className="bg-slate-50 dark:bg-slate-800/50 p-8 rounded-2xl border border-slate-100 dark:border-slate-800 mb-10">
             <h4 className="text-xl font-bold mb-6 flex items-center gap-2">
               <span className="material-symbols-outlined text-yellow-500" style={{ fontVariationSettings: "'FILL' 1" }}>lightbulb</span>
-              Mẹo hay từ Lotte Mart
+              Mẹo hay từ Bách hóa XANH
             </h4>
             <ul className="space-y-4">
               {block.items.map((tip: string, i: number) => (
@@ -448,7 +448,7 @@ const EventDetail: React.FC = () => {
               <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500 dark:text-slate-400 mb-4">
                 <div className="flex items-center gap-2">
                   {post.author_avatar && <img src={post.author_avatar} alt="" className="w-6 h-6 rounded-full object-cover" />}
-                  <span>{post.author_name || 'Ban Quản Trị Lotte Mart'}</span>
+                  <span>{post.author_name || 'Ban Quản Trị Bách hóa XANH'}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-base">calendar_today</span>

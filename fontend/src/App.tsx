@@ -62,9 +62,9 @@ import AdminProductManagement from './admin/pages/AdminProductManagement.tsx';
 import AdminCategoryManagement from './admin/pages/AdminCategoryManagement';
 import AdminCustomers from './admin/pages/AdminCustomers.tsx';
 import AdminCouponsManagement from './admin/pages/AdminCouponsManagement.tsx';
-import AdminLotteMartEventsManagementPortal from './admin/pages/AdminLotteMartEventsManagementPortal.tsx';
+import AdminBachHoaXanhEventsManagementPortal from './admin/pages/AdminLotteMartEventsManagementPortal.tsx';
 import AdminSystemSettings from './admin/pages/AdminSystemSettings.tsx';
-import AdminLotteMartOrderManagement from './admin/pages/AdminLotteMartOrderManagement.tsx';
+import AdminBachHoaXanhOrderManagement from './admin/pages/AdminLotteMartOrderManagement.tsx';
 import AdminReviewsManagement from './admin/pages/AdminReviewsManagement.tsx';
 import AdminQuestions from './admin/pages/AdminQuestions.tsx';
 import AdminSupportTickets from './admin/pages/AdminSupportTickets.tsx';
@@ -85,6 +85,13 @@ import SharedFamilyCart from './pages/SharedFamilyCart.tsx';
 import RecipeDetail from './pages/RecipeDetail.tsx';
 import LotteFunZone from './pages/LotteFunZone.tsx';
 import AdminGamification from './admin/pages/AdminGamification.tsx';
+import ShoppingGuide from './pages/ShoppingGuide.tsx';
+import ReturnPolicy from './pages/ReturnPolicy.tsx';
+import ShippingPolicy from './pages/ShippingPolicy.tsx';
+import Faq from './pages/Faq.tsx';
+import Careers from './pages/Careers.tsx';
+import NewsEvents from './pages/NewsEvents.tsx';
+import Partnership from './pages/Partnership.tsx';
 
 
 function App() {
@@ -139,11 +146,20 @@ function App() {
       dataService.getAdminSettings().then(settings => {
         if (settings) {
           // Browser tab title — prefer dedicated system_name, fallback to brand_name
-          const tabTitle = settings.system_name || settings.brand_name || "LOTTE Mart";
+          let tabTitle = settings.system_name || settings.brand_name || "Bách hóa XANH";
+          if (tabTitle.toUpperCase().includes("LOTTE")) {
+            tabTitle = tabTitle.replace(/LOTTE Mart/gi, "Bách hóa XANH").replace(/Lotte/gi, "Bách hóa XANH");
+          }
           if (tabTitle) document.title = tabTitle;
 
           // Dynamic favicon — prefer dedicated favicon_url, fallback to brand_logo_url
-          const faviconUrl = settings.favicon_url || settings.brand_logo_url;
+          let faviconUrl = settings.favicon_url || settings.brand_logo_url;
+          if (faviconUrl && (faviconUrl.toLowerCase().includes("lotte") || faviconUrl.toLowerCase().includes("logo"))) {
+            faviconUrl = "/favicon.svg";
+          }
+          if (!faviconUrl) {
+            faviconUrl = "/favicon.svg";
+          }
           if (faviconUrl) {
             const clean = faviconUrl.split('?')[0];
             // Remove ALL existing favicon links so the browser cannot cache the Vite default
@@ -151,7 +167,7 @@ function App() {
             const link = document.createElement('link');
             link.id = 'dynamic-favicon';
             link.rel = 'icon';
-            link.type = 'image/png';
+            link.type = 'image/svg+xml';
             link.href = `${clean}?v=${Date.now()}`;
             document.head.appendChild(link);
           }
@@ -252,7 +268,7 @@ function App() {
       <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 text-center p-8">
         <span className="material-symbols-outlined text-6xl text-orange-500 mb-4 animate-bounce">construction</span>
         <h1 className="text-3xl font-black text-slate-800 mb-2">Hệ thống đang bảo trì</h1>
-        <p className="text-slate-500 max-w-md">Lotte Mart đang được nâng cấp để mang lại trải nghiệm tốt hơn. Vui lòng quay lại sau ít phút, xin lỗi vì sự bất tiện này!</p>
+        <p className="text-slate-500 max-w-md">Bách hóa XANH đang được nâng cấp để mang lại trải nghiệm tốt hơn. Vui lòng quay lại sau ít phút, xin lỗi vì sự bất tiện này!</p>
       </div>
     );
   }
@@ -278,6 +294,13 @@ function App() {
         <Route path="/shop-at-home" element={<ShopAtHome />} />
         <Route path="/hot-deals/product/:id" element={<ProductDetail />} />
         <Route path='/about' element={<About />} />
+        <Route path="/shopping-guide" element={<ShoppingGuide />} />
+        <Route path="/return-policy" element={<ReturnPolicy />} />
+        <Route path="/shipping-policy" element={<ShippingPolicy />} />
+        <Route path="/faq" element={<Faq />} />
+        <Route path="/careers" element={<Careers />} />
+        <Route path="/news-events" element={<NewsEvents />} />
+        <Route path="/partnership" element={<Partnership />} />
         <Route path="/home/product/:id" element={<ProductDetail />} />
         <Route path="/search" element={<SearchResults />} />
         <Route path="/featured-events" element={<FeaturedEvents />} />
@@ -335,9 +358,9 @@ function App() {
             <Route path="customers" element={<AdminCustomers />} />
             <Route path="coupons" element={<AdminCouponsManagement />} />
             <Route path="gamification" element={<AdminGamification />} />
-            <Route path="events" element={<AdminLotteMartEventsManagementPortal />} />
+            <Route path="events" element={<AdminBachHoaXanhEventsManagementPortal />} />
             <Route path="settings" element={<AdminSystemSettings />} />
-            <Route path="orders" element={<AdminLotteMartOrderManagement />} />
+            <Route path="orders" element={<AdminBachHoaXanhOrderManagement />} />
             <Route path="reviews" element={<AdminReviewsManagement />} />
             <Route path="questions" element={<AdminQuestions />} />
             <Route path="support" element={<AdminSupportTickets />} />

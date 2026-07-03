@@ -490,7 +490,7 @@ const Checkout: React.FC = () => {
             {t('common.maintenanceTitle') || 'Hệ Thống Đang Bảo Trì'}
           </h2>
           <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed text-sm">
-            {t('common.maintenanceMessage') || 'Để đảm bảo trải nghiệm tốt nhất và nâng cấp hệ thống, Lotte Mart Storefront hiện đang tạm dừng nhận đơn hàng. Chúng tôi sẽ trở lại trong thời gian sớm nhất.'}
+            {t('common.maintenanceMessage') || 'Để đảm bảo trải nghiệm tốt nhất và nâng cấp hệ thống, Bách hóa XANH Storefront hiện đang tạm dừng nhận đơn hàng. Chúng tôi sẽ trở lại trong thời gian sớm nhất.'}
           </p>
           <button onClick={() => navigate('/home')} className="bg-primary text-white px-8 py-3 rounded-xl font-bold hover:opacity-90 transition-opacity">
             {t('common.backToHome') || 'Về Trang Chủ'}

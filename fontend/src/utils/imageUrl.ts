@@ -58,6 +58,10 @@ export const resolveImageUrl = (src?: string | null): string => {
     if (categoryImages[slug]) {
       return categoryImages[slug];
     }
+    if (slug.includes('bia') || slug.includes('uong') || slug.includes('men')) {
+      return categoryImages['do-uong'];
+    }
+    return fallbackProductImage;
   }
 
   if (value.startsWith('/uploads')) {

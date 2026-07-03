@@ -756,7 +756,7 @@ const Payment: React.FC = () => {
             {t('common.maintenanceTitle') || 'Hệ Thống Đang Bảo Trì'}
           </h2>
           <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed text-sm">
-            {t('common.maintenanceMessage') || 'Để đảm bảo trải nghiệm tốt nhất và nâng cấp hệ thống, Lotte Mart Storefront hiện đang tạm dừng nhận đơn hàng. Chúng tôi sẽ trở lại trong thời gian sớm nhất.'}
+            {t('common.maintenanceMessage') || 'Để đảm bảo trải nghiệm tốt nhất và nâng cấp hệ thống, Bách hóa XANH Storefront hiện đang tạm dừng nhận đơn hàng. Chúng tôi sẽ trở lại trong thời gian sớm nhất.'}
           </p>
           <button onClick={() => navigate('/home')} className="bg-primary text-white px-8 py-3 rounded-xl font-bold hover:opacity-90 transition-opacity">
             {t('common.backToHome') || 'Về Trang Chủ'}
@@ -846,7 +846,7 @@ const Payment: React.FC = () => {
                 <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-slate-700/10 rounded-full blur-2xl"></div>
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Lotte Mart Enterprise</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Bách hóa XANH Enterprise</p>
                     <h4 className="text-lg font-black italic tracking-tighter mt-1">VISA CARD</h4>
                   </div>
                   <span className="material-symbols-outlined text-3xl opacity-75">contactless</span>

@@ -2614,7 +2614,7 @@ const AdminCouponsManagement: React.FC = () => {
         <section className="mb-8 flex justify-between items-end">
           <div>
             <h1 className="text-3xl font-black tracking-tight mb-2">{t('admin.promotions.pageTitle', 'Trung tâm Marketing')}</h1>
-            <nav className="flex gap-2 text-sm font-medium text-secondary">
+            <nav className="flex gap-2 text-sm font-medium text-slate-500 dark:text-slate-400">
               <span>{t('admin.promotions.breadcrumbSystem', 'Hệ thống')}</span><span>/</span><span className="text-primary">{t('admin.promotions.breadcrumbPromo', 'Trung tâm Marketing')}</span>
             </nav>
           </div>
@@ -2695,7 +2695,7 @@ const AdminCouponsManagement: React.FC = () => {
         <div className="bg-surface-container-lowest rounded-2xl shadow-sm overflow-hidden border border-slate-50">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-surface-container-low border-b border-slate-100 text-secondary text-xs font-black uppercase tracking-wider">
+              <tr className="bg-surface-container-low border-b border-slate-100 text-slate-600 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
                 <th className="px-6 py-4">{t('admin.promotions.tableName', 'Tên / Hình ảnh')}</th>
                 <th className="px-6 py-4">{t('admin.promotions.tableType', 'Loại / Giá trị')}</th>
                 <th className="px-6 py-4">{t('admin.promotions.tableTime', 'Thời gian')}</th>
@@ -2745,7 +2745,7 @@ const AdminCouponsManagement: React.FC = () => {
                           )}
                           <div className="flex flex-col min-w-0">
                             <span className="text-sm font-bold text-on-surface line-clamp-1">{item.title || item.code || '-'}</span>
-                            <span className="text-xs text-secondary mt-0.5 uppercase tracking-wide">ID: {itemId}</span>
+                            <span className="text-xs text-slate-400 mt-0.5 uppercase tracking-wide">ID: {itemId}</span>
                             {item.branch_id && (
                               <span className="text-[10px] text-blue-600 font-bold mt-0.5 uppercase tracking-wide">
                                 {t('admin.promotions.branchSelect', 'Chi nhánh')}: {branchOptions.find(b => String(b.id) === String(item.branch_id))?.label || item.branch_id}
@@ -2780,13 +2780,13 @@ const AdminCouponsManagement: React.FC = () => {
                               <span className="text-xs font-bold text-on-surface uppercase">
                                 {item.type || item.position || (item.original_price ? t('admin.promotions.discountPriceLabel', 'Giá giảm') : t('admin.promotions.notAvailable', 'Không có'))}
                               </span>
-                              <span className="text-sm text-secondary font-medium mt-0.5">
+                              <span className="text-sm text-primary font-bold mt-0.5">
                                 {(item.discount_value || item.value) ? `${item.discount_value || item.value} ${(item.type === 'percentage' || item.type === 'percent') ? '%' : 'VND'}` : ''}
                                 {item.deal_price ? `${Number(item.deal_price).toLocaleString()}đ (Từ ${Number(item.original_price || 0).toLocaleString()}đ)` : ''}
                                 {item.link ? `${t('admin.promotions.linkLabel', 'Liên kết')}: ${item.link}` : ''}
                               </span>
                               {total > 0 && (
-                                <span className="text-xs text-secondary mt-1">{t('admin.promotions.remainingLabel', 'Còn lại')}: {Number(remaining || 0).toLocaleString('vi-VN')} / {Number(total).toLocaleString('vi-VN')}</span>
+                                <span className="text-xs text-slate-500 mt-1">{t('admin.promotions.remainingLabel', 'Còn lại')}: {Number(remaining || 0).toLocaleString('vi-VN')} / {Number(total).toLocaleString('vi-VN')}</span>
                               )}
                             </>
                           )}
@@ -2828,7 +2828,7 @@ const AdminCouponsManagement: React.FC = () => {
           {totalRecords > 0 && (
             <div className="bg-surface-container-lowest px-6 py-4 flex flex-col sm:flex-row items-center justify-between border-t border-slate-50 gap-4">
               <div className="flex items-center gap-4">
-                <span className="text-xs font-medium text-secondary">
+                <span className="text-xs font-medium text-slate-500">
                   Hiển thị {Math.min(totalRecords, (currentPage - 1) * pageSize + 1)} - {Math.min(totalRecords, currentPage * pageSize)} trong số {totalRecords} kết quả
                 </span>
                 <select
@@ -2848,7 +2848,7 @@ const AdminCouponsManagement: React.FC = () => {
                 <button
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                  className="p-1.5 border border-slate-100 rounded-lg hover:bg-slate-50 text-secondary disabled:opacity-50 flex items-center justify-center"
+                  className="p-1.5 border border-slate-100 rounded-lg hover:bg-slate-50 text-slate-600 disabled:opacity-50 flex items-center justify-center"
                 >
                   <span className="material-symbols-outlined text-lg">chevron_left</span>
                 </button>
@@ -2856,7 +2856,7 @@ const AdminCouponsManagement: React.FC = () => {
                 <button
                   disabled={currentPage === totalPages}
                   onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                  className="p-1.5 border border-slate-100 rounded-lg hover:bg-slate-50 text-secondary disabled:opacity-50 flex items-center justify-center"
+                  className="p-1.5 border border-slate-100 rounded-lg hover:bg-slate-50 text-slate-600 disabled:opacity-50 flex items-center justify-center"
                 >
                   <span className="material-symbols-outlined text-lg">chevron_right</span>
                 </button>

@@ -17,6 +17,7 @@ const LUCIDE_TO_MATERIAL_MAP: Record<string, string> = {
   'carrot': 'spa',
   'beer': 'sports_bar',
   'coffee': 'local_cafe',
+  'droplet': 'water_drop',
   'icecream': 'icecream',
   'pizza': 'local_pizza',
   'egg': 'egg',

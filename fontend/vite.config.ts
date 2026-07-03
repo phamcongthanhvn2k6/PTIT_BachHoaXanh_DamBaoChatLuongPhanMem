@@ -17,6 +17,23 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+              return 'vendor-react';
+            }
+            if (id.includes('jspdf') || id.includes('html2canvas') || id.includes('html2canvas-pro')) {
+              return 'vendor-pdf';
+            }
+            return 'vendor';
+          }
+        }
+      }
+    }
+  },
   server: {
     proxy: {
       '/api': 'http://127.0.0.1:3001',

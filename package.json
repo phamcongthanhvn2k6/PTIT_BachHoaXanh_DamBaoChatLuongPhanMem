@@ -1,0 +1,8 @@
+{
+  "name": "ptit-bach-hoa-xanh",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npx concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix fontend\""
+  }
+}

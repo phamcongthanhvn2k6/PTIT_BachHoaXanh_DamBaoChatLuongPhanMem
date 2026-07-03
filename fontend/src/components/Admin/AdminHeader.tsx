@@ -79,6 +79,14 @@ const AdminHeader: React.FC = () => {
         <LanguageSwitcher variant={isDarkMode ? 'dark' : 'light'} />
 
         <button 
+          onClick={() => navigate('/')}
+          className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-5 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 border border-slate-200 dark:border-slate-700"
+        >
+          <span className="material-symbols-outlined text-sm leading-none block">storefront</span>
+          Xem trang User
+        </button>
+
+        <button 
           onClick={handleLogout}
           className="bg-primary hover:bg-primary-container text-white px-5 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-primary/20"
         >

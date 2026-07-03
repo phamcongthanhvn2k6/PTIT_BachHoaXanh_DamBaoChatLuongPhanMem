@@ -185,7 +185,7 @@ const AdminDashboard: React.FC = () => {
                 };
 
                 const rows = [
-                  [`Lotte Mart Dashboard Report - ${new Date().toLocaleDateString('vi-VN')}`],
+                  [`Bách hóa XANH Dashboard Report - ${new Date().toLocaleDateString('vi-VN')}`],
                   [],
                   [t('adminDash.sales'), summary.sales.value, 'VND', `${summary.sales.change}%`],
                   [t('adminDash.orders'), summary.orders.value, '', `${summary.orders.change}%`],
@@ -243,7 +243,7 @@ const AdminDashboard: React.FC = () => {
                   <p className={`text-xs mt-1 ${maintenanceStatus.maintenance ? 'text-rose-700' : 'text-emerald-700'}`}>
                     {maintenanceStatus.maintenance 
                       ? 'Tất cả các tính năng mua sắm, thanh toán và đặt hàng từ phía khách hàng đã bị tạm khóa.' 
-                      : 'Hệ thống Lotte Mart đang vận hành bình thường và ổn định.'}
+                      : 'Hệ thống Bách hóa XANH đang vận hành bình thường và ổn định.'}
                   </p>
                 </div>
               </div>

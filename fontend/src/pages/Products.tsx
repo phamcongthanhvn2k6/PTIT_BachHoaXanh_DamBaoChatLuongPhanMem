@@ -437,7 +437,7 @@ const Products: React.FC = () => {
                     <div className={`flex-1 ${viewMode === 'list' ? 'flex flex-col justify-between' : 'p-5'} ${isOutOfStock ? 'opacity-70' : ''}`}>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-[10px] font-bold text-primary uppercase tracking-widest">
-                          {item.brand || 'Lotte Selection'}
+                          {item.brand || 'Bách hóa XANH Selection'}
                         </span>
                         {item.average_rating > 0 && (
                           <div className="flex items-center gap-0.5 text-amber-400">
