@@ -18,6 +18,7 @@ export interface AuthPayload {
   token: string;
   user: User;
   refreshToken?: string;
+  needs_email_verification?: boolean;
 }
 
 interface VerifyOtpInput {
@@ -35,12 +36,13 @@ const normalizeAuthResponse = (raw: any): AuthPayload => {
   const token = data?.token;
   const user = data?.user;
   const refreshToken = data?.refreshToken;
+  const needs_email_verification = data?.needs_email_verification;
 
   if (!token || !user) {
     throw new Error('Invalid auth response from server');
   }
 
-  return { token, user, refreshToken };
+  return { token, user, refreshToken, needs_email_verification };
 };
 
 const saveTokenPair = (token: string, refreshToken?: string) => {

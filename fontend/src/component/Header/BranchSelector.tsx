@@ -232,7 +232,7 @@ const BranchSelector: React.FC = () => {
             padding: 0
           }}
         >
-          <span style={{ fontSize: 14 }}>📍</span>
+          <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#FFD400' }}>location_on</span>
           <span style={{ whiteSpace: 'nowrap', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {branchName}
           </span>

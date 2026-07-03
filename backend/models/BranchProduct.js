@@ -40,4 +40,9 @@ branchProductSchema.virtual('available_quantity').get(function() {
   return Math.max(0, this.stock - (this.reserved_quantity || 0));
 });
 
+branchProductSchema.index({ branch_id: 1, product_id: 1 });
+branchProductSchema.index({ product_id: 1 });
+branchProductSchema.index({ category_id: 1 });
+branchProductSchema.index({ is_available: 1, stock: 1 });
+
 export default mongoose.model('BranchProduct', branchProductSchema);

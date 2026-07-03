@@ -87,7 +87,8 @@
     "entertainment": "エンタメ",
     "memberLotte": "Bach Hoa XANH会員",
     "categories": "すべてのカテゴリ",
-    "searchPlaceholder": "商品やブランドを検索..."
+    "searchPlaceholder": "商品やブランドを検索...",
+    "recipes": "レシピ"
   },
   "cart": {
     "sku": "SKU:",

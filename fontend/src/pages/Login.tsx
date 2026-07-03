@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store';
 import { login, register, loginWithGoogle, sendOTP, verifyOTP, clearAuthMessages, hydrateOAuthSession, forgotPassword, resetPassword, authVerify } from '../slices/authSlice';
 import { toast } from '../components/Toast/toastEvent';
@@ -305,11 +305,15 @@ const Login: React.FC<LoginProps> = ({ mode = 'login' }) => {
     if (!validateRegister()) return;
     dispatch(clearAuthMessages());
     try {
-      await dispatch(register({ username, email, phone, password: registerPassword })).unwrap();
+      const result = await dispatch(register({ username, email, phone, password: registerPassword })).unwrap();
       toast.success('Đăng ký thành công!');
-      setOtpEmail(email);
-      setShowEmailOtpModal(true);
-      setEmailOtpInfoMessage('Mã OTP xác thực tài khoản đã được gửi tới email đăng ký.');
+      if (result?.needs_email_verification) {
+        setOtpEmail(email);
+        setShowEmailOtpModal(true);
+        setEmailOtpInfoMessage('Mã OTP xác thực tài khoản đã được gửi tới email đăng ký.');
+      } else {
+        handlePostLoginRedirect();
+      }
     } catch (err: any) {
       setErrors({ form: getErrorText(err, 'Đăng ký thất bại') });
     }

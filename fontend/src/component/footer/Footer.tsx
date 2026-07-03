@@ -107,16 +107,24 @@ function Footer() {
                 </Link>
               </li>
               <li>
-                <span className="hover:text-emerald-400 transition-colors cursor-pointer block py-0.5">{t('footer.shoppingGuide')}</span>
+                <Link to="/shopping-guide" className="hover:text-emerald-400 transition-colors block py-0.5" style={{ textDecoration: "none" }}>
+                  {t('footer.shoppingGuide')}
+                </Link>
               </li>
               <li>
-                <span className="hover:text-emerald-400 transition-colors cursor-pointer block py-0.5">{t('footer.returnPolicy')}</span>
+                <Link to="/return-policy" className="hover:text-emerald-400 transition-colors block py-0.5" style={{ textDecoration: "none" }}>
+                  {t('footer.returnPolicy')}
+                </Link>
               </li>
               <li>
-                <span className="hover:text-emerald-400 transition-colors cursor-pointer block py-0.5">{t('footer.shippingPolicy')}</span>
+                <Link to="/shipping-policy" className="hover:text-emerald-400 transition-colors block py-0.5" style={{ textDecoration: "none" }}>
+                  {t('footer.shippingPolicy')}
+                </Link>
               </li>
               <li>
-                <span className="hover:text-emerald-400 transition-colors cursor-pointer block py-0.5">{t('footer.faq')}</span>
+                <Link to="/faq" className="hover:text-emerald-400 transition-colors block py-0.5" style={{ textDecoration: "none" }}>
+                  {t('footer.faq')}
+                </Link>
               </li>
             </ul>
           </div>
@@ -128,16 +136,24 @@ function Footer() {
             </h4>
             <ul className="space-y-2.5 text-xs sm:text-sm font-semibold text-slate-400">
               <li>
-                <span className="hover:text-emerald-400 transition-colors cursor-pointer block py-0.5">{t('footer.introduction')}</span>
+                <Link to="/about" className="hover:text-emerald-400 transition-colors block py-0.5" style={{ textDecoration: "none" }}>
+                  {t('footer.introduction')}
+                </Link>
               </li>
               <li>
-                <span className="hover:text-emerald-400 transition-colors cursor-pointer block py-0.5">{t('footer.careers')}</span>
+                <Link to="/careers" className="hover:text-emerald-400 transition-colors block py-0.5" style={{ textDecoration: "none" }}>
+                  {t('footer.careers')}
+                </Link>
               </li>
               <li>
-                <span className="hover:text-emerald-400 transition-colors cursor-pointer block py-0.5">{t('footer.newsEvents')}</span>
+                <Link to="/news-events" className="hover:text-emerald-400 transition-colors block py-0.5" style={{ textDecoration: "none" }}>
+                  {t('footer.newsEvents')}
+                </Link>
               </li>
               <li>
-                <span className="hover:text-emerald-400 transition-colors cursor-pointer block py-0.5">{t('footer.partnership')}</span>
+                <Link to="/partnership" className="hover:text-emerald-400 transition-colors block py-0.5" style={{ textDecoration: "none" }}>
+                  {t('footer.partnership')}
+                </Link>
               </li>
             </ul>
           </div>

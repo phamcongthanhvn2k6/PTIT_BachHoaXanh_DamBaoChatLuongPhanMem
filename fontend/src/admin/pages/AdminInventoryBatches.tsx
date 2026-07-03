@@ -8,6 +8,7 @@ import {
   LoadingOverlay, PaginationControl, Modal, DetailDrawer,
   FormSection, FormField, StatCard, cls,
 } from '../components/AdminUI';
+import { resolveImageUrl } from '../../utils/imageUrl';
 
 const PAGE_SIZE = 12;
 
@@ -17,6 +18,9 @@ const EXPIRY_FILTER_OPTIONS = [
   { value: 'warning', label: 'Cảnh báo (<30 ngày)' },
   { value: 'safe', label: 'Còn hạn' },
 ];
+
+const customThCell = 'p-5 text-left text-[12px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider';
+const customTdCell = 'p-5 text-[15px] text-slate-700 dark:text-slate-300';
 
 const AdminInventoryBatches: React.FC = () => {
   const navigate = useNavigate();
@@ -380,62 +384,62 @@ const AdminInventoryBatches: React.FC = () => {
               <table className="w-full">
                 <thead>
                   <tr className="bg-slate-50/80 border-b border-slate-100">
-                    <th className={cls.thCell}>#</th>
-                    <th className={cls.thCell + ' min-w-[250px]'}>Sản phẩm & SKU</th>
-                    <th className={cls.thCell}>Chi nhánh</th>
-                    <th className={cls.thCell}>Tổng tồn (ERP)</th>
-                    <th className={cls.thCell}>Tổng lô (FIFO)</th>
-                    <th className={cls.thCell}>Chênh lệch</th>
-                    <th className={cls.thCell}>Reserved / Sellable</th>
-                    <th className={cls.thCell}>Kiểu lỗi</th>
-                    <th className={`${cls.thCell} text-right`}>Thao tác</th>
+                    <th className={customThCell}>#</th>
+                    <th className={customThCell + ' min-w-[250px]'}>Sản phẩm & SKU</th>
+                    <th className={customThCell}>Chi nhánh</th>
+                    <th className={customThCell}>Tổng tồn (ERP)</th>
+                    <th className={customThCell}>Tổng lô (FIFO)</th>
+                    <th className={customThCell}>Chênh lệch</th>
+                    <th className={customThCell}>Reserved / Sellable</th>
+                    <th className={customThCell}>Kiểu lỗi</th>
+                    <th className={`${customThCell} text-right`}>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredDriftRows.map((row, idx) => (
                     <tr key={row.branch_product_id} className="hover:bg-slate-50/60 transition-colors group">
-                      <td className={`${cls.tdCell} text-slate-400`}>{idx + 1}</td>
-                      <td className={cls.tdCell}>
+                      <td className={`${customTdCell} text-slate-400`}>{idx + 1}</td>
+                      <td className={customTdCell}>
                         <div className="flex items-center gap-3">
                           {row.thumbnail ? (
-                            <img src={row.thumbnail} alt="" className="w-10 h-10 rounded-lg border object-cover flex-shrink-0" />
+                            <img src={resolveImageUrl(row.thumbnail)} alt="" className="w-12 h-12 rounded-lg border object-cover flex-shrink-0" />
                           ) : (
-                            <div className="w-10 h-10 rounded-lg border bg-slate-100 flex items-center justify-center flex-shrink-0">
+                            <div className="w-12 h-12 rounded-lg border bg-slate-100 flex items-center justify-center flex-shrink-0">
                               <span className="material-symbols-outlined text-slate-400 text-lg">inventory_2</span>
                             </div>
                           )}
                           <div>
-                            <p className="font-semibold text-slate-900 text-sm line-clamp-2">{row.product_name}</p>
-                            <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">SKU: {row.sku}</span>
+                            <p className="font-bold text-slate-900 text-[15px] leading-snug line-clamp-2">{row.product_name}</p>
+                            <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">SKU: {row.sku}</span>
                           </div>
                         </div>
                       </td>
-                      <td className={cls.tdCell}>
-                        <span className="text-sm font-medium text-slate-600">{row.branch_name}</span>
+                      <td className={customTdCell}>
+                        <span className="text-[15px] font-semibold text-slate-600">{row.branch_name}</span>
                       </td>
-                      <td className={cls.tdCell}>
-                        <span className="font-bold text-slate-900">{row.stock}</span>
+                      <td className={customTdCell}>
+                        <span className="font-extrabold text-slate-900 text-base">{row.stock}</span>
                       </td>
-                      <td className={cls.tdCell}>
-                        <span className="font-semibold text-slate-700">{row.batchSum}</span>
+                      <td className={customTdCell}>
+                        <span className="font-bold text-slate-700 text-[15px]">{row.batchSum}</span>
                       </td>
-                      <td className={cls.tdCell}>
-                        <span className={`font-bold ${row.diff > 0 ? 'text-amber-600' : 'text-red-600'}`}>
+                      <td className={customTdCell}>
+                        <span className={`font-extrabold text-base ${row.diff > 0 ? 'text-amber-600' : 'text-red-600'}`}>
                           {row.diff > 0 ? `+${row.diff}` : row.diff}
                         </span>
                       </td>
-                      <td className={cls.tdCell}>
-                        <div className="flex flex-col text-xs text-slate-500">
+                      <td className={customTdCell}>
+                        <div className="flex flex-col text-sm text-slate-500">
                           <span>Giữ hàng: <b className="text-slate-700">{row.reserved}</b></span>
                           <span>Bán được: <b className="text-emerald-600">{row.sellable}</b></span>
                         </div>
                       </td>
-                      <td className={cls.tdCell}>
-                        <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold uppercase ${row.type === 'no_batches' ? 'bg-red-50 text-red-700 border border-red-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
+                      <td className={customTdCell}>
+                        <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-bold uppercase ${row.type === 'no_batches' ? 'bg-red-50 text-red-700 border border-red-100' : 'bg-amber-50 text-amber-700 border border-amber-100'}`}>
                           {row.type === 'no_batches' ? 'Mất lô hàng' : 'Lệch số lượng'}
                         </span>
                       </td>
-                      <td className={`${cls.tdCell} text-right`}>
+                      <td className={`${customTdCell} text-right`}>
                         <button
                           onClick={() => handleHealProduct(row.branch_product_id)}
                           className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-xs font-bold transition-all border border-emerald-200 cursor-pointer"
@@ -462,14 +466,14 @@ const AdminInventoryBatches: React.FC = () => {
                 <table className="w-full">
                   <thead>
                     <tr className="bg-slate-50/80 border-b border-slate-100">
-                      <th className={cls.thCell}>#</th>
-                      <th className={cls.thCell + ' min-w-[250px]'}>Sản phẩm & SKU</th>
-                      <th className={cls.thCell}>Nhà cung cấp</th>
-                      <th className={cls.thCell}>Tồn kho</th>
-                      <th className={cls.thCell}>Giá bán / Nhập</th>
-                      <th className={cls.thCell + ' min-w-[180px]'}>Hạn sử dụng</th>
-                      <th className={cls.thCell}>Trạng thái</th>
-                      <th className={`${cls.thCell} text-right`}>Thao tác</th>
+                      <th className={customThCell}>#</th>
+                      <th className={customThCell + ' min-w-[250px]'}>Sản phẩm & SKU</th>
+                      <th className={customThCell}>Nhà cung cấp</th>
+                      <th className={customThCell}>Tồn kho</th>
+                      <th className={customThCell}>Giá bán / Nhập</th>
+                      <th className={customThCell + ' min-w-[180px]'}>Hạn sử dụng</th>
+                      <th className={customThCell}>Trạng thái</th>
+                      <th className={`${customThCell} text-right`}>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -479,29 +483,29 @@ const AdminInventoryBatches: React.FC = () => {
 
                       return (
                         <tr key={String(row._id)} className="hover:bg-slate-50/60 transition-colors group">
-                          <td className={`${cls.tdCell} text-slate-400`}>{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                          <td className={`${customTdCell} text-slate-400`}>{(page - 1) * PAGE_SIZE + idx + 1}</td>
 
                           {/* Product */}
-                          <td className={cls.tdCell}>
+                          <td className={customTdCell}>
                             <div className="flex items-start gap-3">
                               {row.product_thumbnail ? (
-                                <img src={row.product_thumbnail} alt="" className="w-10 h-10 rounded-lg border object-cover flex-shrink-0" />
+                                <img src={resolveImageUrl(row.product_thumbnail)} alt="" className="w-12 h-12 rounded-lg border object-cover flex-shrink-0" />
                               ) : (
-                                <div className="w-10 h-10 rounded-lg border bg-slate-100 flex items-center justify-center flex-shrink-0">
+                                <div className="w-12 h-12 rounded-lg border bg-slate-100 flex items-center justify-center flex-shrink-0">
                                   <span className="material-symbols-outlined text-slate-400 text-lg">inventory_2</span>
                                 </div>
                               )}
                               <div className="min-w-0">
                                 <button
                                   onClick={() => setDetailItem(row)}
-                                  className="font-semibold text-slate-900 hover:text-red-600 transition-colors text-left text-sm line-clamp-2"
+                                  className="font-bold text-slate-900 hover:text-primary transition-colors text-left text-[15px] leading-snug line-clamp-2"
                                 >
                                   {row.product_name || '—'}
                                 </button>
                                 <div className="flex items-center gap-2 mt-1">
-                                  <span className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">SKU: {row.sku || '—'}</span>
+                                  <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">SKU: {row.sku || '—'}</span>
                                   {row.batch_code && (
-                                    <span className="text-[10px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">Lô: {row.batch_code}</span>
+                                    <span className="text-[11px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">Lô: {row.batch_code}</span>
                                   )}
                                 </div>
                               </div>
@@ -509,11 +513,11 @@ const AdminInventoryBatches: React.FC = () => {
                           </td>
 
                           {/* Supplier */}
-                          <td className={cls.tdCell}>
+                          <td className={customTdCell}>
                             {row.supplier_name ? (
                               <div>
-                                <p className="font-medium text-slate-700 text-sm truncate max-w-[140px]">{row.supplier_name}</p>
-                                {row.supplier_code && <p className="text-[10px] text-slate-400 font-mono">{row.supplier_code}</p>}
+                                <p className="font-bold text-slate-700 text-[15px] truncate max-w-[150px]">{row.supplier_name}</p>
+                                {row.supplier_code && <p className="text-[11px] text-slate-400 font-mono">{row.supplier_code}</p>}
                               </div>
                             ) : (
                               <span className="text-slate-400">—</span>
@@ -521,10 +525,10 @@ const AdminInventoryBatches: React.FC = () => {
                           </td>
 
                           {/* Stock */}
-                          <td className={cls.tdCell}>
+                          <td className={customTdCell}>
                             <div className="flex flex-col gap-1">
-                              <span className="font-bold text-slate-900">{row.bp_stock || row.quantity || 0}</span>
-                              <span className="text-[10px] text-slate-500">Đã bán: {row.bp_sold_count || 0}</span>
+                              <span className="font-extrabold text-slate-900 text-base">{row.bp_stock || row.quantity || 0}</span>
+                              <span className="text-[11px] text-slate-500">Đã bán: {row.bp_sold_count || 0}</span>
                               {badges.filter((b: any) => b.type === 'stock' || b.type === 'sales').map((badge: any, bi: number) => (
                                 <StatusBadge key={bi} status={badge.color === 'red' ? 'low_stock' : 'active'} label={badge.text} />
                               ))}
@@ -532,26 +536,26 @@ const AdminInventoryBatches: React.FC = () => {
                           </td>
 
                           {/* Price */}
-                          <td className={cls.tdCell}>
+                          <td className={customTdCell}>
                             <div className="flex flex-col gap-0.5">
-                              <span className="font-semibold text-red-600">{Number(row.bp_price || row.product_price || 0).toLocaleString('vi-VN')}đ</span>
-                              <span className="text-[10px] text-slate-500">Nhập: {Number(row.cost_price || 0).toLocaleString('vi-VN')}đ</span>
+                              <span className="font-extrabold text-red-600 text-base">{Number(row.bp_price || row.product_price || 0).toLocaleString('vi-VN')}đ</span>
+                              <span className="text-[11px] text-slate-500">Nhập: {Number(row.cost_price || 0).toLocaleString('vi-VN')}đ</span>
                             </div>
                           </td>
 
                           {/* Expiry */}
-                          <td className={cls.tdCell}>
+                          <td className={customTdCell}>
                             <div className="flex flex-col gap-1">
                               {row.manufacture_date && (
-                                <span className="text-[10px] text-slate-500">
+                                <span className="text-[11px] text-slate-500">
                                   NSX: {new Date(row.manufacture_date).toLocaleDateString('vi-VN')}
                                 </span>
                               )}
-                              <span className={`font-semibold text-sm ${getExpiryColor(row.expiry_status)}`}>
+                              <span className={`font-bold text-[15px] ${getExpiryColor(row.expiry_status)}`}>
                                 {row.exp_date ? new Date(row.exp_date).toLocaleDateString('vi-VN') : 'Không có hạn'}
                               </span>
                               {daysLeft !== null && (
-                                <span className={`text-[10px] font-bold ${daysLeft < 0 ? 'text-red-600' : daysLeft < 7 ? 'text-orange-600' : daysLeft < 30 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                <span className={`text-[11px] font-bold ${daysLeft < 0 ? 'text-red-600' : daysLeft < 7 ? 'text-orange-600' : daysLeft < 30 ? 'text-amber-600' : 'text-emerald-600'}`}>
                                   {daysLeft < 0 ? `Hết hạn ${Math.abs(daysLeft)} ngày` : `Còn ${daysLeft} ngày`}
                                 </span>
                               )}
@@ -559,7 +563,7 @@ const AdminInventoryBatches: React.FC = () => {
                           </td>
 
                           {/* Status badges */}
-                          <td className={cls.tdCell}>
+                          <td className={customTdCell}>
                             <div className="flex flex-wrap gap-1">
                               {badges.filter((b: any) => b.type === 'expiry').map((badge: any, bi: number) => (
                                 <StatusBadge
@@ -569,7 +573,7 @@ const AdminInventoryBatches: React.FC = () => {
                                 />
                               ))}
                               {badges.filter((b: any) => b.type === 'category').map((badge: any, bi: number) => (
-                                <span key={`cat-${bi}`} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700">
+                                <span key={`cat-${bi}`} className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700">
                                   {badge.text}
                                 </span>
                               ))}
@@ -577,13 +581,13 @@ const AdminInventoryBatches: React.FC = () => {
                           </td>
 
                           {/* Actions */}
-                          <td className={`${cls.tdCell} text-right`}>
+                          <td className={`${customTdCell} text-right`}>
                             <div className="flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={() => handleEdit(row)} className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-red-300 text-red-600 rounded-lg text-xs font-bold transition-all">
+                              <button onClick={() => handleEdit(row)} className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 border border-slate-200 hover:border-primary/50 text-primary hover:bg-primary/5 rounded-lg text-xs font-bold transition-all cursor-pointer">
                                 <span className="material-symbols-outlined text-sm">edit</span> Sửa
                               </button>
                               {(row.expiry_status === 'critical' || row.expiry_status === 'warning') && (
-                                <button onClick={() => handleCreateDraftPromotion(row)} className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-xs font-bold transition-colors">
+                                <button onClick={() => handleCreateDraftPromotion(row)} className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 rounded-lg text-xs font-bold transition-colors cursor-pointer">
                                   <span className="material-symbols-outlined text-sm">sell</span> Tạo sale
                                 </button>
                               )}
@@ -662,7 +666,7 @@ const AdminInventoryBatches: React.FC = () => {
           <div className="space-y-6">
             {detailItem.product_thumbnail && (
               <div className="rounded-xl overflow-hidden border border-slate-200">
-                <img src={detailItem.product_thumbnail} alt="" className="w-full h-48 object-cover" />
+                <img src={resolveImageUrl(detailItem.product_thumbnail)} alt="" className="w-full h-48 object-cover" />
               </div>
             )}
 
@@ -720,7 +724,7 @@ const AdminInventoryBatches: React.FC = () => {
                 <span className="material-symbols-outlined text-sm">edit</span> Chỉnh sửa
               </button>
               {(detailItem.expiry_status === 'critical' || detailItem.expiry_status === 'warning') && (
-                <button onClick={() => { handleCreateDraftPromotion(detailItem); setDetailItem(null); }} className={cls.btnDanger + ' flex-1 justify-center'}>
+                <button onClick={() => { handleCreateDraftPromotion(detailItem); setDetailItem(null); }} className="inline-flex items-center justify-center gap-2 h-10 px-5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-amber-500/20 transition-all cursor-pointer active:scale-[0.98] flex-1 justify-center">
                   <span className="material-symbols-outlined text-sm">sell</span> Tạo sale
                 </button>
               )}

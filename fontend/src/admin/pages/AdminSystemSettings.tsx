@@ -218,7 +218,7 @@ const AdminSystemSettings: React.FC = () => {
       <div className="max-w-6xl mx-auto space-y-8 pb-32">
         {/* Page Header */}
         <div className="mb-10">
-          <nav className="flex text-[10px] uppercase tracking-widest text-secondary font-bold mb-2 gap-2">
+          <nav className="flex text-[10px] uppercase tracking-widest text-slate-500 dark:text-slate-400 font-bold mb-2 gap-2">
             <span>{t('adminSettings.breadcrumbAdmin')}</span>
             <span className="text-outline">/</span>
             <span className="text-primary">{t('adminSettings.breadcrumbSettings')}</span>
@@ -226,7 +226,7 @@ const AdminSystemSettings: React.FC = () => {
           <h2 className="text-[2.75rem] font-black tracking-tight leading-none bg-clip-text text-transparent bg-gradient-to-r from-on-surface to-slate-500">
             {t('adminSettings.pageTitle')}
           </h2>
-          <p className="mt-2 text-secondary font-medium text-sm">{t('adminSettings.pageSubtitle')}</p>
+          <p className="mt-2 text-slate-500 dark:text-slate-400 font-medium text-sm">{t('adminSettings.pageSubtitle')}</p>
         </div>
 
         {/* Tabs */}
@@ -239,7 +239,7 @@ const AdminSystemSettings: React.FC = () => {
               className={`px-5 py-2.5 font-bold rounded-xl text-sm transition-all flex items-center gap-2 ${
                 activeTab === tab.id
                   ? 'bg-surface-container-lowest text-primary shadow-sm ring-1 ring-slate-200'
-                  : 'text-secondary hover:text-on-surface hover:bg-surface-container-lowest/50'
+                  : 'text-slate-500 hover:text-on-surface hover:bg-surface-container-lowest/50'
               }`}
             >
               <span className={`material-symbols-outlined text-[20px] ${activeTab === tab.id ? 'font-black' : ''}`}>{tab.icon}</span>
@@ -308,7 +308,7 @@ const AdminSystemSettings: React.FC = () => {
                                 ) : (
                                   <span className="material-symbols-outlined text-slate-300 text-[14px] flex-shrink-0">language</span>
                                 )}
-                                <span className="text-[9px] text-slate-500 font-medium truncate">LOTTE Mart</span>
+                                <span className="text-[9px] text-slate-500 font-medium truncate">Bách hóa XANH</span>
                               </div>
                             </div>
                             {/* Page area */}
@@ -381,23 +381,23 @@ const AdminSystemSettings: React.FC = () => {
                   {/* ── Text fields ── */}
                   <div className="grid grid-cols-2 gap-6">
                     <div className="col-span-2 md:col-span-1 space-y-1.5">
-                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.systemName')}</label>
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t('adminSettings.systemName')}</label>
                       <input className={inputCls} type="text" placeholder="VD: Bách hóa XANH Online" value={settings.system_name || ''} onChange={e => handleSettingChange('system_name', e.target.value)} />
                     </div>
                     <div className="col-span-2 md:col-span-1 space-y-1.5">
-                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.brandName')}</label>
-                      <input className={inputCls} placeholder="VD: LOTTE Mart" value={settings.brand_name || ''} onChange={e => handleSettingChange('brand_name', e.target.value)} />
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t('adminSettings.brandName')}</label>
+                      <input className={inputCls} placeholder="VD: Bách hóa XANH" value={settings.brand_name || ''} onChange={e => handleSettingChange('brand_name', e.target.value)} />
                     </div>
                     <div className="col-span-2 md:col-span-1 space-y-1.5">
-                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.headerLogoText')}</label>
-                      <input className={inputCls} placeholder="VD: LOTTE Mart" value={settings.header_logo_text || ''} onChange={e => handleSettingChange('header_logo_text', e.target.value)} />
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t('adminSettings.headerLogoText')}</label>
+                      <input className={inputCls} placeholder="VD: Bách hóa XANH" value={settings.header_logo_text || ''} onChange={e => handleSettingChange('header_logo_text', e.target.value)} />
                     </div>
                     <div className="col-span-2 md:col-span-1 space-y-1.5">
-                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.supportEmail')}</label>
-                      <input className={inputCls} type="email" placeholder="VD: support@lottemart.vn" value={settings.support_email || ''} onChange={e => handleSettingChange('support_email', e.target.value)} />
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t('adminSettings.supportEmail')}</label>
+                      <input className={inputCls} type="email" placeholder="VD: support@bachhoaxanh.com" value={settings.support_email || ''} onChange={e => handleSettingChange('support_email', e.target.value)} />
                     </div>
                     <div className="col-span-2 space-y-1.5">
-                      <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.hotline')}</label>
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t('adminSettings.hotline')}</label>
                       <input className={inputCls} type="text" placeholder="VD: 1800 599 907" value={settings.support_phone || ''} onChange={e => handleSettingChange('support_phone', e.target.value)} />
                     </div>
                   </div>
@@ -413,15 +413,15 @@ const AdminSystemSettings: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.shippingFee')}</label>
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t('adminSettings.shippingFee')}</label>
                     <input className={inputCls} type="number" value={settings.default_shipping_fee || 0} onChange={e => handleSettingChange('default_shipping_fee', Number(e.target.value))} />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.freeShipThreshold')}</label>
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t('adminSettings.freeShipThreshold')}</label>
                     <input className={inputCls} type="number" value={settings.free_shipping_threshold || 0} onChange={e => handleSettingChange('free_shipping_threshold', Number(e.target.value))} />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-black uppercase tracking-wider text-secondary">{t('adminSettings.vatRate')}</label>
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t('adminSettings.vatRate')}</label>
                     <input className={inputCls} type="number" value={settings.vat_rate || 0} onChange={e => handleSettingChange('vat_rate', Number(e.target.value))} />
                   </div>
                 </div>
@@ -442,7 +442,7 @@ const AdminSystemSettings: React.FC = () => {
               <div className={`flex items-center justify-between ${togglingMaintenance ? 'cursor-not-allowed' : 'cursor-pointer'}`} onClick={handleMaintenanceToggleClick}>
                 <div>
                   <p className={`text-sm font-bold ${settings.maintenance_mode ? 'text-orange-900' : 'text-on-surface'}`}>{t('adminSettings.maintenanceToggle')}</p>
-                  <p className="text-[10px] text-secondary mt-1 max-w-[200px] leading-relaxed">{t('adminSettings.maintenanceDesc')}</p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 max-w-[200px] leading-relaxed">{t('adminSettings.maintenanceDesc')}</p>
                 </div>
                 <div className="relative inline-flex items-center flex-shrink-0">
                   <div className={`w-11 h-6 rounded-full transition-colors ${settings.maintenance_mode ? 'bg-orange-500' : 'bg-surface-variant'}`}></div>

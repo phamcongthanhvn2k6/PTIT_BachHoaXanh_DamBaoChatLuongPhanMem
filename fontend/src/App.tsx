@@ -85,6 +85,13 @@ import SharedFamilyCart from './pages/SharedFamilyCart.tsx';
 import RecipeDetail from './pages/RecipeDetail.tsx';
 import LotteFunZone from './pages/LotteFunZone.tsx';
 import AdminGamification from './admin/pages/AdminGamification.tsx';
+import ShoppingGuide from './pages/ShoppingGuide.tsx';
+import ReturnPolicy from './pages/ReturnPolicy.tsx';
+import ShippingPolicy from './pages/ShippingPolicy.tsx';
+import Faq from './pages/Faq.tsx';
+import Careers from './pages/Careers.tsx';
+import NewsEvents from './pages/NewsEvents.tsx';
+import Partnership from './pages/Partnership.tsx';
 
 
 function App() {
@@ -287,6 +294,13 @@ function App() {
         <Route path="/shop-at-home" element={<ShopAtHome />} />
         <Route path="/hot-deals/product/:id" element={<ProductDetail />} />
         <Route path='/about' element={<About />} />
+        <Route path="/shopping-guide" element={<ShoppingGuide />} />
+        <Route path="/return-policy" element={<ReturnPolicy />} />
+        <Route path="/shipping-policy" element={<ShippingPolicy />} />
+        <Route path="/faq" element={<Faq />} />
+        <Route path="/careers" element={<Careers />} />
+        <Route path="/news-events" element={<NewsEvents />} />
+        <Route path="/partnership" element={<Partnership />} />
         <Route path="/home/product/:id" element={<ProductDetail />} />
         <Route path="/search" element={<SearchResults />} />
         <Route path="/featured-events" element={<FeaturedEvents />} />

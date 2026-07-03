@@ -7,6 +7,25 @@ import Supplier from '../models/Supplier.js';
 import Branch from '../models/Branch.js';
 import Promotion from '../models/Promotion.js';
 
+const getProductThumbnail = (product) => {
+  if (!product) return '';
+  if (Array.isArray(product.images) && product.images.length > 0) {
+    // Find the first Cloudinary or HTTP image
+    const realImg = product.images.find(img => img && (img.startsWith('http://') || img.startsWith('https://') || img.startsWith('/uploads') || img.startsWith('uploads/')));
+    if (realImg) return realImg;
+  }
+  return product.thumbnail || '';
+};
+
+const clearInventoryCache = async () => {
+  try {
+    const { deleteCachePattern } = await import('../services/redisService.js');
+    await deleteCachePattern('cache:*/api/inventory-batches*');
+  } catch (err) {
+    console.error('Failed to clear inventory batches cache:', err);
+  }
+};
+
 const buildQuery = (req) => {
   const q = {};
   if (req.query?.branch_product_id) q.branch_product_id = req.query.branch_product_id;
@@ -97,7 +116,7 @@ const enrichBatches = async (batches) => {
       product_name: product.name || '',
       sku: product.sku || '',
       master_id: String(product._id || ''),
-      product_thumbnail: product.thumbnail || '',
+      product_thumbnail: getProductThumbnail(product),
       product_price: product.price || 0,
       product_original_price: product.original_price || 0,
       // Category info
@@ -266,6 +285,8 @@ export const create = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
+    await clearInventoryCache();
+
     return res.status(201).json({ success: true, data: batch, message: 'Inventory batch created' });
   } catch (err) {
     await session.abortTransaction();
@@ -282,6 +303,9 @@ export const update = async (req, res) => {
     const updates = { ...req.body };
     delete updates._id;
     const updated = await InventoryBatch.findByIdAndUpdate(req.params.id, updates, { new: true });
+    
+    await clearInventoryCache();
+
     return res.json({ success: true, data: updated, message: 'Inventory batch updated' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -293,9 +317,28 @@ export const lowStockAlerts = async (_req, res) => {
     const data = await BranchProduct.find({
       is_available: true,
       $expr: { $lte: ['$stock', '$min_stock'] },
-    }).sort({ stock: 1 }).limit(200);
+    }).sort({ stock: 1 }).limit(200).lean();
 
-    return res.json({ success: true, data });
+    const productIds = [...new Set(data.map(bp => String(bp.product_id)).filter(Boolean))];
+    const products = await Product.find({ _id: { $in: productIds } }).select('name').lean();
+    
+    const productMap = {};
+    products.forEach(p => {
+      productMap[String(p._id)] = p;
+    });
+
+    const enriched = data.map(bp => {
+      const prod = productMap[String(bp.product_id)] || {};
+      return {
+        ...bp,
+        product: {
+          name: prod.name || 'Sản phẩm'
+        },
+        quantity: bp.stock
+      };
+    });
+
+    return res.json({ success: true, data: enriched });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -473,7 +516,7 @@ export const driftReport = async (req, res) => {
           branch_product_id: bpIdStr,
           product_name: product.name || bp.name || '—',
           sku: product.sku || bp.sku || '—',
-          thumbnail: product.thumbnail || '',
+          thumbnail: getProductThumbnail(product),
           branch_id: String(bp.branch_id),
           branch_name: branch.name || bp.branch_name || '—',
           stock,
@@ -597,6 +640,9 @@ export const autoHealProduct = async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    await clearInventoryCache();
+
     return res.json({ success: true, message: 'Tự động sửa lỗi lệch kho thành công' });
   } catch (err) {
     await session.abortTransaction();
@@ -700,6 +746,9 @@ export const autoHealAll = async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    await clearInventoryCache();
+
     return res.json({ success: true, message: `Đã tự động sửa lệch kho cho ${healedCount} sản phẩm` });
   } catch (err) {
     await session.abortTransaction();

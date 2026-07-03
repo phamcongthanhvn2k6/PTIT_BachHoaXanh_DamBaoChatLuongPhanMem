@@ -17,7 +17,7 @@ type MenuItem = {
 const menuClass = ({ isActive }: { isActive: boolean }) =>
   `flex items-center gap-3 px-4 py-3 transition-colors ${
     isActive
-      ? 'bg-red-700/10 text-red-500 border-r-4 border-red-600 font-semibold'
+      ? 'bg-primary/10 text-primary border-r-4 border-primary font-semibold'
       : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
   }`;
 
@@ -82,8 +82,8 @@ const AdminSidebar: React.FC = () => {
             className="w-9 h-9 object-contain rounded-full bg-white p-0.5 shadow-md flex-shrink-0"
           />
         ) : (
-          <div className="w-9 h-9 rounded-full bg-red-600 flex items-center justify-center text-white font-black text-sm flex-shrink-0 shadow-md">
-            L
+          <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-black text-sm flex-shrink-0 shadow-md">
+            B
           </div>
         )}
         <div className="min-w-0">
@@ -131,14 +131,14 @@ const AdminSidebar: React.FC = () => {
 
       <div className="px-6 mt-auto pt-6 border-t border-slate-800">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-white font-bold text-xs">
+          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-primary flex items-center justify-center text-white font-bold text-xs">
             {String(profileName).charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
             <p className="text-xs font-bold text-white truncate">{profileName}</p>
             <p className="text-[10px] text-slate-500 truncate">{admin?.email}</p>
             <span className={`inline-block mt-0.5 text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${
-              isSuperAdmin(admin) ? 'bg-red-600/20 text-red-400' : 'bg-slate-700/50 text-slate-400'
+              isSuperAdmin(admin) ? 'bg-primary/20 text-primary' : 'bg-slate-700/50 text-slate-400'
             }`}>
               {roleBadge}
             </span>

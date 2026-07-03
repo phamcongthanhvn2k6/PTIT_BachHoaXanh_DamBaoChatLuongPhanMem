@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from '../../components/Toast/toastEvent';
 import { useAppSelector } from '../../store';
 import { productService } from '../../services/productService';
-import { getBackendHost } from '../../utils/imageUrl';
+import { getBackendHost, resolveImageUrl } from '../../utils/imageUrl';
 import { CategoryIcon } from '../../components/CategoryIcon';
 
 type SortOption = 'newest' | 'stock-low' | 'best-seller' | 'price-high' | 'price-low';
@@ -1189,7 +1189,7 @@ const AdminProductManagement: React.FC = () => {
                     <td className="px-5 py-4 max-w-[300px]">
                       <div className="flex gap-4">
                         <div className="w-14 h-14 rounded-xl bg-slate-100 border border-slate-200 flex-shrink-0 overflow-hidden relative">
-                          <img className="w-full h-full object-cover" src={item.images?.[0] || item.product?.images?.[0] || 'https://via.placeholder.com/100'} alt={item.name} />
+                          <img className="w-full h-full object-cover" src={resolveImageUrl(item.images?.[0] || item.product?.images?.[0])} alt={item.name} />
                           {item.stock <= 0 && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><span className="text-[8px] font-bold text-white">HẾT</span></div>}
                         </div>
                         <div className="flex flex-col justify-center">
@@ -1571,7 +1571,7 @@ const AdminProductManagement: React.FC = () => {
                     {(editItem.images || []).map((imgUrl: string, idx: number) => (
                       <div key={idx} className="relative group aspect-square rounded-xl border-2 border-slate-200 overflow-hidden bg-slate-100">
                         <img
-                          src={imgUrl}
+                          src={resolveImageUrl(imgUrl)}
                           alt={`Ảnh ${idx + 1}`}
                           className="w-full h-full object-cover"
                           onError={(e) => {

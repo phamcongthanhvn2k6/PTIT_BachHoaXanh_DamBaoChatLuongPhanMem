@@ -3,6 +3,7 @@ import path from 'path';
 import multer from 'multer';
 import mongoose from 'mongoose';
 import { fileURLToPath } from 'url';
+import { uploadToCloudinary } from '../services/cloudinaryService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -90,25 +91,52 @@ const uploadToGridFS = (file, category) => {
   });
 };
 
+const uploadSingleFileHelper = async (file, category, host) => {
+  // 1. Try Cloudinary
+  try {
+    const secureUrl = await uploadToCloudinary(file.buffer, category);
+    if (secureUrl) {
+      return {
+        url: secureUrl,
+        relative_url: secureUrl,
+        filename: secureUrl.split('/').pop(),
+        size: file.size,
+        mimetype: file.mimetype,
+      };
+    }
+  } catch (err) {
+    console.error(`[upload] Cloudinary upload failed for ${category}, falling back to GridFS:`, err);
+  }
+
+  // 2. Fallback to GridFS
+  const filename = await uploadToGridFS(file, category);
+  let folder = `${category}s`;
+  if (category === 'support') folder = 'support';
+  if (category === 'evidence') folder = 'evidence';
+  if (category === 'brand_logo') folder = 'brand';
+  const relativePath = `/uploads/${folder}/${filename}`;
+
+  return {
+    url: `${host}${relativePath}`,
+    relative_url: relativePath,
+    filename,
+    size: file.size,
+    mimetype: file.mimetype,
+  };
+};
+
 export const uploadPromotionImage = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'Image file is required' });
     }
 
-    const filename = await uploadToGridFS(req.file, 'promotion');
     const host = `${req.protocol}://${req.get('host')}`;
-    const relativePath = `/uploads/promotions/${filename}`;
+    const fileData = await uploadSingleFileHelper(req.file, 'promotion', host);
 
     return res.status(201).json({
       success: true,
-      data: {
-        url: `${host}${relativePath}`,
-        relative_url: relativePath,
-        filename,
-        size: req.file.size,
-        mimetype: req.file.mimetype,
-      },
+      data: fileData,
       message: 'Upload successful',
     });
   } catch (err) {
@@ -124,17 +152,7 @@ export const uploadReviewImages = async (req, res) => {
     }
 
     const host = `${req.protocol}://${req.get('host')}`;
-    const mapped = await Promise.all(files.map(async (file) => {
-      const filename = await uploadToGridFS(file, 'review');
-      const relativePath = `/uploads/reviews/${filename}`;
-      return {
-        url: `${host}${relativePath}`,
-        relative_url: relativePath,
-        filename,
-        size: file.size,
-        mimetype: file.mimetype,
-      };
-    }));
+    const mapped = await Promise.all(files.map(file => uploadSingleFileHelper(file, 'review', host)));
 
     return res.status(201).json({
       success: true,
@@ -157,17 +175,7 @@ export const uploadSupportImages = async (req, res) => {
     }
 
     const host = `${req.protocol}://${req.get('host')}`;
-    const mapped = await Promise.all(files.map(async (file) => {
-      const filename = await uploadToGridFS(file, 'support');
-      const relativePath = `/uploads/support/${filename}`;
-      return {
-        url: `${host}${relativePath}`,
-        relative_url: relativePath,
-        filename,
-        size: file.size,
-        mimetype: file.mimetype,
-      };
-    }));
+    const mapped = await Promise.all(files.map(file => uploadSingleFileHelper(file, 'support', host)));
 
     return res.status(201).json({
       success: true,
@@ -190,17 +198,7 @@ export const uploadEvidenceImages = async (req, res) => {
     }
 
     const host = `${req.protocol}://${req.get('host')}`;
-    const mapped = await Promise.all(files.map(async (file) => {
-      const filename = await uploadToGridFS(file, 'evidence');
-      const relativePath = `/uploads/evidence/${filename}`;
-      return {
-        url: `${host}${relativePath}`,
-        relative_url: relativePath,
-        filename,
-        size: file.size,
-        mimetype: file.mimetype,
-      };
-    }));
+    const mapped = await Promise.all(files.map(file => uploadSingleFileHelper(file, 'evidence', host)));
 
     return res.status(201).json({
       success: true,
@@ -221,19 +219,12 @@ export const uploadBrandLogo = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Logo image file is required' });
     }
     
-    const filename = await uploadToGridFS(req.file, 'brand_logo');
     const host = `${req.protocol}://${req.get('host')}`;
-    const relativePath = `/uploads/brand/${filename}`;
+    const fileData = await uploadSingleFileHelper(req.file, 'brand_logo', host);
     
     return res.status(201).json({
       success: true,
-      data: {
-        url: `${host}${relativePath}`,
-        relative_url: relativePath,
-        filename,
-        size: req.file.size,
-        mimetype: req.file.mimetype,
-      },
+      data: fileData,
       message: 'Logo uploaded successfully',
     });
   } catch (err) {
@@ -249,17 +240,7 @@ export const uploadProductImages = async (req, res) => {
     }
 
     const host = `${req.protocol}://${req.get('host')}`;
-    const mapped = await Promise.all(files.map(async (file) => {
-      const filename = await uploadToGridFS(file, 'product');
-      const relativePath = `/uploads/products/${filename}`;
-      return {
-        url: `${host}${relativePath}`,
-        relative_url: relativePath,
-        filename,
-        size: file.size,
-        mimetype: file.mimetype,
-      };
-    }));
+    const mapped = await Promise.all(files.map(file => uploadSingleFileHelper(file, 'product', host)));
 
     return res.status(201).json({
       success: true,
@@ -317,23 +298,17 @@ export const uploadEventImage = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Image file is required' });
     }
 
-    const filename = await uploadToGridFS(req.file, 'event');
     const host = `${req.protocol}://${req.get('host')}`;
-    const relativePath = `/uploads/events/${filename}`;
+    const fileData = await uploadSingleFileHelper(req.file, 'event', host);
 
     return res.status(201).json({
       success: true,
-      data: {
-        url: `${host}${relativePath}`,
-        relative_url: relativePath,
-        filename,
-        size: req.file.size,
-        mimetype: req.file.mimetype,
-      },
+      data: fileData,
       message: 'Upload successful',
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
 };
+
 

@@ -11,8 +11,10 @@ import UserAvatar from '../../components/UserAvatar/UserAvatar';
 const HeaderProfile: React.FC = () => {
   const { t } = useTranslation();
   const { isAuthenticated, user } = useAppSelector(state => state.auth);
+  const { admin } = useAppSelector(state => state.adminAuth);
   const { data: notifications } = useAppSelector(state => state.notification);
   const { currentBranch } = useAppSelector(state => state.branch);
+  const showAdminLink = (isAuthenticated && user && [1, 2, 4, 5].includes(Number((user as any).role_id))) || !!admin;
   const currentBranchId = currentBranch ? String(currentBranch.id || (currentBranch as any)?._id || '') : '';
   const currentCartItems = useAppSelector(state => selectCurrentBranchItems(state as any, String(currentBranchId)));
   const dispatch = useAppDispatch();
@@ -76,9 +78,9 @@ const HeaderProfile: React.FC = () => {
   }
 
   return (
-    <div className="flex items-center gap-4 lg:gap-6">
+    <div className="flex items-center gap-4.5 lg:gap-5">
       {/* Notifications and Cart Icons */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3.5 lg:gap-4">
         {/* Notifications */}
         <Link 
           to="/account/notifications" 
@@ -162,127 +164,150 @@ const HeaderProfile: React.FC = () => {
             </div>
 
             <nav className="p-2 space-y-1">
-              <Link
-                to="/account"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
-                role="menuitem"
-              >
-                <span className="material-symbols-outlined text-[20px] text-primary">person</span>
-                <span className="text-sm font-bold">{t('userMenu.viewProfile')}</span>
-              </Link>
-              
-              <Link
-                to="/account/orders"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
-                role="menuitem"
-              >
-                <span className="material-symbols-outlined text-[20px] text-primary">shopping_bag</span>
-                <span className="text-sm font-bold">{t('userMenu.myOrders')}</span>
-              </Link>
+              {showAdminLink && (
+                <div className="px-2 pb-2 border-b border-slate-100 dark:border-slate-800/60">
+                  <Link
+                    to="/admin"
+                    onClick={() => setIsOpen(false)}
+                    className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-emerald-400 transition-all font-black"
+                    role="menuitem"
+                  >
+                    <span className="material-symbols-outlined text-[20px] text-emerald-600 dark:text-emerald-400">admin_panel_settings</span>
+                    <span className="text-sm">Quản trị hệ thống</span>
+                  </Link>
+                </div>
+              )}
 
-              <Link
-                to="/account/support"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
-                role="menuitem"
-              >
-                <span className="material-symbols-outlined text-[20px] text-primary">support_agent</span>
-                <span className="text-sm font-bold">{t('userMenu.support')}</span>
-              </Link>
-              
-              <Link
-                to="/family-cart"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 transition-colors"
-                role="menuitem"
-              >
-                <span className="material-symbols-outlined text-[20px]">family_restroom</span>
-                <span className="text-sm font-bold">{t('userMenu.familyCart')}</span>
-              </Link>
+              {/* Nhóm 1: Tài khoản cá nhân */}
+              <div className="space-y-0.5">
+                <Link
+                  to="/account"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
+                  role="menuitem"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-primary">person</span>
+                  <span className="text-sm font-bold">{t('userMenu.viewProfile')}</span>
+                </Link>
+                <Link
+                  to="/account/addresses"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
+                  role="menuitem"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-primary">location_on</span>
+                  <span className="text-sm font-bold">{t('userMenu.addresses')}</span>
+                </Link>
+                <Link
+                  to="/account/settings"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
+                  role="menuitem"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-primary">settings</span>
+                  <span className="text-sm font-bold">{t('userMenu.settings')}</span>
+                </Link>
+              </div>
 
-              <Link
-                to="/smart-shopping?tab=pricewatch"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-700 dark:text-amber-400 transition-colors"
-                role="menuitem"
-              >
-                <span className="material-symbols-outlined text-[20px]">notifications_active</span>
-                <span className="text-sm font-bold">{t('userMenu.priceWatch')}</span>
-              </Link>
+              <hr className="border-slate-100 dark:border-slate-800/60 my-1.5 mx-2" />
 
-              <Link
-                to="/account/returns"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
-                role="menuitem"
-              >
-                <span className="material-symbols-outlined text-[20px] text-primary">assignment_return</span>
-                <span className="text-sm font-bold">{t('userMenu.returns')}</span>
-              </Link>
+              {/* Nhóm 2: Hoạt động mua sắm */}
+              <div className="space-y-0.5">
+                <Link
+                  to="/account/orders"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
+                  role="menuitem"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-primary">shopping_bag</span>
+                  <span className="text-sm font-bold">{t('userMenu.myOrders')}</span>
+                </Link>
+                <Link
+                  to="/account/returns"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
+                  role="menuitem"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-primary">assignment_return</span>
+                  <span className="text-sm font-bold">{t('userMenu.returns')}</span>
+                </Link>
+                <Link
+                  to="/account/viewed-history"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
+                  role="menuitem"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-primary">history</span>
+                  <span className="text-sm font-bold">{t('userMenu.viewedHistory')}</span>
+                </Link>
+              </div>
 
-              <Link
-                to="/account/wishlist"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
-                role="menuitem"
-              >
-                <span className="material-symbols-outlined text-[20px] text-primary">favorite</span>
-                <span className="text-sm font-bold">{t('userMenu.wishlist')}</span>
-              </Link>
+              <hr className="border-slate-100 dark:border-slate-800/60 my-1.5 mx-2" />
 
-              <Link
-                to="/account/viewed-history"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
-                role="menuitem"
-              >
-                <span className="material-symbols-outlined text-[20px] text-primary">history</span>
-                <span className="text-sm font-bold">{t('userMenu.viewedHistory')}</span>
-              </Link>
-              
-              <Link
-                to="/account/addresses"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
-                role="menuitem"
-              >
-                <span className="material-symbols-outlined text-[20px] text-primary">location_on</span>
-                <span className="text-sm font-bold">{t('userMenu.addresses')}</span>
-              </Link>
-              
-              <Link
-                to="/account/coupons"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
-                role="menuitem"
-              >
-                <span className="material-symbols-outlined text-[20px] text-primary">sell</span>
-                <span className="text-sm font-bold">{t('userMenu.coupons')}</span>
-              </Link>
-              
-              <Link
-                to="/account/settings"
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
-                role="menuitem"
-              >
-                <span className="material-symbols-outlined text-[20px] text-primary">settings</span>
-                <span className="text-sm font-bold">{t('userMenu.settings')}</span>
-              </Link>
+              {/* Nhóm 3: Khám phá & Lưu trữ */}
+              <div className="space-y-0.5">
+                <Link
+                  to="/account/wishlist"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
+                  role="menuitem"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-primary">favorite</span>
+                  <span className="text-sm font-bold">{t('userMenu.wishlist')}</span>
+                </Link>
+                <Link
+                  to="/family-cart"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 transition-colors"
+                  role="menuitem"
+                >
+                  <span className="material-symbols-outlined text-[20px]">family_restroom</span>
+                  <span className="text-sm font-bold">{t('userMenu.familyCart')}</span>
+                </Link>
+                <Link
+                  to="/smart-shopping?tab=pricewatch"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-700 dark:text-amber-400 transition-colors"
+                  role="menuitem"
+                >
+                  <span className="material-symbols-outlined text-[20px]">notifications_active</span>
+                  <span className="text-sm font-bold">{t('userMenu.priceWatch')}</span>
+                </Link>
+                <Link
+                  to="/account/coupons"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
+                  role="menuitem"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-primary">sell</span>
+                  <span className="text-sm font-bold">{t('userMenu.coupons')}</span>
+                </Link>
+              </div>
+
+              <hr className="border-slate-100 dark:border-slate-800/60 my-1.5 mx-2" />
+
+              {/* Nhóm 4: Hỗ trợ & Thoát */}
+              <div className="space-y-0.5">
+                <Link
+                  to="/account/support"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
+                  role="menuitem"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-primary">support_agent</span>
+                  <span className="text-sm font-bold">{t('userMenu.support')}</span>
+                </Link>
+                
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 mt-2 rounded-xl bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 font-extrabold transition-all border border-red-100/50 dark:border-red-900/20"
+                  role="menuitem"
+                >
+                  <span className="material-symbols-outlined text-[20px]">logout</span>
+                  <span className="text-sm">{t('userMenu.logout')}</span>
+                </button>
+              </div>
             </nav>
-
-            <div className="p-2 border-t border-slate-100 dark:border-slate-800 mt-2">
-              <button
-                onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 transition-colors"
-                role="menuitem"
-              >
-                <span className="material-symbols-outlined text-[20px]">logout</span>
-                <span className="text-sm font-bold">{t('userMenu.logout')}</span>
-              </button>
-            </div>
           </div>
         )}
       </div>

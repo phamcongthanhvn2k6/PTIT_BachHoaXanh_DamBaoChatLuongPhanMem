@@ -87,7 +87,8 @@
     "entertainment": "Entertainment",
     "memberLotte": "Bach Hoa XANH Member",
     "categories": "All Categories",
-    "searchPlaceholder": "Search for products, brands..."
+    "searchPlaceholder": "Search for products, brands...",
+    "recipes": "Recipes"
   },
   "featuredEvents": {
     "title": "News & Events",

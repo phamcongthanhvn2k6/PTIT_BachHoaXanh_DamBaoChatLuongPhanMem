@@ -291,7 +291,21 @@ const Home: React.FC = () => {
         return {
           ...deal,
           title: deal?.title || productAny?.name || t('product.flashDeal'),
-          image_url: deal?.image_url || productAny?.image || productAny?.images?.[0] || productAny?.thumbnail || '',
+          image_url: (() => {
+            const productImages = productAny?.images || [];
+            const hasRealImage = productImages.some((img: string) => {
+              const lower = img.toLowerCase();
+              return !lower.includes('unsplash.com') && !lower.includes('/assets/products/') && !lower.includes('assets/products/');
+            });
+            if (hasRealImage) {
+              const realImg = productImages.find((img: string) => {
+                const lower = img.toLowerCase();
+                return !lower.includes('unsplash.com') && !lower.includes('/assets/products/') && !lower.includes('assets/products/');
+              });
+              if (realImg) return realImg;
+            }
+            return deal?.image_url || productAny?.image || productAny?.thumbnail || '';
+          })(),
           product_id: resolvedProductId,
           deal_price: dealPrice,
           effective_price: dealPrice,

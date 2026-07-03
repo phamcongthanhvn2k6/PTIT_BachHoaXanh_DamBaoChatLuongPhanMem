@@ -1,6 +1,16 @@
 import i18n from '../i18n';
 import { resolveImageUrl, fallbackProductImage } from './imageUrl';
 
+const isRealImage = (url: string | null | undefined): boolean => {
+  if (!url || typeof url !== 'string') return false;
+  const lower = url.toLowerCase().trim();
+  if (lower.includes('unsplash.com')) return false;
+  if (lower.includes('/assets/products/') || lower.includes('assets/products/')) return false;
+  if (lower.startsWith('http://') || lower.startsWith('https://')) return true;
+  if (lower.startsWith('/uploads') || lower.startsWith('uploads/')) return true;
+  return false;
+};
+
 const toId = (value: any): string => {
   if (value === undefined || value === null) return '';
   if (typeof value === 'object' && value !== null) {
@@ -42,7 +52,14 @@ const toImageArray = (raw: any): string[] => {
     list.push(raw.thumbnail.trim());
   }
   const resolved = list.map((img: any) => resolveImageUrl(String(img))).filter(Boolean);
-  return Array.from(new Set(resolved));
+  const unique = Array.from(new Set(resolved));
+  
+  // Filter out mock images if there is at least one real image uploaded
+  const hasReal = unique.some(isRealImage);
+  if (hasReal) {
+    return unique.filter(isRealImage);
+  }
+  return unique;
 };
 
 const deriveCategoryShop = (raw: any, categoryLookup?: Record<string, string>): string => {
@@ -84,24 +101,36 @@ const resolveProductImage = (merged: any, product: any, branchProduct: any): str
     return trimmed;
   };
 
-  // 1. Try thumbnail
-  let chosen = checkUrl(merged.thumbnail || product?.thumbnail || branchProduct?.thumbnail || '');
-  if (chosen) return resolveImageUrl(chosen) || fallbackProductImage;
+  // Collect all unique candidate images
+  const candidates: string[] = [];
+  const addCandidate = (val: any) => {
+    const checked = checkUrl(val);
+    if (checked && !candidates.includes(checked)) {
+      candidates.push(checked);
+    }
+  };
 
-  // 2. Try primaryImage / image / imageUrl
-  chosen = checkUrl(merged.primaryImage || product?.primaryImage || branchProduct?.primaryImage || merged.image || product?.image || merged.imageUrl || product?.imageUrl || '');
-  if (chosen) return resolveImageUrl(chosen) || fallbackProductImage;
+  addCandidate(merged.thumbnail || product?.thumbnail || branchProduct?.thumbnail);
+  addCandidate(merged.primaryImage || product?.primaryImage || branchProduct?.primaryImage || merged.image || product?.image || merged.imageUrl || product?.imageUrl);
 
-  // 3. Try first gallery image
   const rawImages = Array.isArray(merged.images) ? merged.images : (Array.isArray(product?.images) ? product.images : []);
   const rawGallery = Array.isArray(merged.gallery) ? merged.gallery : (Array.isArray(product?.gallery) ? product.gallery : []);
-  const allRaw = [...rawImages, ...rawGallery];
-  for (const img of allRaw) {
-    const valid = checkUrl(img);
-    if (valid) return resolveImageUrl(valid) || fallbackProductImage;
+  for (const img of [...rawImages, ...rawGallery]) {
+    addCandidate(img);
   }
 
-  // 4. Fallback placeholder
+  // 1. Try to find the first real uploaded image
+  const realImage = candidates.find(isRealImage);
+  if (realImage) {
+    return resolveImageUrl(realImage);
+  }
+
+  // 2. Fallback to mock image if no real image exists
+  if (candidates.length > 0) {
+    return resolveImageUrl(candidates[0]);
+  }
+
+  // 3. Fallback placeholder
   return fallbackProductImage;
 };
 

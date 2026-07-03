@@ -139,12 +139,14 @@ const LotteFunZone: React.FC = () => {
       dispatch(authVerify());
 
       const spinCamp = await dataService.getGamificationCampaign('spin');
-      setSpinCampaign(spinCamp);
+      const isValidSpinCamp = spinCamp && spinCamp._id && Array.isArray(spinCamp.rewards);
+      setSpinCampaign(isValidSpinCamp ? spinCamp : null);
       
       const checkinCamp = await dataService.getGamificationCampaign('checkin');
-      setCheckinCampaign(checkinCamp);
+      const isValidCheckinCamp = checkinCamp && checkinCamp._id;
+      setCheckinCampaign(isValidCheckinCamp ? checkinCamp : null);
 
-      if (spinCamp) {
+      if (isValidSpinCamp) {
         // Calculate remaining spins for user
         const logs = await dataService.getMyLogs({ campaign_id: spinCamp._id, limit: 100 });
         const todayStr = new Date(Date.now() + (7 * 60 + new Date().getTimezoneOffset()) * 60000).toISOString().split('T')[0];
@@ -154,6 +156,8 @@ const LotteFunZone: React.FC = () => {
         
         const extraSpins = spinCamp.extra_spins || 0;
         setSpinsRemainingToday(Math.max(0, spinCamp.max_spins_per_user_day - spinsToday) + extraSpins);
+      } else {
+        setSpinsRemainingToday(0);
       }
 
       const checkState = await dataService.getCheckinState();

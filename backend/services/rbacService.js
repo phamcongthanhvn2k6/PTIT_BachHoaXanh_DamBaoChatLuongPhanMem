@@ -198,7 +198,7 @@ export async function ensureRbacSeed() {
     const adminUser = await User.findOne({ email: adminEmail });
     if (!adminUser) {
       const bcrypt = await import('bcryptjs');
-      const hash = await bcrypt.default.hash('Admin@123', 10);
+      const hash = await bcrypt.default.hash('password123', 10);
       await User.create({
         username: 'admin',
         full_name: 'Admin Bách hóa XANH',
@@ -224,9 +224,9 @@ export async function ensureRbacSeed() {
         changed = true;
       }
       const bcrypt = await import('bcryptjs');
-      const isCorrect = adminUser.password_hash ? await bcrypt.default.compare('Admin@123', adminUser.password_hash) : false;
+      const isCorrect = adminUser.password_hash ? await bcrypt.default.compare('password123', adminUser.password_hash) : false;
       if (!isCorrect) {
-        adminUser.password_hash = await bcrypt.default.hash('Admin@123', 10);
+        adminUser.password_hash = await bcrypt.default.hash('password123', 10);
         changed = true;
       }
       if (changed) {

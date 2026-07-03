@@ -39,12 +39,14 @@ export const ensureMarketingSeed = async () => {
     const hotDealsCount = await HotDeal.countDocuments();
     if (hotDealsCount === 0) {
       console.log('Seeding initial hot deals...');
+      const heineken = await Product.findOne({ name: /Heineken Silver/i });
+      const teaPlus = await Product.findOne({ name: /Tea Plus/i });
       const fallbackProductId = productIds[0] || 'dummy_product_id';
-      const firstProductId = productIds[0] || fallbackProductId;
-      const secondProductId = productIds[1] || fallbackProductId;
+      const firstProductId = heineken ? String(heineken._id) : (productIds[0] || fallbackProductId);
+      const secondProductId = teaPlus ? String(teaPlus._id) : (productIds[1] || fallbackProductId);
       await HotDeal.insertMany([
-        { title: 'Bia Heineken Silver', product_id: firstProductId, type: 'percent', discount_percent: 30, discount_value: 30, original_price: 21000, deal_price: 14700, stock_limit: 100, remaining_quantity: 100, total_quantity: 100, sold_count: 0, is_active: true, image_url: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6faa6?q=80&w=1974' },
-        { title: 'Trà Ô Long Tea Plus', product_id: secondProductId, type: 'fixed_amount', discount_percent: 15, discount_value: 1500, original_price: 10000, deal_price: 8500, stock_limit: 200, remaining_quantity: 150, total_quantity: 200, sold_count: 50, is_active: true, image_url: 'https://images.unsplash.com/photo-1599084993091-1cb5c0721cc6?q=80&w=2070' }
+        { title: 'Bia Heineken Silver', product_id: firstProductId, type: 'percent', discount_percent: 30, discount_value: 30, original_price: 21000, deal_price: 14700, stock_limit: 100, remaining_quantity: 100, total_quantity: 100, sold_count: 0, is_active: true, image_url: 'https://images.unsplash.com/photo-1560806887-1e4cd0b6faa6?q=80&w=1974', start_date: new Date(), end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
+        { title: 'Trà Ô Long Tea Plus', product_id: secondProductId, type: 'fixed_amount', discount_percent: 15, discount_value: 1500, original_price: 10000, deal_price: 8500, stock_limit: 200, remaining_quantity: 150, total_quantity: 200, sold_count: 50, is_active: true, image_url: 'https://images.unsplash.com/photo-1599084993091-1cb5c0721cc6?q=80&w=2070', start_date: new Date(), end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }
       ]);
     }
   } catch (err) {
