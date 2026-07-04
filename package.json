@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "npm run build --prefix fontend",
+    "build": "npm ci --prefix fontend && npm run build --prefix fontend",
     "dev": "npx concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix fontend\""
   }
 }
