@@ -121,6 +121,15 @@ const COUPONS_DATA = [
   { code: 'NEWUSER', value: 'Giảm 10%', valueEn: '10% OFF', valueJa: '10%割引', minOrder: '0₫', desc: 'Giảm 10% cho thành viên mới', descEn: '10% off for new members', descJa: '新規メンバー10%割引' }
 ];
 
+const CATEGORY_STYLES = [
+  'bg-emerald-50/80 text-emerald-600 border-emerald-100 hover:bg-emerald-100/50 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/40',
+  'bg-blue-50/80 text-blue-600 border-blue-100 hover:bg-blue-100/50 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-900/40',
+  'bg-amber-50/80 text-amber-600 border-amber-100 hover:bg-amber-100/50 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/40',
+  'bg-sky-50/80 text-sky-600 border-sky-100 hover:bg-sky-100/50 dark:bg-sky-950/20 dark:text-sky-400 dark:border-sky-900/40',
+  'bg-yellow-50/80 text-yellow-600 border-yellow-100 hover:bg-yellow-100/50 dark:bg-yellow-950/20 dark:text-yellow-400 dark:border-yellow-900/40',
+  'bg-rose-50/80 text-rose-600 border-rose-100 hover:bg-rose-100/50 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/40',
+];
+
 const Home: React.FC = () => {
   const { t, i18n } = useTranslation();
   const dispatch = useAppDispatch();
@@ -156,15 +165,6 @@ const Home: React.FC = () => {
     return LOCAL_DICT[lang]?.[key] || LOCAL_DICT['vi']?.[key] || '';
   };
 
-  const CATEGORY_STYLES = [
-    'bg-emerald-50/80 text-emerald-600 border-emerald-100 hover:bg-emerald-100/50 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/40',
-    'bg-blue-50/80 text-blue-600 border-blue-100 hover:bg-blue-100/50 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-900/40',
-    'bg-amber-50/80 text-amber-600 border-amber-100 hover:bg-amber-100/50 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/40',
-    'bg-sky-50/80 text-sky-600 border-sky-100 hover:bg-sky-100/50 dark:bg-sky-950/20 dark:text-sky-400 dark:border-sky-900/40',
-    'bg-yellow-50/80 text-yellow-600 border-yellow-100 hover:bg-yellow-100/50 dark:bg-yellow-950/20 dark:text-yellow-400 dark:border-yellow-900/40',
-    'bg-rose-50/80 text-rose-600 border-rose-100 hover:bg-rose-100/50 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/40',
-  ];
-
   const homeCategories = useMemo(() => {
     const activeCats = (categories || []).filter((c: any) => c.is_active !== false);
     if (activeCats.length > 0) {
@@ -184,7 +184,7 @@ const Home: React.FC = () => {
       ...cat,
       bg: CATEGORY_STYLES[index % CATEGORY_STYLES.length],
     }));
-  }, [categories, CATEGORY_STYLES]);
+  }, [categories]);
 
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {

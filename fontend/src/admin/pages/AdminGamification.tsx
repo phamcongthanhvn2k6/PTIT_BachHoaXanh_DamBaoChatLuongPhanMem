@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dataService } from '../../services/dataService';
 
@@ -287,21 +287,16 @@ const AdminGamification: React.FC = () => {
   // Analytics stats
   const [analytics, setAnalytics] = useState<any>(null);
 
-  useEffect(() => {
-    fetchCampaigns();
-    fetchLogs();
-  }, [filterUser, filterType]);
-
-  const fetchCampaigns = async () => {
+  const fetchCampaigns = useCallback(async () => {
     try {
       const res = await dataService.adminGetCampaigns();
       setCampaigns(res || []);
     } catch (e) {
       console.error('Failed to load campaigns', e);
     }
-  };
+  }, []);
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     try {
       const params: any = { limit: 20 };
       if (filterUser) params.user_id = filterUser;
@@ -314,7 +309,12 @@ const AdminGamification: React.FC = () => {
     } catch (e) {
       console.error('Failed to load history logs', e);
     }
-  };
+  }, [filterUser, filterType]);
+
+  useEffect(() => {
+    fetchCampaigns();
+    fetchLogs();
+  }, [fetchCampaigns, fetchLogs]);
 
   const fetchAnalytics = async (campaignId: string) => {
     try {
@@ -517,7 +517,7 @@ const AdminGamification: React.FC = () => {
       if (isCreating) {
         res = await dataService.adminCreateCampaign(payload);
       } else {
-        res = await dataService.adminUpdateCampaign(selectedCampaign?._id!, payload);
+        res = await dataService.adminUpdateCampaign(selectedCampaign!._id!, payload);
       }
 
       if (res && res.success) {
