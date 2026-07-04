@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useTranslation } from 'react-i18next';
@@ -653,7 +653,7 @@ const AdminCouponsManagement: React.FC = () => {
     }
   };
 
-  const loadTabPagedData = async () => {
+  const loadTabPagedData = useCallback(async () => {
     try {
       setLoading(true);
       const params: Record<string, any> = {
@@ -731,7 +731,7 @@ const AdminCouponsManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab, currentPage, pageSize, searchTerm, filterStatus, sortOrder]);
 
   const loadData = async () => {
     await Promise.all([
@@ -802,7 +802,7 @@ const AdminCouponsManagement: React.FC = () => {
 
   useEffect(() => {
     loadTabPagedData();
-  }, [activeTab, currentPage, pageSize, searchTerm, filterStatus, sortOrder]);
+  }, [loadTabPagedData]);
 
   useEffect(() => {
     if (showFormModal) {
@@ -931,7 +931,7 @@ const AdminCouponsManagement: React.FC = () => {
       setShowFormModal(true);
       navigate(location.pathname, { replace: true });
     }
-  }, [location.state, navigate]);
+  }, [location.state, navigate, location.pathname]);
 
   const paginatedList = items;
 

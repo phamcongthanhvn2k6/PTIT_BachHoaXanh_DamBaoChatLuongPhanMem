@@ -1,5 +1,5 @@
 // src/admin/pages/AdminProductManagement.tsx
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from '../../components/Toast/toastEvent';
@@ -68,7 +68,7 @@ const AdminProductManagement: React.FC = () => {
   // Branch filter (Admin) from global Redux
   const { adminBranchId: branchFilter } = useAppSelector(state => state.adminAuth);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [bpRes, catRes] = await Promise.all([
@@ -85,11 +85,11 @@ const AdminProductManagement: React.FC = () => {
      } catch {
        toast.error(t('adminProducts.toastProductLoadError'));
     } finally { setLoading(false); }
-  };
+  }, [t]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const specTemplates = [
     { name: t('adminProducts.templateFood'), labels: [t('adminProducts.brand'), t('adminProducts.origin'), t('adminProducts.weight'), t('adminProducts.standard'), t('adminProducts.features'), t('adminProducts.unit'), t('adminProducts.storage')] },

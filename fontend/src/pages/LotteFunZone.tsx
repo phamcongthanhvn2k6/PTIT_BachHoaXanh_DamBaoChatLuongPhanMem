@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dataService } from '../services/dataService';
 import { useAppSelector, useAppDispatch } from '../store';
@@ -61,7 +61,7 @@ const playSound = (freq = 440, type = 'sine', duration = 0.1, volume = 0.1) => {
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + duration);
-  } catch (e) {
+  } catch {
     // Ignore block
   }
 };
@@ -121,19 +121,7 @@ const LotteFunZone: React.FC = () => {
     return item.reward_name;
   };
 
-  useEffect(() => {
-    fetchActiveCampaigns();
-    fetchUserHistory();
-    generateFakeWins();
-    
-    // Ticker to rotate fake wins
-    const interval = setInterval(() => {
-      generateFakeWins();
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [currentLang]);
-
-  const fetchActiveCampaigns = async () => {
+  const fetchActiveCampaigns = useCallback(async () => {
     try {
       // Refresh user session to get latest lotte_points and status/locks
       dispatch(authVerify());
@@ -165,9 +153,9 @@ const LotteFunZone: React.FC = () => {
     } catch (e) {
       console.error('Failed to load campaigns', e);
     }
-  };
+  }, [dispatch]);
 
-  const fetchUserHistory = async () => {
+  const fetchUserHistory = useCallback(async () => {
     try {
       if (!user) return;
       const logs = await dataService.getMyLogs({ limit: 10 });
@@ -177,9 +165,9 @@ const LotteFunZone: React.FC = () => {
     } catch (e) {
       console.error('Failed to fetch user history', e);
     }
-  };
+  }, [user]);
 
-  const generateFakeWins = () => {
+  const generateFakeWins = useCallback(() => {
     const names = [
       'Nguyễn Minh T.', 'Trần Thanh H.', 'Lê Văn Đ.', 'Phạm Thị M.', 'Hoàng Anh D.', 
       'Takeshi K.', 'John D.', 'Yuki S.', 'Nguyễn Quốc A.', 'Vũ Hoàng Y.'
@@ -199,7 +187,19 @@ const LotteFunZone: React.FC = () => {
     });
 
     setRecentGlobalWins(wins);
-  };
+  }, [currentLang]);
+
+  useEffect(() => {
+    fetchActiveCampaigns();
+    fetchUserHistory();
+    generateFakeWins();
+    
+    // Ticker to rotate fake wins
+    const interval = setInterval(() => {
+      generateFakeWins();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [fetchActiveCampaigns, fetchUserHistory, generateFakeWins]);
 
   // Lucky Spin triggers
   const handleSpin = async () => {

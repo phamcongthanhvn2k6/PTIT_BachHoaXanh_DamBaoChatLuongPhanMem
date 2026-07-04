@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import { dataService } from '../../services/dataService';
 import httpClient from '../../api/httpClient';
@@ -91,7 +91,7 @@ const AdminSystemSettings: React.FC = () => {
 
   const [health, setHealth] = useState<any>(null);
 
-  const fetchHealth = async () => {
+  const fetchHealth = useCallback(async () => {
     try {
       const res = await httpClient.get('/api/health');
       if (res?.data) {
@@ -100,10 +100,10 @@ const AdminSystemSettings: React.FC = () => {
     } catch (err) {
       console.error('Failed to fetch health status:', err);
     }
-  };
+  }, []);
 
   // ── Data loading ──────────────────────────────────────────────
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const res = await dataService.getAdminSettings();
@@ -115,13 +115,13 @@ const AdminSystemSettings: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t, fetchHealth]);
 
   useEffect(() => {
     loadData();
     const interval = setInterval(fetchHealth, 15000);
     return () => clearInterval(interval);
-  }, []);
+  }, [loadData, fetchHealth]);
 
   const handleSettingChange = (name: string, value: any) => {
     setSettings((prev: any) => ({ ...prev, [name]: value }));

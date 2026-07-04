@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store';
@@ -9,8 +9,39 @@ import { authService } from '../services/authService';
 
 const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 const phoneRegex = /^(?:\+84|0)(3[2-9]|5[6|8|9]|7[0|6-9]|8[1-9]|9[0-9])[0-9]{7}$/;
-const usernameRegex = /^[\p{L} \.'\-]{2,80}$/u;
+const usernameRegex = /^[\p{L} .'-]{2,80}$/u;
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&()[\]{}^~#\-+=<>/\\;:'",.])[A-Za-z\d@$!%*?&()[\]{}^~#\-+=<>/\\;:'",.]{8,}$/;
+
+const getErrorText = (error: unknown, fallback: string) => {
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' && 'message' in error) {
+    return (error as { message?: string }).message || fallback;
+  }
+  return fallback;
+};
+
+const mapGoogleAuthError = (error: unknown): string => {
+  const text = getErrorText(error, 'Đăng nhập Google thất bại');
+  const normalized = text.toLowerCase();
+
+  if (normalized.includes('popup')) {
+    return 'Popup Google đã bị chặn hoặc đã đóng. Vui lòng cho phép popup và thử lại.';
+  }
+
+  if (normalized.includes('origin') || normalized.includes('not allowed')) {
+    return 'Google OAuth chưa cho phép domain hiện tại. Vui lòng cấu hình Authorized JavaScript origins trên Google Cloud Console.';
+  }
+
+  if (normalized.includes('credential')) {
+    return 'Google không trả về credential hợp lệ. Vui lòng thử lại.';
+  }
+
+  if (normalized.includes('chưa sẵn sàng') || normalized.includes('initialize')) {
+    return 'Không thể khởi tạo Google Identity Services. Vui lòng tải lại trang.';
+  }
+
+  return text;
+};
 
 interface LoginProps {
   mode?: 'login' | 'register';
@@ -81,38 +112,7 @@ const Login: React.FC<LoginProps> = ({ mode = 'login' }) => {
     navigate(tab === 'login' ? '/login' : '/register');
   };
 
-  const getErrorText = (error: unknown, fallback: string) => {
-    if (typeof error === 'string') return error;
-    if (error && typeof error === 'object' && 'message' in error) {
-      return (error as { message?: string }).message || fallback;
-    }
-    return fallback;
-  };
-
-  const mapGoogleAuthError = (error: unknown): string => {
-    const text = getErrorText(error, 'Đăng nhập Google thất bại');
-    const normalized = text.toLowerCase();
-
-    if (normalized.includes('popup')) {
-      return 'Popup Google đã bị chặn hoặc đã đóng. Vui lòng cho phép popup và thử lại.';
-    }
-
-    if (normalized.includes('origin') || normalized.includes('not allowed')) {
-      return 'Google OAuth chưa cho phép domain hiện tại. Vui lòng cấu hình Authorized JavaScript origins trên Google Cloud Console.';
-    }
-
-    if (normalized.includes('credential')) {
-      return 'Google không trả về credential hợp lệ. Vui lòng thử lại.';
-    }
-
-    if (normalized.includes('chưa sẵn sàng') || normalized.includes('initialize')) {
-      return 'Không thể khởi tạo Google Identity Services. Vui lòng tải lại trang.';
-    }
-
-    return text;
-  };
-
-  const getSafeRedirect = () => {
+  const getSafeRedirect = useCallback(() => {
     const searchParams = new URLSearchParams(location.search);
     const redirect = searchParams.get('redirect');
 
@@ -128,11 +128,11 @@ const Login: React.FC<LoginProps> = ({ mode = 'login' }) => {
     }
 
     return '/';
-  };
+  }, [location.search]);
 
-  const handlePostLoginRedirect = () => {
+  const handlePostLoginRedirect = useCallback(() => {
     navigate(getSafeRedirect(), { replace: true });
-  };
+  }, [navigate, getSafeRedirect]);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -159,7 +159,7 @@ const Login: React.FC<LoginProps> = ({ mode = 'login' }) => {
         setErrors({ form: 'Không thể xử lý dữ liệu đăng nhập Facebook.' });
       }
     }
-  }, [location.search, dispatch]);
+  }, [location.search, dispatch, handlePostLoginRedirect]);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -193,7 +193,7 @@ const Login: React.FC<LoginProps> = ({ mode = 'login' }) => {
       }
     });
 
-  }, [isGoogleConfigured, dispatch, activeTab]);
+  }, [isGoogleConfigured, dispatch, activeTab, handlePostLoginRedirect]);
 
   useEffect(() => {
     if (resendCountdown <= 0) return;
@@ -230,31 +230,21 @@ const Login: React.FC<LoginProps> = ({ mode = 'login' }) => {
     }
   }, [authState.error]);
 
-  // Real-time validation for login
-  useEffect(() => {
-    if (activeTab === 'login' && Object.keys(errors).length > 0 && !errors.form) {
-      validateLogin();
-    }
-  }, [identifier, loginPassword, activeTab]);
-
-  // Real-time validation for registration
-  useEffect(() => {
-    if (activeTab === 'register' && Object.keys(errors).length > 0 && !errors.form) {
-      validateRegister();
-    }
-  }, [username, email, phone, registerPassword, confirmPassword, agreeTerms, activeTab]);
-
-  function validateLogin() {
+  const validateLogin = useCallback(() => {
     const e: any = {};
     if (loginMode === 'password') {
       if (!identifier) e.identifier = 'Vui lòng nhập email hoặc số điện thoại.';
       if (!loginPassword) e.password = 'Vui lòng nhập mật khẩu.';
     }
-    setErrors(e);
+    setErrors((prev: any) => {
+      const changed = Object.keys(e).length !== Object.keys(prev).length ||
+        Object.keys(e).some(k => e[k] !== prev[k]);
+      return changed ? e : prev;
+    });
     return Object.keys(e).length === 0;
-  }
+  }, [loginMode, identifier, loginPassword]);
 
-  function validateRegister() {
+  const validateRegister = useCallback(() => {
     const e: any = {};
     if (!usernameRegex.test(username)) e.username = 'Họ tên không hợp lệ (2-80 ký tự)';
     if (!emailRegex.test(email)) e.email = 'Vui lòng nhập email hợp lệ';
@@ -262,9 +252,27 @@ const Login: React.FC<LoginProps> = ({ mode = 'login' }) => {
     if (!passwordRegex.test(registerPassword)) e.password = 'Mật khẩu ít nhất 8 ký tự, gồm HOA, thường, số, ký tự đặc biệt';
     if (registerPassword !== confirmPassword) e.confirmPassword = 'Xác nhận mật khẩu không khớp';
     if (!agreeTerms) e.terms = 'Bạn cần đồng ý với điều khoản dịch vụ';
-    setErrors(e);
+    setErrors((prev: any) => {
+      const changed = Object.keys(e).length !== Object.keys(prev).length ||
+        Object.keys(e).some(k => e[k] !== prev[k]);
+      return changed ? e : prev;
+    });
     return Object.keys(e).length === 0;
-  }
+  }, [username, email, phone, registerPassword, confirmPassword, agreeTerms]);
+
+  // Real-time validation for login
+  useEffect(() => {
+    if (activeTab === 'login' && Object.keys(errors).length > 0 && !errors.form) {
+      validateLogin();
+    }
+  }, [activeTab, errors, validateLogin]);
+
+  // Real-time validation for registration
+  useEffect(() => {
+    if (activeTab === 'register' && Object.keys(errors).length > 0 && !errors.form) {
+      validateRegister();
+    }
+  }, [activeTab, errors, validateRegister]);
 
   const calculatePasswordStrength = (pwd: string) => {
     let strength = 0;
