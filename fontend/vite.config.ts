@@ -17,6 +17,25 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('jspdf') || id.includes('html2canvas') || id.includes('docx')) {
+              return 'vendor-documents';
+            }
+            if (id.includes('three') || id.includes('@react-three')) {
+              return 'vendor-3d';
+            }
+            if (id.includes('leaflet') || id.includes('recharts')) {
+              return 'vendor-charts-maps';
+            }
+          }
+        }
+      }
+    }
+  },
   server: {
     proxy: {
       '/api': 'http://127.0.0.1:3001',
