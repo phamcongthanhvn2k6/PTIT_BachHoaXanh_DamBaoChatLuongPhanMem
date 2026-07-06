@@ -850,7 +850,7 @@ export const list = async (req, res) => {
     if (status && status !== 'ALL') filter.status = status;
 
     const p = Math.max(1, parseInt(page));
-    const l = Math.min(100, Math.max(1, parseInt(limit)));
+    const l = Math.min(1000, Math.max(1, parseInt(limit)));
     const total = await Order.countDocuments(filter);
     const rawData = await Order.find(filter).sort('-created_at').skip((p - 1) * l).limit(l);
     const data = await populateOrdersWithUsers(rawData);

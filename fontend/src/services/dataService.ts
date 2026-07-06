@@ -232,7 +232,12 @@ export const dataService = {
   // ORDERS
   // ═══════════════════════════════════════════════
   getOrders: async (branchId?: string): Promise<Types.Order[]> => {
-    const raw = await safeArr(httpClient.get(endpoints.orders.list, { params: branchId && branchId !== 'ALL' ? { branch_id: branchId } : {} }));
+    const raw = await safeArr(httpClient.get(endpoints.orders.list, {
+      params: {
+        limit: 1000,
+        ...(branchId && branchId !== 'ALL' ? { branch_id: branchId } : {})
+      }
+    }));
     // Normalize: ensure every order has `id` field (some may only have `_id`)
     return raw.map((o: any) => ({
       ...o,
@@ -254,7 +259,7 @@ export const dataService = {
     }));
   },
   getOrdersByUser: async (userId: string | number): Promise<Types.Order[]> => {
-    const raw = await safeArr(httpClient.get(endpoints.orders.list, { params: { user_id: userId } }));
+    const raw = await safeArr(httpClient.get(endpoints.orders.list, { params: { user_id: userId, limit: 1000 } }));
     return raw.map((o: any) => ({
       ...o,
       id: o.id || o._id || '',
