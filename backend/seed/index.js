@@ -407,6 +407,53 @@ const run = async () => {
   ];
   await PopupAd.insertMany(seedPopupAds).catch((e) => console.log('PopupAds seed err:', e.message));
 
+  // Seed Orders
+  const orders = await Order.insertMany((mock.orders || []).map(o => ({
+    _id: makeId(o.id),
+    user_id: makeId(o.user_id),
+    branch_id: o.branch_id ? makeId(o.branch_id) : null,
+    branch_name: o.branch_name || '',
+    items: (o.items || []).map(item => ({
+      product_id: makeId(item.product_id),
+      product_name: item.product_name,
+      product_image: item.product_image,
+      sku: item.sku,
+      category_name: item.category_name,
+      quantity: item.quantity || 1,
+      price: item.price || 0,
+      original_price: item.original_price || 0,
+      unit_price: item.unit_price || 0,
+      final_price: item.final_price || 0,
+      discount_amount: item.discount_amount || 0,
+    })),
+    order_address: o.order_address || {},
+    status: o.status || 'PENDING',
+    subtotal: o.subtotal || 0,
+    shipping_fee: o.shipping_fee || 0,
+    discount_amount: o.discount_amount || 0,
+    total_amount: o.total_amount || 0,
+    payment: {
+      method: o.payment?.method || 'COD',
+      status: o.payment?.status || 'PENDING',
+      transaction_id: o.payment?.transaction_id || null,
+    },
+    tracking: {
+      tracking_number: o.tracking?.tracking_number || null,
+      carrier: o.tracking?.carrier || null,
+      dispatch_branch: o.tracking?.dispatch_branch ? makeId(o.tracking.dispatch_branch) : null,
+      dispatch_branch_name: o.tracking?.dispatch_branch_name || null,
+      history: (o.tracking?.history || []).map(h => ({
+        timestamp: h.timestamp ? new Date(h.timestamp) : new Date(),
+        status: h.status,
+        note: h.note,
+        by: h.by,
+      })),
+    },
+    created_at: o.created_at ? new Date(o.created_at) : new Date(),
+    updated_at: o.updated_at ? new Date(o.updated_at) : new Date(),
+  }))).catch((e) => { console.error('Order seed err:', e.message); return []; });
+  console.log(`Seeded ${orders.length} orders`);
+
   console.log('\n✅ Seed complete!');
   console.log('Admin login: admin@bachhoaxanh.com / Admin@123');
   process.exit(0);

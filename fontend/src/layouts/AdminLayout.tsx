@@ -1,6 +1,5 @@
 import React from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
-import AdminSidebar from '../components/Admin/AdminSidebar';
 import AdminHeader from '../components/Admin/AdminHeader';
 import { useAppSelector } from '../store';
 
@@ -22,10 +21,9 @@ const AdminLayout: React.FC = () => {
 
   return (
     <div className="bg-surface dark:bg-slate-900 text-on-surface dark:text-slate-200 antialiased min-h-screen overflow-hidden flex transition-colors">
-      <AdminSidebar />
-      <main className="ml-64 flex-1 h-screen flex flex-col relative">
+      <main className="w-full flex-1 h-screen flex flex-col relative">
         <AdminHeader />
-        <div className="flex-1 overflow-y-auto pt-16">
+        <div className="flex-1 overflow-y-auto pt-20">
           <Outlet />
         </div>
       </main>
