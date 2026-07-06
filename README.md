@@ -152,15 +152,12 @@ VITE_GOOGLE_CLIENT_ID=your_google_oauth_client_id  # Dùng đăng nhập bằng 
 
 ### 5. Nạp dữ liệu mẫu vào Cơ sở dữ liệu (Seed DB)
 
-* **Cách 1 (Nhanh trên Windows):** Kích đúp chuột vào file [seed_database.bat](file:///c:/Users/LEGION/OneDrive/M%C3%A1y%20t%C3%ADnh/PTIT_%C4%90%E1%BA%A3m%20b%E1%BA%A3o%20ch%E1%BA%A5t%20l%C6%B0%E1%BB%A3ng%20ph%E1%BA%A7n%20m%E1%BB%81m/seed_database.bat) tại thư mục gốc.
-* **Cách 2 (Sử dụng dòng lệnh):** Chạy lệnh dưới đây từ terminal:
-  ```bash
-  npm run seed --prefix backend
-  ```
-
-> 🔑 **Tài khoản quản trị mặc định sau khi seed thành công:**
-> - **Email**: `admin@lottemart.vn`
-> - **Mật khẩu**: `Admin@123`
+> ⚠️ **AN TOÀN DỮ LIỆU**: Lệnh nạp dữ liệu mẫu (`seed`) đã được **VÔ HIỆU HÓA** nhằm bảo vệ dữ liệu hiện có trên MongoDB Atlas (tránh việc User 2 hoặc các thành viên khác kích chạy làm xóa sạch và ghi đè dữ liệu của hệ thống).
+> 
+> Hệ thống cơ sở dữ liệu trực tuyến hiện đã được nạp đầy đủ dữ liệu mẫu và tài khoản quản trị:
+> - **Tài khoản quản trị mặc định (SuperAdmin)**: `admin@lottemart.vn` / `Admin@123`
+> - **Tài khoản StoreManager**: `manager_hcm@lottemart.vn` / `Manager@123`
+> - **Tài khoản Cashier**: `cashier_hcm@lottemart.vn` / `Cashier@123`
 
 ### 6. Khởi chạy dự án (Development Mode)
 

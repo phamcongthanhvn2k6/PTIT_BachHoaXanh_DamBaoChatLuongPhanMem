@@ -1,16 +1,13 @@
 @echo off
 echo =================================================================
-echo        NAP DU LIEU MAU (SEED DATABASE) - BACH HOA XANH
+echo   ❌ AN TOAN DU LIEU: LENH SEED DATABASE DA BI VO HIEU HOA!
 echo =================================================================
 echo.
-echo Dang thuc hien nap du lieu vao MongoDB (Mongoose)...
-call npm run seed --prefix backend
+echo De tranh viec User 2 hoac cac thanh vien khac chay lenh seed lam xoa sach
+echo va ghi de du lieu dang su dung tren MongoDB Atlas (Online),
+echo lenh seed database hien tai da duoc khoa lai.
 echo.
-echo =================================================================
-echo [Hoan thanh] Nap du lieu mau hoan tat!
-echo Tai khoan Admin mac dinh:
-echo - Email: admin@lottemart.vn
-echo - Mat khau: Admin@123
+echo Vui long lien he voi chu so huu database de duoc cap quyen neu can thiet.
 echo =================================================================
 echo.
 pause
