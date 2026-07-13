@@ -28,6 +28,11 @@ const reviewSchema = new mongoose.Schema({
     admin_name: { type: String, default: null },
     replied_at: { type: Date, default: null },
   },
+  ai_sentiment: { type: String, default: null, enum: ['positive', 'neutral', 'negative', null] },
+  ai_sentiment_score: { type: Number, default: null },
+  ai_is_flagged: { type: Boolean, default: false },
+  ai_flag_reason: { type: String, default: '' },
+  ai_suggested_reply: { type: String, default: null },
 }, { timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' } });
 
 reviewSchema.index({ status: 1, created_at: -1 });

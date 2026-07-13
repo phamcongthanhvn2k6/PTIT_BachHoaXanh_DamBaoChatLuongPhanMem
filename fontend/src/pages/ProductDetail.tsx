@@ -15,6 +15,7 @@ import UserAvatar from '../components/UserAvatar/UserAvatar';
 import { toast } from '../components/Toast/toastEvent';
 import { productService } from '../services/productService';
 import { dataService } from '../services/dataService';
+import { questionService } from '../services/questionService';
 import { saveViewHistory } from '../services/viewHistoryService';
 import { resolveImageUrl, fallbackProductImage } from '../utils/imageUrl';
 import { extractProductId, getProductUrl, getLocaleFromPrefix } from '../utils/productUrl';
@@ -62,6 +63,9 @@ const ProductDetail: React.FC = () => {
   const [coupons, setCoupons] = useState<any[]>([]);
   const [questionDraft, setQuestionDraft] = useState('');
   const [submittingQuestion, setSubmittingQuestion] = useState(false);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [submittingReplies, setSubmittingReplies] = useState<Record<string, boolean>>({});
+  const [activeReplyBoxId, setActiveReplyBoxId] = useState<string | null>(null);
   const [isWished, setIsWished] = useState(false);
   const [isTogglingWishlist, setIsTogglingWishlist] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -617,6 +621,33 @@ const ProductDetail: React.FC = () => {
       toast.error(t('qa.submitError', 'Không thể gửi câu hỏi lúc này'));
     } finally {
       setSubmittingQuestion(false);
+    }
+  };
+
+  const handleReplyQuestion = async (questionId: string) => {
+    if (!product) return;
+    const content = (replyDrafts[questionId] || '').trim();
+    if (!content) {
+      toast.warning('Vui lòng nhập nội dung câu trả lời');
+      return;
+    }
+
+    setSubmittingReplies(prev => ({ ...prev, [questionId]: true }));
+    try {
+      await questionService.reply(String(product.id || product._id), questionId, content);
+      toast.success(t('adminQuestions.replySuccess', 'Đã gửi phản hồi thành công'));
+      
+      // Refetch questions to update UI
+      const latest = await productService.getProductQuestions(String(product.id || product._id));
+      setQuestions(Array.isArray(latest) ? latest : []);
+      
+      // Clear draft and close input box
+      setReplyDrafts(prev => ({ ...prev, [questionId]: '' }));
+      setActiveReplyBoxId(null);
+    } catch (err) {
+      toast.error(t('adminQuestions.replyError', 'Lỗi khi gửi phản hồi'));
+    } finally {
+      setSubmittingReplies(prev => ({ ...prev, [questionId]: false }));
     }
   };
 
@@ -1314,7 +1345,7 @@ const ProductDetail: React.FC = () => {
 
             {/* Tab Đánh giá */}
             {activeTab === 'danh-gia' && (
-              <ReviewList productId={productId} />
+              <ReviewList productId={product.id || product._id} />
             )}
           </div>
 
@@ -1543,6 +1574,53 @@ const ProductDetail: React.FC = () => {
                         )}
                       </div>
                     ) : null}
+
+                    {/* Admin Reply Action */}
+                    {(user?.role_id === 1 || user?.role_id === 2) && (
+                      <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col gap-3">
+                        {activeReplyBoxId === q.id ? (
+                          <div className="space-y-3">
+                            <textarea
+                              value={replyDrafts[q.id] || ''}
+                              onChange={(e) => setReplyDrafts(prev => ({ ...prev, [q.id]: e.target.value }))}
+                              placeholder="Nhập phản hồi của Admin..."
+                              className="w-full h-20 p-3 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-primary resize-none text-xs bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-semibold"
+                            />
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => setActiveReplyBoxId(null)}
+                                className="px-3.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 text-xs font-bold transition cursor-pointer"
+                              >
+                                Hủy
+                              </button>
+                              <button
+                                onClick={() => handleReplyQuestion(q.id)}
+                                disabled={submittingReplies[q.id]}
+                                className="px-4 py-1.5 rounded-lg bg-primary text-white hover:bg-primary/95 text-xs font-black transition cursor-pointer disabled:opacity-60"
+                              >
+                                {submittingReplies[q.id] ? 'Đang gửi...' : 'Gửi câu trả lời'}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex justify-end">
+                            <button
+                              onClick={() => {
+                                setActiveReplyBoxId(q.id);
+                                // Pre-fill with existing reply content if any
+                                if (answerList.length > 0) {
+                                  setReplyDrafts(prev => ({ ...prev, [q.id]: answerList[0].content }));
+                                }
+                              }}
+                              className="px-3 py-1 rounded-lg border border-primary/30 text-primary hover:bg-primary/5 text-xs font-extrabold transition flex items-center gap-1 cursor-pointer"
+                            >
+                              <span className="material-symbols-outlined text-sm font-bold">reply</span>
+                              {answerList.length > 0 ? 'Sửa phản hồi' : 'Trả lời'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}

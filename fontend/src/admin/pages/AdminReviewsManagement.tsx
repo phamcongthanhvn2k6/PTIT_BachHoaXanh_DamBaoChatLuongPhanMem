@@ -28,6 +28,35 @@ const AdminReviewsManagement: React.FC = () => {
   const [moderationReason, setModerationReason] = useState('');
   const [statusChangeModal, setStatusChangeModal] = useState<{ id: string, status: string, label: string } | null>(null);
 
+  const getSentimentBadge = (sentiment: string, score?: number) => {
+    const pct = score ? ` (${Math.round(score * 100)}%)` : '';
+    switch (sentiment) {
+      case 'positive':
+        return (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-100 mt-1">
+            <span className="material-symbols-outlined text-[11px] font-bold">sentiment_very_satisfied</span>
+            Tích cực{pct}
+          </span>
+        );
+      case 'neutral':
+        return (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-slate-50 text-slate-600 border border-slate-200 mt-1">
+            <span className="material-symbols-outlined text-[11px] font-bold">sentiment_neutral</span>
+            Trung lập{pct}
+          </span>
+        );
+      case 'negative':
+        return (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-red-50 text-red-750 border border-red-100 mt-1">
+            <span className="material-symbols-outlined text-[11px] font-bold">sentiment_very_dissatisfied</span>
+            Tiêu cực{pct}
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
+
   const statusOptions = [
     { value: '', label: t('adminSupport.filterAll', 'Tất cả') },
     { value: 'published', label: t('adminReviews.status.published', 'Đã duyệt') },
@@ -166,12 +195,29 @@ const AdminReviewsManagement: React.FC = () => {
                             <div className="font-bold text-slate-800 truncate">{r.product_name || `SP #${r.product_id}`}</div>
                             <div className="text-xs text-slate-500 truncate mt-0.5">{r.user_name || r.user_id}</div>
                          </td>
-                         <td className="px-6 py-4 max-w-[250px] truncate">
-                            <div className="flex text-amber-400 mb-1">
-                              {Array.from({length: 5}).map((_, i) => <span key={i} className="material-symbols-outlined text-[14px]">{i < r.rating ? 'star' : 'star_border'}</span>)}
-                            </div>
-                            <div className="truncate text-slate-600 font-semibold text-xs" title={r.content}>{r.content}</div>
-                         </td>
+                          <td className="px-6 py-4 max-w-[250px] truncate">
+                             <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                               <div className="flex text-amber-400">
+                                 {Array.from({length: 5}).map((_, i) => (
+                                   <span 
+                                     key={i} 
+                                     className="material-symbols-outlined text-[14px]"
+                                     style={{ fontVariationSettings: i < r.rating ? "'FILL' 1" : "'FILL' 0" }}
+                                   >
+                                     star
+                                   </span>
+                                 ))}
+                               </div>
+                               {r.ai_sentiment && getSentimentBadge(r.ai_sentiment, r.ai_sentiment_score)}
+                               {r.ai_is_flagged && (
+                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-rose-600 text-white animate-pulse" title={r.ai_flag_reason}>
+                                   <span className="material-symbols-outlined text-[11px] font-bold">warning</span>
+                                   AI Flagged
+                                 </span>
+                               )}
+                             </div>
+                             <div className="truncate text-slate-600 font-semibold text-xs" title={r.content}>{r.content}</div>
+                          </td>
                          <td className="px-6 py-4">
                             <StatusBadge status={getStatusColor(r.status)} label={t(`adminReviews.status.${r.status}`, r.status) as string} />
                             {r.reported_count > 0 && <span className="ml-2 text-xs text-red-500 font-bold">({r.reported_count} reports)</span>}
@@ -269,9 +315,17 @@ const AdminReviewsManagement: React.FC = () => {
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/60 flex flex-col justify-center space-y-1.5">
                   <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">{t('adminReviews.ratingLabel')}</div>
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <div className="flex text-amber-400">
-                      {Array.from({length: 5}).map((_, i) => <span key={i} className="material-symbols-outlined text-base">{i < detailReview.rating ? 'star' : 'star_border'}</span>)}
-                    </div>
+                     <div className="flex text-amber-400">
+                       {Array.from({length: 5}).map((_, i) => (
+                         <span 
+                           key={i} 
+                           className="material-symbols-outlined text-base"
+                           style={{ fontVariationSettings: i < detailReview.rating ? "'FILL' 1" : "'FILL' 0" }}
+                         >
+                           star
+                         </span>
+                       ))}
+                     </div>
                     <StatusBadge status={getStatusColor(detailReview.status)} label={t(`adminReviews.status.${detailReview.status}`, detailReview.status) as string} />
                   </div>
                   {detailReview.created_at && (
@@ -306,6 +360,40 @@ const AdminReviewsManagement: React.FC = () => {
                 )}
               </div>
 
+              {/* AI Analysis Card */}
+              {(detailReview.ai_sentiment || detailReview.ai_is_flagged) && (
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Phân tích từ trợ lý AI</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {detailReview.ai_sentiment && (
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold uppercase ${
+                        detailReview.ai_sentiment === 'positive' ? 'bg-emerald-105/10 text-emerald-600 border border-emerald-200/50' :
+                        detailReview.ai_sentiment === 'negative' ? 'bg-red-105/10 text-red-600 border border-red-200/50' :
+                        'bg-slate-105/10 text-slate-600 border border-slate-200/50'
+                      }`}>
+                        <span className="material-symbols-outlined text-sm">
+                          {detailReview.ai_sentiment === 'positive' ? 'sentiment_very_satisfied' :
+                           detailReview.ai_sentiment === 'negative' ? 'sentiment_very_dissatisfied' : 'sentiment_neutral'}
+                        </span>
+                        Cảm xúc: {detailReview.ai_sentiment === 'positive' ? 'Tích cực' : detailReview.ai_sentiment === 'negative' ? 'Tiêu cực' : 'Trung lập'}
+                        {detailReview.ai_sentiment_score ? ` (${Math.round(detailReview.ai_sentiment_score * 100)}%)` : ''}
+                      </span>
+                    )}
+                    {detailReview.ai_is_flagged && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold uppercase bg-red-600 text-white animate-pulse">
+                        <span className="material-symbols-outlined text-sm">warning</span>
+                        AI Cảnh báo: Vi phạm kiểm duyệt
+                      </span>
+                    )}
+                  </div>
+                  {detailReview.ai_is_flagged && detailReview.ai_flag_reason && (
+                    <p className="text-xs text-red-600 font-semibold bg-red-50 border border-red-200 rounded-xl p-2.5">
+                      <b>Lý do gắn cờ:</b> {detailReview.ai_flag_reason}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Store Response Section */}
               <FormSection title={t('adminReviews.storeReply')}>
                 {detailReview.reply?.content ? (
@@ -317,17 +405,37 @@ const AdminReviewsManagement: React.FC = () => {
                     <div className="text-slate-850 font-semibold text-sm leading-relaxed">{detailReview.reply.content}</div>
                   </div>
                 ) : (
-                  <div className="space-y-3 bg-white border border-slate-200 rounded-2xl p-4 shadow-3xs">
-                    <textarea 
-                      className={cls.input + ' min-h-[100px] text-sm focus:ring-2 focus:ring-primary/20'} 
-                      value={replyText} 
-                      onChange={e => setReplyText(e.target.value)} 
-                      placeholder={t('adminReviews.replyPlaceholder')}
-                    />
-                    <div className="flex justify-end">
-                      <button onClick={submitReply} className={cls.btnPrimary + ' text-xs px-4 py-2'}>
-                        {t('adminReviews.sendReply')}
-                      </button>
+                  <div className="space-y-3">
+                    {detailReview.ai_suggested_reply && (
+                      <div className="bg-emerald-50/40 border border-emerald-200 rounded-2xl p-4 space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-sm">auto_awesome</span>
+                            Gợi ý phản hồi từ AI
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setReplyText(detailReview.ai_suggested_reply)}
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition"
+                          >
+                            Áp dụng gợi ý
+                          </button>
+                        </div>
+                        <p className="text-xs text-slate-650 italic font-semibold">"{detailReview.ai_suggested_reply}"</p>
+                      </div>
+                    )}
+                    <div className="space-y-3 bg-white border border-slate-200 rounded-2xl p-4 shadow-3xs">
+                      <textarea 
+                        className={cls.input + ' min-h-[100px] text-sm focus:ring-2 focus:ring-primary/20'} 
+                        value={replyText} 
+                        onChange={e => setReplyText(e.target.value)} 
+                        placeholder={t('adminReviews.replyPlaceholder')}
+                      />
+                      <div className="flex justify-end">
+                        <button onClick={submitReply} className={cls.btnPrimary + ' text-xs px-4 py-2'}>
+                          {t('adminReviews.sendReply')}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

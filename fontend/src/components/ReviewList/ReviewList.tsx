@@ -29,6 +29,10 @@ const ReviewList: React.FC<ReviewListProps> = ({ productId }) => {
 
   const reviews = reviewsState || [];
   
+  const avgRating = reviews.length > 0 
+    ? Number((reviews.reduce((acc, curr) => acc + curr.rating, 0) / reviews.length).toFixed(1))
+    : 0;
+  
   // Sort reviews: newest first
   const sortedReviews = [...reviews].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   
@@ -99,12 +103,37 @@ const ReviewList: React.FC<ReviewListProps> = ({ productId }) => {
       <div className="bg-orange-50/50 dark:bg-slate-900 border border-orange-100 dark:border-slate-800 rounded-2xl p-6 mb-8 flex flex-col md:flex-row items-center gap-8">
         <div className="flex flex-col items-center justify-center min-w-[150px]">
           <div className="text-5xl font-black text-orange-500 mb-1">
-            {reviews.length > 0 ? (reviews.reduce((acc, curr) => acc + curr.rating, 0) / reviews.length).toFixed(1) : '0.0'}
+            {avgRating.toFixed(1)}
           </div>
           <div className="flex gap-1 text-orange-500 mb-2">
-            {[1, 2, 3, 4, 5].map(star => (
-              <span key={star} className="material-symbols-outlined text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-            ))}
+            {[1, 2, 3, 4, 5].map(star => {
+              const fillAmount = Math.max(0, Math.min(1, avgRating - (star - 1)));
+              return (
+                <div key={star} className="relative text-xl inline-block w-[20px] h-[20px]">
+                  {/* Background Empty Star */}
+                  <span 
+                    className="material-symbols-outlined text-transparent [-webkit-text-stroke:1px_currentColor] select-none absolute top-0 left-0"
+                    style={{ fontSize: '20px' }}
+                  >
+                    star
+                  </span>
+                  {/* Foreground Fill Star */}
+                  {fillAmount > 0 && (
+                    <div 
+                      className="absolute top-0 left-0 overflow-hidden select-none"
+                      style={{ width: `${fillAmount * 100}%`, height: '100%' }}
+                    >
+                      <span 
+                        className="material-symbols-outlined text-orange-500" 
+                        style={{ fontVariationSettings: "'FILL' 1", fontSize: '20px' }}
+                      >
+                        star
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
           <p className="text-sm font-medium text-slate-500">{reviews.length} đánh giá</p>
         </div>

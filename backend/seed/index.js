@@ -20,6 +20,8 @@ import { Banner, HotDeal, DeliverySlot, AdminSetting } from '../models/Misc.js';
 import { PaymentProvider } from '../models/Payment.js';
 import MembershipTier from '../models/MembershipTier.js';
 import { PopupAd } from '../models/PopupAd.js';
+import Review from '../models/Review.js';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,7 +48,7 @@ const run = async () => {
     PromotionClaim.deleteMany({}), PromotionUsage.deleteMany({}),
     Banner.deleteMany({}), HotDeal.deleteMany({}), DeliverySlot.deleteMany({}),
     AdminSetting.deleteMany({}), PaymentProvider.deleteMany({}), MembershipTier.deleteMany({}),
-    PopupAd.deleteMany({}),
+    PopupAd.deleteMany({}), Review.deleteMany({}),
   ]);
   console.log('Cleared existing data');
 
@@ -166,6 +168,88 @@ const run = async () => {
   })).catch((e) => { console.error('Product seed err:', e.message); return []; });
   console.log(`Seeded ${products.length} products`);
 
+  // Seed Reviews matching product rating metadata
+  const reviewsToInsert = [];
+  const reviewers = [
+    { name: 'Nguyễn Văn Hùng', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=120' },
+    { name: 'Trần Thị Mai', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=120' },
+    { name: 'Phạm Minh Tuấn', avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&q=80&w=120' },
+    { name: 'Lê Hoàng Yến', avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=120' },
+    { name: 'Vũ Quốc Anh', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=120' },
+    { name: 'Hoàng Ngọc Bích', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=120' },
+    { name: 'Đỗ Duy Mạnh', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=120' },
+    { name: 'Nguyễn Thu Trang', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120' }
+  ];
+
+  const reviewTemplates = [
+    { rating: 5, content: 'Sản phẩm tuyệt vời, chất lượng tươi ngon và sạch sẽ. Đóng gói cẩn thận, giao nhanh.' },
+    { rating: 5, content: 'Đúng chuẩn Bách Hóa Xanh, nhân viên giao hàng rất lịch sự. Sẽ tiếp tục mua lại lần sau.' },
+    { rating: 5, content: 'Chất lượng quá tốt so với giá tiền. Hàng còn mới, hạn sử dụng dài.' },
+    { rating: 4, content: 'Sản phẩm ngon lành, sạch sẽ. Chỉ có điều giao hàng hơi chậm hơn dự kiến 15 phút.' },
+    { rating: 4, content: 'Chất lượng sản phẩm tốt, đóng gói kỹ. Hy vọng chi nhánh giữ vững chất lượng này.' },
+    { rating: 4, content: 'Rất hài lòng về chất lượng. Mong cửa hàng có thêm nhiều chương trình khuyến mãi nữa.' },
+    { rating: 3, content: 'Chất lượng ở mức ổn, không quá đặc sắc nhưng dùng được.' },
+    { rating: 5, content: 'Sản phẩm tuyệt hảo, hạn sử dụng còn lâu, vị cực kỳ ngon. Khuyên mọi người nên thử.' }
+  ];
+
+  for (const p of products) {
+    const numReviews = Math.floor(Math.random() * 5) + 4; // 4 to 8 reviews per product
+    const shuffledReviewers = [...reviewers].sort(() => 0.5 - Math.random());
+    const shuffledTemplates = [...reviewTemplates].sort(() => 0.5 - Math.random());
+    
+    for (let i = 0; i < Math.min(numReviews, shuffledReviewers.length); i++) {
+      const reviewer = shuffledReviewers[i];
+      const template = shuffledTemplates[i % shuffledTemplates.length];
+      
+      reviewsToInsert.push({
+        user_id: makeId(Math.floor(Math.random() * 10) + 1),
+        user_name: reviewer.name,
+        user_avatar: reviewer.avatar,
+        product_id: p._id,
+        product_name: p.name,
+        rating: template.rating,
+        content: template.content,
+        status: 'published',
+        is_verified_purchase: Math.random() > 0.3,
+        helpful_count: Math.floor(Math.random() * 10),
+        created_at: new Date(Date.now() - Math.floor(Math.random() * 30) * 24 * 60 * 60 * 1000)
+      });
+    }
+  }
+
+  await Review.insertMany(reviewsToInsert).catch((e) => console.log('Reviews seed err:', e.message));
+  console.log(`Seeded ${reviewsToInsert.length} reviews`);
+
+  // Recalculate product rating stats based on seeded reviews
+  console.log('Recalculating product rating stats...');
+  for (const p of products) {
+    const reviews = reviewsToInsert.filter(r => String(r.product_id) === String(p._id));
+    const reviewCount = reviews.length;
+    let averageRating = 0;
+    const ratingBreakdown = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
+    if (reviewCount > 0) {
+      const sum = reviews.reduce((acc, curr) => acc + curr.rating, 0);
+      averageRating = Number((sum / reviewCount).toFixed(1));
+      
+      reviews.forEach(r => {
+        const ratingKey = String(Math.round(r.rating));
+        if (ratingBreakdown[ratingKey] !== undefined) {
+          ratingBreakdown[ratingKey] += 1;
+        }
+      });
+    }
+
+    await Product.updateOne({ _id: p._id }, {
+      rating: averageRating,
+      average_rating: averageRating,
+      review_count: reviewCount,
+      total_reviews: reviewCount,
+      rating_breakdown: ratingBreakdown
+    });
+  }
+  console.log('Product rating stats recalculated successfully!');
+
   // Seed Branches
   const branches = await Branch.insertMany((mock.branches || [{ id: 1, name: 'Bách hóa XANH Giang Văn Minh', address: '42 Giang Văn Minh, Phường Kim Mã, Quận Ba Đình', city: 'Hà Nội', is_active: true }]).map(b => ({
     _id: makeId(b.id),
@@ -177,13 +261,32 @@ const run = async () => {
   console.log(`Seeded ${branches.length} branches`);
 
   // Seed BranchProducts
-  await BranchProduct.insertMany((mock.branch_products || []).map(bp => ({
-    _id: makeId(bp.id),
-    product_id: bp.product_id ? makeId(bp.product_id) : null, branch_id: bp.branch_id ? makeId(bp.branch_id) : null,
-    price: bp.price || 0, original_price: bp.original_price || 0, discount_percent: bp.discount_percent || 0,
-    stock: bp.stock || 0, min_stock: bp.min_stock || 0, is_available: bp.is_available !== false,
-    promotion_tag: bp.promotion_tag || '',
-  }))).catch(() => []);
+  const pMap = new Map((mock.products || []).map(p => [String(p.id), p]));
+  await BranchProduct.insertMany((mock.branch_products || []).map(bp => {
+    const prod = pMap.get(String(bp.product_id));
+    const catName = prod ? prod.category_name : '';
+    const isFresh = catName && ['rau', 'thịt', 'hải sản', 'trái cây', 'fresh'].some(k => String(catName).toLowerCase().includes(k));
+    const daysToAdd = isFresh ? (Math.floor(Math.random() * 5) + 3) : (Math.floor(Math.random() * 360) + 180);
+    const expiryDate = new Date(Date.now() + daysToAdd * 24 * 60 * 60 * 1000);
+    const mfgDate = new Date(expiryDate.getTime() - (isFresh ? 5 : 365) * 24 * 60 * 60 * 1000);
+
+    return {
+      _id: makeId(bp.id),
+      product_id: bp.product_id ? makeId(bp.product_id) : null,
+      branch_id: bp.branch_id ? makeId(bp.branch_id) : null,
+      price: bp.price || 0,
+      original_price: bp.original_price || 0,
+      discount_percent: bp.discount_percent || 0,
+      stock: bp.stock || 0,
+      min_stock: bp.min_stock || 0,
+      is_available: bp.is_available !== false,
+      promotion_tag: bp.promotion_tag || '',
+      expiry_date: expiryDate,
+      manufacture_date: mfgDate,
+      is_expired: false,
+      is_expiring_soon: isFresh && daysToAdd <= 3,
+    };
+  })).catch(() => []);
 
   // Seed Promotions
   await Promotion.insertMany((mock.promotions || []).map(p => {

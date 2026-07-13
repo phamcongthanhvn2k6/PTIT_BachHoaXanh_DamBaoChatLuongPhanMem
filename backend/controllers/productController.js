@@ -441,10 +441,10 @@ export const policies = async (req, res) => {
   return res.json({
     success: true,
     data: [
-      { id: 1, title: 'Chính sách đổi trả', description: 'Đổi trả trong 7 ngày kể từ ngày mua', icon: 'return' },
-      { id: 2, title: 'Giao hàng miễn phí', description: 'Miễn phí giao hàng cho đơn từ 300.000đ', icon: 'delivery' },
+      { id: 1, title: 'Chính sách đổi trả', description: 'Đổi trả trong 7 ngày kể từ ngày mua', icon: 'assignment_return' },
+      { id: 2, title: 'Giao hàng miễn phí', description: 'Miễn phí giao hàng cho đơn từ 300.000đ', icon: 'local_shipping' },
       { id: 3, title: 'Thanh toán an toàn', description: 'Hỗ trợ nhiều phương thức thanh toán', icon: 'payment' },
-      { id: 4, title: 'Hàng chính hãng', description: '100% sản phẩm chính hãng', icon: 'authentic' },
+      { id: 4, title: 'Hàng chính hãng', description: '100% sản phẩm chính hãng', icon: 'verified' },
     ],
   });
 };
