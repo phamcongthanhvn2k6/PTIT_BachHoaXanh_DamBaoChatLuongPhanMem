@@ -1,5 +1,63 @@
 import Review from '../models/Review.js';
 import { paginateMeta } from '../utils/helpers.js';
+import mongoose from 'mongoose';
+
+const updateProductRatingStats = async (productId) => {
+  try {
+    const Product = mongoose.model('Product');
+
+    let product = null;
+    const paramStr = String(productId).trim();
+    if (mongoose.Types.ObjectId.isValid(paramStr) && /^[0-9a-fA-F]{24}$/.test(paramStr)) {
+      product = await Product.findById(paramStr);
+    }
+    if (!product) {
+      product = await Product.findOne({ short_code: paramStr });
+    }
+    if (!product && /^\d+$/.test(paramStr)) {
+      product = await Product.findOne({ id: Number(paramStr) });
+    }
+
+    if (!product) {
+      console.warn(`[RatingSync] Product not found for ID: ${productId}`);
+      return;
+    }
+
+    const matchingProductIds = [product._id, String(product._id), product.id, String(product.id), product.short_code].filter(Boolean);
+    const reviews = await Review.find({
+      product_id: { $in: matchingProductIds },
+      status: { $in: ['active', 'published', 'approved'] }
+    });
+
+    const reviewCount = reviews.length;
+    let averageRating = 0;
+    const ratingBreakdown = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
+    if (reviewCount > 0) {
+      const sum = reviews.reduce((acc, curr) => acc + curr.rating, 0);
+      averageRating = Number((sum / reviewCount).toFixed(1));
+      
+      reviews.forEach(r => {
+        const ratingKey = String(Math.round(r.rating));
+        if (ratingBreakdown[ratingKey] !== undefined) {
+          ratingBreakdown[ratingKey] += 1;
+        }
+      });
+    }
+
+    product.rating = averageRating;
+    product.average_rating = averageRating;
+    product.review_count = reviewCount;
+    product.total_reviews = reviewCount;
+    product.rating_breakdown = ratingBreakdown;
+    
+    product.markModified('rating_breakdown');
+    await product.save();
+    console.log(`[RatingSync] Updated product ${product.name} (${product._id}): rating=${averageRating}, count=${reviewCount}`);
+  } catch (err) {
+    console.error(`Failed to update product rating stats for product ${productId}:`, err);
+  }
+};
 
 export const list = async (req, res) => {
   try {
@@ -120,7 +178,30 @@ export const forProduct = async (req, res) => {
     if (!productId) {
       return res.status(400).json({ success: false, message: 'Missing product identifier' });
     }
-    const filter = { product_id: productId };
+
+    const Product = mongoose.model('Product');
+    let product = null;
+    const paramStr = String(productId).trim();
+    if (mongoose.Types.ObjectId.isValid(paramStr) && /^[0-9a-fA-F]{24}$/.test(paramStr)) {
+      product = await Product.findById(paramStr);
+    }
+    if (!product) {
+      product = await Product.findOne({ short_code: paramStr });
+    }
+    if (!product && /^\d+$/.test(paramStr)) {
+      product = await Product.findOne({ id: Number(paramStr) });
+    }
+
+    const queryIds = [];
+    if (product) {
+      queryIds.push(product._id);
+      if (product.id) queryIds.push(product.id);
+      if (product.short_code) queryIds.push(product.short_code);
+    } else {
+      queryIds.push(productId);
+    }
+
+    const filter = { product_id: { $in: queryIds } };
     
     if (req.userId) {
       filter.$or = [
@@ -132,7 +213,13 @@ export const forProduct = async (req, res) => {
     }
     
     const data = await Review.find(filter).sort('-created_at');
-    return res.json({ success: true, data });
+    const mappedData = data.map(r => {
+      const obj = r.toObject ? r.toObject() : { ...r };
+      obj.id = obj._id;
+      return obj;
+    });
+
+    return res.json({ success: true, data: mappedData });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -149,8 +236,23 @@ export const create = async (req, res) => {
     if (!productId) {
       return res.status(400).json({ success: false, message: 'Missing product_id' });
     }
-    // Always set user_id from authenticated user to prevent spoofing
     const userId = req.userId;
+
+    const Product = mongoose.model('Product');
+    let product = null;
+    const paramStr = String(productId).trim();
+    if (mongoose.Types.ObjectId.isValid(paramStr) && /^[0-9a-fA-F]{24}$/.test(paramStr)) {
+      product = await Product.findById(paramStr);
+    }
+    if (!product) {
+      product = await Product.findOne({ short_code: paramStr });
+    }
+    if (!product && /^\d+$/.test(paramStr)) {
+      product = await Product.findOne({ id: Number(paramStr) });
+    }
+
+    const resolvedProductId = product ? product._id : productId;
+    const resolvedProductName = product ? product.name : (req.body.product_name || '');
 
     const images = Array.isArray(req.body?.images)
       ? req.body.images.filter(Boolean).map((img) => String(img)).slice(0, 5)
@@ -158,14 +260,23 @@ export const create = async (req, res) => {
 
     const review = await Review.create({
       ...req.body,
-      product_id: productId,
+      product_id: resolvedProductId,
+      product_name: resolvedProductName,
       user_id: userId,
       user_name: req.user?.full_name || req.user?.username || req.body.user_name || 'Khach hang',
       user_avatar: req.user?.avatar || req.body.user_avatar || null,
       content: req.body.content || req.body.comment || '',
       images,
+      status: 'published', // Publish review automatically so it is immediately visible
     });
-    return res.status(201).json({ success: true, data: review, message: 'Đánh giá thành công' });
+
+    // Update product rating stats dynamically
+    await updateProductRatingStats(resolvedProductId);
+
+    const obj = review.toObject();
+    obj.id = obj._id;
+
+    return res.status(201).json({ success: true, data: obj, message: 'Đánh giá thành công' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -181,6 +292,12 @@ export const update = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
     const updated = await Review.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    
+    // Recalculate and update the product's ratings stats
+    if (updated) {
+      await updateProductRatingStats(updated.product_id);
+    }
+    
     return res.json({ success: true, data: updated });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -197,6 +314,10 @@ export const remove = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
     await Review.findByIdAndDelete(req.params.id);
+    
+    // Recalculate and update the product's ratings stats
+    await updateProductRatingStats(review.product_id);
+    
     return res.json({ success: true, message: 'Đã xóa đánh giá' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -233,6 +354,12 @@ export const updateStatus = async (req, res) => {
       moderation_reason: req.body.moderation_reason || '',
       admin_notes: req.body.admin_notes || ''
     }, { new: true });
+    
+    // Recalculate and update the product's ratings stats since status changed
+    if (rv) {
+      await updateProductRatingStats(rv.product_id);
+    }
+    
     return res.json({ success: true, data: rv, message: 'Cập nhật trạng thái thành công' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
