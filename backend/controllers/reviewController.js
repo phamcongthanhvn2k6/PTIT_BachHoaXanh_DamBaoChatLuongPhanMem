@@ -1,6 +1,7 @@
 import Review from '../models/Review.js';
 import { paginateMeta } from '../utils/helpers.js';
 import mongoose from 'mongoose';
+import { requestJsonCompletion, isAIClientReady } from '../utils/aiClient.js';
 
 const updateProductRatingStats = async (productId) => {
   try {
@@ -56,6 +57,45 @@ const updateProductRatingStats = async (productId) => {
     console.log(`[RatingSync] Updated product ${product.name} (${product._id}): rating=${averageRating}, count=${reviewCount}`);
   } catch (err) {
     console.error(`Failed to update product rating stats for product ${productId}:`, err);
+  }
+};
+
+export const moderateReviewWithAI = async (reviewText, rating, productName) => {
+  if (!isAIClientReady()) {
+    console.log('[AI-Review-Moderation] AI Client not configured, bypassing...');
+    return null;
+  }
+
+  try {
+    const systemPrompt = `You are an AI grocery review moderator and assistant for Bách Hóa XANH supermarket. 
+Analyze the customer's product review text and rating. 
+Detect if the review contains toxic content, hate speech, spam, advertisement links, phone numbers, or off-topic complaints (e.g., complaining about the app or delivery instead of the product itself).
+Determine the sentiment of the review as positive, neutral, or negative, and give a sentiment score between 0.0 and 1.0.
+Finally, if the review is safe and has a positive sentiment, write a short, polite, and helpful suggested store reply in Vietnamese (max 2 sentences) thanking the customer and wishing them a nice day.`;
+
+    const userPrompt = `Product: ${productName}
+Rating: ${rating}/5 stars
+Review Content: "${reviewText}"`;
+
+    const schema = {
+      type: "object",
+      properties: {
+        sentiment: { type: "string", enum: ["positive", "neutral", "negative"] },
+        sentiment_score: { type: "number" },
+        is_flagged: { type: "boolean" },
+        flag_reason: { type: "string" },
+        suggested_reply: { type: "string" }
+      },
+      required: ["sentiment", "sentiment_score", "is_flagged", "flag_reason", "suggested_reply"]
+    };
+
+    console.info('[AI-Review-Moderation] Calling OpenRouter to analyze review...');
+    const result = await requestJsonCompletion({ systemPrompt, userPrompt, schema });
+    console.info('[AI-Review-Moderation] AI Analysis Result:', result);
+    return result;
+  } catch (err) {
+    console.error('[AI-Review-Moderation] AI Moderation failed:', err.message);
+    return null;
   }
 };
 
@@ -258,6 +298,25 @@ export const create = async (req, res) => {
       ? req.body.images.filter(Boolean).map((img) => String(img)).slice(0, 5)
       : [];
 
+    // Perform AI Moderation
+    let aiResult = null;
+    let finalStatus = 'published';
+    let flagReason = '';
+
+    try {
+      const content = req.body.content || req.body.comment || '';
+      aiResult = await moderateReviewWithAI(content, Number(req.body.rating || 5), resolvedProductName);
+      
+      if (aiResult) {
+        if (aiResult.is_flagged) {
+          finalStatus = 'reported'; // hide and flag for review
+          flagReason = aiResult.flag_reason || 'AI flagged as unsafe/spam';
+        }
+      }
+    } catch (aiErr) {
+      console.error('[AI-Review] Error processing AI moderation:', aiErr.message);
+    }
+
     const review = await Review.create({
       ...req.body,
       product_id: resolvedProductId,
@@ -267,7 +326,13 @@ export const create = async (req, res) => {
       user_avatar: req.user?.avatar || req.body.user_avatar || null,
       content: req.body.content || req.body.comment || '',
       images,
-      status: 'published', // Publish review automatically so it is immediately visible
+      status: finalStatus,
+      moderation_reason: flagReason,
+      ai_sentiment: aiResult?.sentiment || null,
+      ai_sentiment_score: aiResult?.sentiment_score || null,
+      ai_is_flagged: aiResult?.is_flagged || false,
+      ai_flag_reason: flagReason,
+      ai_suggested_reply: aiResult?.suggested_reply || null,
     });
 
     // Update product rating stats dynamically
