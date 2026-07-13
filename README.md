@@ -133,9 +133,10 @@ CLOUDINARY_CLOUD_NAME=your_cloudinary_name
 CLOUDINARY_API_KEY=your_cloudinary_key
 CLOUDINARY_API_SECRET=your_cloudinary_secret
 
-# Cấu hình AI so sánh sản phẩm (OpenRouter / Gemini)
-OPENROUTER_API_KEY=your_openrouter_key
-OPENROUTER_MODEL=google/gemini-2.5-flash
+# Cấu hình AI Hỏi đáp & Kiểm duyệt đánh giá (OpenRouter)
+# Nhận API Key miễn phí tại: https://openrouter.ai/
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_MODEL=google/gemini-2.5-flash:free     # Hoặc meta-llama/llama-3.3-70b-instruct:free
 ```
 
 #### 🔸 Cấu hình cho Frontend ([fontend/](file:///c:/Users/LEGION/OneDrive/M%C3%A1y%20t%C3%ADnh/PTIT_%C4%90%E1%BA%A3m%20b%E1%BA%A3o%20ch%E1%BA%A5t%20l%C6%B0%E1%BB%A3ng%20ph%E1%BA%A7n%20m%E1%BB%81m/fontend))
@@ -155,7 +156,8 @@ VITE_GOOGLE_CLIENT_ID=your_google_oauth_client_id  # Dùng đăng nhập bằng 
 > ⚠️ **AN TOÀN DỮ LIỆU**: Lệnh nạp dữ liệu mẫu (`seed`) đã được **VÔ HIỆU HÓA** nhằm bảo vệ dữ liệu hiện có trên MongoDB Atlas (tránh việc User 2 hoặc các thành viên khác kích chạy làm xóa sạch và ghi đè dữ liệu của hệ thống).
 > 
 > Hệ thống cơ sở dữ liệu trực tuyến hiện đã được nạp đầy đủ dữ liệu mẫu và tài khoản quản trị:
-> - **Tài khoản quản trị mặc định (SuperAdmin)**: `admin@lottemart.vn` / `Admin@123`
+> - **Tài khoản quản trị mặc định (Admin)**: `admin@bachhoaxanh.com` / `password123`
+> - **Tài khoản quản trị phụ (SuperAdmin)**: `admin@lottemart.vn` / `Admin@123`
 > - **Tài khoản StoreManager**: `manager_hcm@lottemart.vn` / `Manager@123`
 > - **Tài khoản Cashier**: `cashier_hcm@lottemart.vn` / `Cashier@123`
 
@@ -182,7 +184,9 @@ npm test --prefix backend
 
 ### 🙍 Phía khách hàng (User Client)
 - **Khám phá & Tìm kiếm**: Lọc sản phẩm theo danh mục, xuất xứ, thương hiệu, giá cả. Hỗ trợ xem ảnh 360 độ và mô hình 3D AR.
-- **So sánh sản phẩm tích hợp AI**: Cho phép so sánh chi tiết 2 sản phẩm và sử dụng AI Gemini để tóm tắt, đưa ra nhận định/khuyên dùng thông thái.
+- **Trợ lý AI Hỗ trợ mua sắm**:
+  * **So sánh sản phẩm thông minh**: Cho phép so sánh chi tiết 2 sản phẩm và sử dụng AI để tóm tắt, đưa ra nhận định/khuyên dùng thông thái.
+  * **Hỏi đáp Sản phẩm tích hợp AI (AI Q&A)**: Khách hàng hỏi đáp trực tiếp tại trang chi tiết sản phẩm và nhận được câu trả lời tự động tức thì từ AI dựa trên thông số kỹ thuật và mô tả sản phẩm.
 - **Giỏ hàng & Thanh toán**: Chọn chi nhánh giao hàng gần nhất (đồng bộ qua Leaflet Map), chọn ca giao hàng trong ngày, áp dụng Voucher/Coupon từ ví và quét mã QR giả lập để hoàn tất đặt hàng.
 - **Giỏ hàng gia đình (Family Cart)**: Tính năng mua sắm nhóm thời gian thực (Socket.IO). Người tạo có thể đặt hạn mức ngân sách, xét duyệt sản phẩm do các thành viên khác thêm vào và nhắn tin trò chuyện nhóm trực tiếp.
 - **Ví ưu đãi & Nhiệm vụ (Gamification)**: Nhận điểm thưởng tích lũy (Loyalty Points), điểm danh nhận quà và theo dõi các chương trình ưu đãi hiện hành.
@@ -191,6 +195,10 @@ npm test --prefix backend
 ### 👑 Phía quản trị viên (Admin Dashboard)
 - **Báo cáo & Thống kê**: Trực quan hóa doanh số bán hàng, số lượng đơn hàng, lượng khách hàng đăng ký mới theo thời gian thực bằng biểu đồ trực quan.
 - **Quản trị catalog**: Quản lý chi tiết sản phẩm, giá bán, danh mục hàng hóa, theo dõi lịch sử thay đổi giá bán.
+- **Kiểm duyệt đánh giá bằng AI (AI Review Moderation)**:
+  * Tự động lọc từ ngữ thô tục, độc hại, spam liên kết quảng cáo và chuyển vào hàng chờ duyệt ẩn (`reported`).
+  * Phân tích cảm xúc khách hàng (Positive / Neutral / Negative) trực quan với điểm phần trăm tin cậy.
+  * Tự động soạn sẵn bản nháp câu phản hồi mẫu cho Admin xem xét và áp dụng nhanh chỉ với 1 click.
 - **Quản lý Kho hàng & Chuỗi cung ứng**: Quản lý danh sách nhà cung cấp (Suppliers), lập đơn nhập kho (Import Order), quản lý lô hàng nhập thực tế (Import Receipt) và phân tích các lô hàng hết hạn (Inventory Batch).
 - **Quản lý Marketing**: Tạo các sự kiện (Events), bài đăng quảng bá, cấu hình banner quảng cáo trang chủ và thiết lập các kịch bản ưu đãi tự động.
 - **Phân quyền nâng cao (RBAC)**: Phân chia vai trò (Admin, Thủ kho, Thu ngân, v.v.), chỉ định quyền hạn hành động chi tiết và ghi nhật ký hoạt động (Audit Logs) để kiểm soát chất lượng vận hành.
